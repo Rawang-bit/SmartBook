@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rooms - SmartBook</title>
+
+  <!-- Browser Tab Logo -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="auth-guard.js"></script>
+</head>
+
+<body class="admin-page min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 text-slate-800 antialiased">
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900 p-5 text-white shadow-2xl">
+      <div class="mb-7">
+        <div class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-3">
+          <img
+            src="./images/logo.png"
+            alt="SmartBook Logo"
+            class="h-11 w-11 shrink-0 rounded-xl bg-white p-1.5 object-contain"
+            onerror="this.onerror=null;this.src='images/logo.png';"
+          />
+          <div>
+            <div class="text-lg font-black leading-tight text-white">SmartBook</div>
+            <div class="mt-1 text-[11px] font-bold uppercase tracking-wider text-indigo-200">
+              Admin Panel
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="space-y-2">
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="dashboard.html">Dashboard</a>
+        <a class="block rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg" href="rooms.html">Rooms</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="book-room.html">Book Room</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="users.html">Users</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="bookings.html">Bookings</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="history.html">History</a>
+      </nav>
+
+      <div class="mt-auto border-t border-white/10 pt-4">
+        <a href="#" onclick="logout()" class="flex items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-red-600 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 md:p-8">
+
+      <!-- Header -->
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-black text-slate-900">Room Management</h1>
+          <p class="mt-1 font-semibold text-slate-500">Add, edit, and manage meeting rooms</p>
+        </div>
+        <button onclick="logout()" class="inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-extrabold text-red-600 transition hover:bg-red-600 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
+      </div>
+
+      <div id="roomMessage" style="display:none;"></div>
+
+      <section class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+        <!-- Room Form -->
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+          <h2 id="formTitle" class="mb-4 text-xl font-black text-slate-900">
+            Add New Room
+          </h2>
+
+          <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-slate-600">
+            Add rooms that users and admins can book. Inactive rooms will not appear on the public booking calendar.
+          </div>
+
+          <form id="roomForm" class="grid gap-4">
+            <input type="hidden" id="roomId" />
+
+            <label class="block text-sm font-bold text-slate-700">
+              Room Name
+              <input
+                type="text"
+                id="roomName"
+                required
+                placeholder="Example: Meeting Room 01"
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="block text-sm font-bold text-slate-700">
+                Capacity
+                <input
+                  type="number"
+                  id="capacity"
+                  min="1"
+                  required
+                  placeholder="Example: 10"
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                />
+              </label>
+
+              <label class="block text-sm font-bold text-slate-700">
+                Location
+                <input
+                  type="text"
+                  id="location"
+                  required
+                  placeholder="Example: Level 2"
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                />
+              </label>
+            </div>
+
+            <label class="block text-sm font-bold text-slate-700">
+              Status
+              <select
+                id="roomStatus"
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              >
+                <option>Active</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-indigo-700"
+              >
+                Save Room
+              </button>
+
+              <button
+                type="button"
+                onclick="resetRoomForm()"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition hover:bg-slate-200"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Room Cards -->
+        <div id="roomCards" class="grid gap-5"></div>
+
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    requireAuth();
+
+    let roomCache = [];
+
+    function resetRoomForm() {
+      document.getElementById('roomId').value = '';
+      document.getElementById('roomForm').reset();
+      document.getElementById('formTitle').textContent = 'Add New Room';
+    }
+
+    async function renderRooms() {
+      roomCache = await getRooms();
+
+      document.getElementById('roomCards').innerHTML = roomCache.map(function(room) {
+        return `
+          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+            <h3 class="text-lg font-black text-slate-900">
+              ${escapeHtml(room.name)}
+            </h3>
+
+            <div class="mt-2 text-sm font-semibold text-slate-500">
+              Capacity: ${room.capacity} | Location: ${escapeHtml(room.location)}
+            </div>
+
+            <div class="my-4">
+              ${formatStatus(room.status)}
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                onclick="editRoom(${room.id})"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-indigo-700"
+              >
+                Edit
+              </button>
+
+              <button
+                onclick="removeRoom(${room.id})"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('') || `
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 text-center font-semibold text-slate-500 shadow-lg">
+          No rooms found.
+        </div>
+      `;
+    }
+
+    function editRoom(id) {
+      const room = roomCache.find(function(x) {
+        return Number(x.id) === Number(id);
+      });
+
+      if (!room) return;
+
+      document.getElementById('roomId').value = room.id;
+      document.getElementById('roomName').value = room.name;
+      document.getElementById('capacity').value = room.capacity;
+      document.getElementById('location').value = room.location;
+      document.getElementById('roomStatus').value = room.status;
+      document.getElementById('formTitle').textContent = 'Edit Room';
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function removeRoom(id) {
+      if (!confirm('Delete this room?')) return;
+
+      try {
+        await deleteRoomApi(id);
+        showMessage('roomMessage', 'Room deleted successfully.');
+        await renderRooms();
+      } catch (err) {
+        showMessage('roomMessage', err.message, 'error');
+      }
+    }
+
+    document.getElementById('roomForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const payload = {
+        name: document.getElementById('roomName').value.trim(),
+        capacity: Number(document.getElementById('capacity').value),
+        location: document.getElementById('location').value.trim(),
+        status: document.getElementById('roomStatus').value
+      };
+
+      try {
+        const id = document.getElementById('roomId').value;
+
+        if (id) {
+          await updateRoom(id, payload);
+        } else {
+          await createRoom(payload);
+        }
+
+        resetRoomForm();
+        showMessage('roomMessage', 'Room saved successfully.');
+        await renderRooms();
+      } catch (err) {
+        showMessage('roomMessage', err.message, 'error');
+      }
+    });
+
+    renderRooms().catch(function(err) {
+      showMessage('roomMessage', err.message, 'error');
+    });
+  </script>
+</body>
+</html>

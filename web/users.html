@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Users - SmartBook</title>
+
+  <!-- Browser Tab Logo -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="auth-guard.js"></script>
+</head>
+
+<body class="admin-page min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 text-slate-800 antialiased">
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900 p-5 text-white shadow-2xl">
+      <div class="mb-7">
+        <div class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-3">
+          <img
+            src="./images/logo.png"
+            alt="SmartBook Logo"
+            class="h-11 w-11 shrink-0 rounded-xl bg-white p-1.5 object-contain"
+            onerror="this.onerror=null;this.src='images/logo.png';"
+          />
+          <div>
+            <div class="text-lg font-black leading-tight text-white">SmartBook</div>
+            <div class="mt-1 text-[11px] font-bold uppercase tracking-wider text-indigo-200">
+              Admin Panel
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="space-y-2">
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="dashboard.html">Dashboard</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="rooms.html">Rooms</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="book-room.html">Book Room</a>
+        <a class="block rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg" href="users.html">Users</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="bookings.html">Bookings</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="history.html">History</a>
+      </nav>
+
+      <div class="mt-auto border-t border-white/10 pt-4">
+        <a href="#" onclick="logout()" class="flex items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-red-600 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 md:p-8">
+
+      <!-- Header -->
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-black text-slate-900">User Registration</h1>
+          <p class="mt-1 font-semibold text-slate-500">Manage registered users who are allowed to book meeting rooms</p>
+        </div>
+        <button onclick="logout()" class="inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-extrabold text-red-600 transition hover:bg-red-600 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
+      </div>
+
+      <div id="userMessage" style="display:none;"></div>
+
+      <!-- Form + Info -->
+      <section class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+        <!-- User Form -->
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+          <h2 id="formTitle" class="mb-4 text-xl font-black text-slate-900">
+            Add User
+          </h2>
+
+          <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-slate-600">
+            Only active registered users can book rooms from the public calendar.
+          </div>
+
+          <form id="userForm" class="grid gap-4">
+            <input type="hidden" id="userId" />
+
+            <label class="block text-sm font-bold text-slate-700">
+              Full Name
+              <input
+                type="text"
+                id="userName"
+                placeholder="Enter full name"
+                required
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
+
+            <label class="block text-sm font-bold text-slate-700">
+              Email
+              <input
+                type="email"
+                id="userEmail"
+                placeholder="Enter valid email address"
+                required
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                id="saveBtn"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-indigo-700"
+              >
+                Save User
+              </button>
+
+              <button
+                type="button"
+                onclick="resetForm()"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition hover:bg-slate-200"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Info Card -->
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+          <h2 class="mb-4 text-xl font-black text-slate-900">
+            How this works
+          </h2>
+
+          <div class="space-y-3 text-sm font-semibold text-slate-600">
+            <p>
+              Only users registered here can create bookings from the public calendar page.
+            </p>
+
+            <p>
+              When a user enters their email while booking, the backend checks this users table in PostgreSQL.
+            </p>
+
+            <p>
+              If the email does not exist, the booking is blocked automatically.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Registered Users -->
+      <section class="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+        <div class="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 class="text-xl font-black text-slate-900">Registered Users</h2>
+            <p class="mt-1 font-semibold text-slate-500">
+              Search, edit, or delete registered users
+            </p>
+          </div>
+
+          <input
+            id="searchUser"
+            placeholder="Search user..."
+            oninput="renderUsers()"
+            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 md:max-w-xs"
+          />
+        </div>
+
+        <div class="overflow-x-auto rounded-2xl border border-slate-200">
+          <table class="w-full border-collapse bg-white">
+            <thead>
+              <tr>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Name</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Email</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
+              </tr>
+            </thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    requireAuth();
+
+    let users = [];
+
+    function resetForm() {
+      document.getElementById('userId').value = '';
+      document.getElementById('userName').value = '';
+      document.getElementById('userEmail').value = '';
+      document.getElementById('formTitle').textContent = 'Add User';
+      document.getElementById('saveBtn').textContent = 'Save User';
+    }
+
+    async function loadUsers() {
+      try {
+        users = await getUsers();
+        renderUsers();
+      } catch (err) {
+        showMessage('userMessage', err.message, 'error');
+      }
+    }
+
+    function renderUsers() {
+      const q = (document.getElementById('searchUser')?.value || '').toLowerCase();
+
+      const filtered = users.filter(function(u) {
+        return !q ||
+          String(u.name).toLowerCase().includes(q) ||
+          String(u.email).toLowerCase().includes(q);
+      });
+
+      document.getElementById('userRows').innerHTML = filtered.map(function(u) {
+        return `
+          <tr>
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
+              ${escapeHtml(u.name)}
+            </td>
+
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
+              ${escapeHtml(u.email)}
+            </td>
+
+            <td class="border-b border-slate-100 px-4 py-3 align-middle">
+              <div class="flex flex-wrap gap-2">
+                <button
+                  onclick="editUser(${u.id})"
+                  class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition hover:bg-slate-200"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onclick="removeUser(${u.id})"
+                  class="inline-flex min-h-10 items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('') || `
+        <tr>
+          <td colspan="3" class="px-4 py-6 text-center font-semibold text-slate-500">
+            No users registered.
+          </td>
+        </tr>
+      `;
+    }
+
+    function editUser(id) {
+      const u = users.find(function(x) {
+        return Number(x.id) === Number(id);
+      });
+
+      if (!u) return;
+
+      document.getElementById('userId').value = u.id;
+      document.getElementById('userName').value = u.name;
+      document.getElementById('userEmail').value = u.email;
+      document.getElementById('formTitle').textContent = 'Edit User';
+      document.getElementById('saveBtn').textContent = 'Update User';
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function removeUser(id) {
+      if (!confirm('Delete this registered user?')) return;
+
+      try {
+        await deleteUserApi(id);
+        showMessage('userMessage', 'User deleted successfully.');
+        await loadUsers();
+      } catch (err) {
+        showMessage('userMessage', err.message, 'error');
+      }
+    }
+
+    document.getElementById('userForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const id = document.getElementById('userId').value;
+
+      const payload = {
+        name: document.getElementById('userName').value.trim(),
+        email: document.getElementById('userEmail').value.trim().toLowerCase()
+      };
+
+      try {
+        if (id) {
+          await updateUser(id, payload);
+        } else {
+          await createUser(payload);
+        }
+
+        resetForm();
+        showMessage('userMessage', id ? 'User updated successfully.' : 'User added successfully.');
+        await loadUsers();
+      } catch (err) {
+        showMessage('userMessage', err.message, 'error');
+      }
+    });
+
+    loadUsers();
+  </script>
+</body>
+</html>

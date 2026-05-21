@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login - SmartBook</title>
+
+  <!-- Browser Tab Logo -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<!-- Admin login page marker: .admin-page scopes shared admin button/form styling. -->
+<body class="admin-page relative min-h-screen overflow-hidden">
+
+  <!-- Blurred Background Image -->
+  <div
+    class="absolute inset-0 bg-cover bg-center bg-no-repeat blur-sm scale-105"
+    style="background-image: url('images/background.png');">
+  </div>
+
+  <!-- Dark Overlay -->
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <!-- Login Content -->
+  <div class="relative min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md rounded-3xl bg-white/85 backdrop-blur-xl shadow-2xl border border-white/40 p-8">
+
+      <!-- Logo -->
+      <div class="flex justify-center mb-4">
+        <img src="images/logo.png" alt="SmartBook Logo" class="h-16 w-auto max-w-[180px] object-contain" />
+      </div>
+
+      <h1 class="text-center text-3xl font-black text-slate-900">
+        Admin Login
+      </h1>
+
+      <p class="text-center text-sm font-semibold text-slate-500 mt-2 mb-6">
+        SmartBook
+      </p>
+
+      <div id="loginMessage" class="notice mb-4" style="display:none;"></div>
+
+      <form id="loginForm" class="space-y-5">
+        <div>
+          <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
+            Username
+          </label>
+          <input
+            type="text"
+            id="username"
+            placeholder="Enter admin username"
+            required
+            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
+            Password
+          </label>
+          <input
+            type="password"
+            id="password"
+            placeholder="Enter password"
+            required
+            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white shadow-xl transition hover:bg-indigo-700"
+        >
+          Login
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      try {
+        await loginAdmin(
+          document.getElementById('username').value.trim(),
+          document.getElementById('password').value.trim()
+        );
+
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        showMessage('loginMessage', err.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

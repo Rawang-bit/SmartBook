@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book Room - SmartBook</title>
+
+  <!-- Browser Tab Logo -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="auth-guard.js"></script>
+</head>
+
+<body class="admin-page min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 text-slate-800 antialiased">
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar -->
+    <aside class="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900 p-5 text-white shadow-2xl">
+      <div class="mb-7">
+        <div class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-3">
+          <img
+            src="./images/logo.png"
+            alt="SmartBook Logo"
+            class="h-11 w-11 shrink-0 rounded-xl bg-white p-1.5 object-contain"
+            onerror="this.onerror=null;this.src='images/logo.png';"
+          />
+          <div>
+            <div class="text-lg font-black leading-tight text-white">SmartBook</div>
+            <div class="mt-1 text-[11px] font-bold uppercase tracking-wider text-indigo-200">
+              Admin Panel
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="space-y-2">
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="dashboard.html">Dashboard</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="rooms.html">Rooms</a>
+        <a class="block rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg" href="book-room.html">Book Room</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="users.html">Users</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="bookings.html">Bookings</a>
+        <a class="block rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="history.html">History</a>
+      </nav>
+
+      <div class="mt-auto border-t border-white/10 pt-4">
+        <a href="#" onclick="logout()" class="flex items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-red-600 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 md:p-8">
+
+      <!-- Header -->
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-black text-slate-900">Book a Meeting Room</h1>
+          <p class="mt-1 font-semibold text-slate-500">Create a reservation for any registered user</p>
+        </div>
+        <button onclick="logout()" class="inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-extrabold text-red-600 transition hover:bg-red-600 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+        <!-- Booking Form -->
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+          <div id="formMessage" style="display:none;"></div>
+
+          <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-slate-600">
+            Select a registered user, room, date, and 30-minute time slot. Past dates and past times are blocked.
+          </div>
+
+          <form id="bookingForm" class="grid gap-4">
+
+            <label class="block text-sm font-bold text-slate-700">
+              Registered User
+              <select
+                id="registeredUser"
+                required
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Select registered user</option>
+              </select>
+            </label>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="block text-sm font-bold text-slate-700">
+                Full Name
+                <input
+                  type="text"
+                  id="userName"
+                  readonly
+                  required
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-700 outline-none"
+                />
+              </label>
+
+              <label class="block text-sm font-bold text-slate-700">
+                Email
+                <input
+                  type="email"
+                  id="userEmail"
+                  readonly
+                  required
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-700 outline-none"
+                />
+              </label>
+            </div>
+
+            <label class="block text-sm font-bold text-slate-700">
+              Meeting Room
+              <select
+                id="roomId"
+                required
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              ></select>
+            </label>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="block text-sm font-bold text-slate-700">
+                Date
+                <input
+                  type="date"
+                  id="bookingDate"
+                  required
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                />
+              </label>
+
+              <label class="block text-sm font-bold text-slate-700">
+                Purpose
+                <input
+                  type="text"
+                  id="purpose"
+                  placeholder="Meeting title"
+                  required
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                />
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="block text-sm font-bold text-slate-700">
+                Start Time
+                <select
+                  id="startTime"
+                  required
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                ></select>
+              </label>
+
+              <label class="block text-sm font-bold text-slate-700">
+                End Time
+                <select
+                  id="endTime"
+                  required
+                  class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                ></select>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              class="inline-flex min-h-10 items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-indigo-700"
+            >
+              Create Booking
+            </button>
+          </form>
+        </section>
+
+        <!-- Available Rooms -->
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
+          <h2 class="mb-4 text-xl font-black text-slate-900">Available Rooms</h2>
+          <div id="availableRooms" class="grid gap-5"></div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    requireAuth();
+
+    let rooms = [];
+    let bookings = [];
+    let users = [];
+
+    function minutesFromTimeOption(value) {
+      const time24 = toTime24(value);
+      const parts = time24.split(':').map(Number);
+      return parts[0] * 60 + parts[1];
+    }
+
+    function selectedDateIsToday(dateValue) {
+      return dateValue === todayISO();
+    }
+
+    function isPastBookingStart(dateValue, startValue) {
+      if (!dateValue || !startValue) return false;
+
+      if (dateValue < todayISO()) return true;
+      if (!selectedDateIsToday(dateValue)) return false;
+
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      return minutesFromTimeOption(startValue) <= currentMinutes;
+    }
+
+    function fillTimeDropdowns() {
+      const selectedDate = document.getElementById('bookingDate').value || todayISO();
+
+      const validStartOptions = BOOKING_TIME_OPTIONS
+        .slice(0, -1)
+        .filter(function(time) {
+          return !isPastBookingStart(selectedDate, time);
+        });
+
+      const startSelect = document.getElementById('startTime');
+      const currentStart = startSelect.value;
+
+      startSelect.innerHTML = '<option value="">Select start time</option>' +
+        validStartOptions.map(function(time) {
+          return '<option value="' + time + '">' + time + '</option>';
+        }).join('');
+
+      if (validStartOptions.includes(currentStart)) {
+        startSelect.value = currentStart;
+      }
+
+      refreshEndTimes();
+    }
+
+    function refreshEndTimes() {
+      const selectedDate = document.getElementById('bookingDate').value || todayISO();
+      const start = document.getElementById('startTime').value;
+      const endSelect = document.getElementById('endTime');
+
+      if (!start || isPastBookingStart(selectedDate, start)) {
+        endSelect.innerHTML = '<option value="">Select end time</option>';
+        return;
+      }
+
+      const startIndex = BOOKING_TIME_OPTIONS.indexOf(start);
+
+      endSelect.innerHTML = '<option value="">Select end time</option>' +
+        BOOKING_TIME_OPTIONS
+          .slice(startIndex + 1)
+          .map(function(time) {
+            return '<option value="' + time + '">' + time + '</option>';
+          })
+          .join('');
+    }
+
+    function fillUsers() {
+      const activeUsers = users.filter(function(user) {
+        return (user.status || 'Active') === 'Active';
+      });
+
+      document.getElementById('registeredUser').innerHTML =
+        '<option value="">Select registered user</option>' +
+        activeUsers.map(function(user) {
+          return '<option value="' + user.id + '">' +
+            escapeHtml(user.name) + ' - ' + escapeHtml(user.email) +
+          '</option>';
+        }).join('');
+    }
+
+    function fillRooms() {
+      const activeRooms = rooms.filter(function(room) {
+        return room.status === 'Active';
+      });
+
+      document.getElementById('roomId').innerHTML =
+        '<option value="">Select a room</option>' +
+        activeRooms.map(function(room) {
+          return '<option value="' + room.id + '">' +
+            escapeHtml(room.name) + ' (' + escapeHtml(room.location) + ')' +
+          '</option>';
+        }).join('');
+
+      document.getElementById('availableRooms').innerHTML = activeRooms.map(function(room) {
+        return `
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="font-black text-slate-900">${escapeHtml(room.name)}</div>
+            <div class="mt-1 text-sm font-semibold text-slate-500">Capacity: ${room.capacity}</div>
+            <div class="text-sm font-semibold text-slate-500">Location: ${escapeHtml(room.location)}</div>
+          </div>
+        `;
+      }).join('') || `
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+          No active rooms found.
+        </div>
+      `;
+    }
+
+    async function loadPageData() {
+      [rooms, bookings, users] = await Promise.all([
+        getRooms(),
+        getBookings(),
+        getUsers()
+      ]);
+
+      fillUsers();
+      fillRooms();
+
+      document.getElementById('bookingDate').value = todayISO();
+      document.getElementById('bookingDate').min = todayISO();
+
+      fillTimeDropdowns();
+    }
+
+    document.getElementById('registeredUser').addEventListener('change', function() {
+      const selected = users.find(function(user) {
+        return Number(user.id) === Number(this.value);
+      }, this);
+
+      document.getElementById('userName').value = selected ? selected.name : '';
+      document.getElementById('userEmail').value = selected ? selected.email : '';
+    });
+
+    document.getElementById('startTime').addEventListener('change', refreshEndTimes);
+
+    document.getElementById('bookingDate').addEventListener('change', function() {
+      if (this.value < todayISO()) {
+        this.value = todayISO();
+        showMessage('formMessage', 'Previous dates cannot be booked.', 'error');
+      }
+
+      fillTimeDropdowns();
+    });
+
+    document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const roomId = Number(document.getElementById('roomId').value);
+      const date = document.getElementById('bookingDate').value;
+      const start = document.getElementById('startTime').value;
+      const end = document.getElementById('endTime').value;
+
+      if (!roomId || !date || !start || !end) {
+        showMessage('formMessage', 'Please complete room, date, start time, and end time.', 'error');
+        return;
+      }
+
+      if (isPastBookingStart(date, start)) {
+        showMessage('formMessage', 'Previous date or past time slots cannot be booked.', 'error');
+        fillTimeDropdowns();
+        return;
+      }
+
+      if (toTime24(end) <= toTime24(start)) {
+        showMessage('formMessage', 'End time must be later than start time.', 'error');
+        return;
+      }
+
+      if (hasConflictInList(bookings, roomId, date, start, end)) {
+        showMessage('formMessage', 'This room is already booked for the selected time slot.', 'error');
+        return;
+      }
+
+      try {
+        await createBooking({
+          user: document.getElementById('userName').value.trim(),
+          email: document.getElementById('userEmail').value.trim(),
+          roomId,
+          date,
+          start,
+          end,
+          purpose: document.getElementById('purpose').value.trim(),
+          status: 'Booked'
+        });
+
+        this.reset();
+
+        document.getElementById('bookingDate').value = todayISO();
+        document.getElementById('bookingDate').min = todayISO();
+
+        fillTimeDropdowns();
+
+        showMessage('formMessage', 'Booking created successfully.', 'success');
+
+        bookings = await getBookings();
+      } catch (err) {
+        showMessage('formMessage', err.message, 'error');
+      }
+    });
+
+    loadPageData().catch(function(err) {
+      showMessage('formMessage', err.message, 'error');
+    });
+  </script>
+</body>
+</html>
