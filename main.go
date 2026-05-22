@@ -11,7 +11,6 @@ import (
 )
 
 func main() {
-	// Connect to PostgreSQL — database.Connect() loads the .env file automatically
 	db, err := database.Connect()
 	if err != nil {
 		log.Fatal("Could not connect to the database:", err)

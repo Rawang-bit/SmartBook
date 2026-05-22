@@ -1,0 +1,21 @@
+# Environment variables — never commit credentials
+.env
+.env.*
+!.env.example
+
+# Go build output
+/smartbook
+/bookroom-management-system
+*.exe
+*.out
+*.test
+
+# Go test and build cache
+/tmp/
+
+# Logs
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db

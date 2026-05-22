@@ -48,7 +48,7 @@ smartbook/
 │   └── hashpw.go                     # Helper: generate a bcrypt hash for a password
 │
 ├── database/
-│   ├── connection.go                 # Opens the PostgreSQL connection; loads .env automatically
+│   ├── connection.go                 # Opens the PostgreSQL connection (reads DATABASE_URL from environment)
 │   ├── 01_create_database.sql        # Creates the bookroom_db database
 │   └── 02_create_tables_and_seed.sql # Creates all tables, indexes, and seeds default data
 │
@@ -151,14 +151,19 @@ Open a PostgreSQL shell (`psql`) and run:
 \i database/02_create_tables_and_seed.sql
 ```
 
-**3. Create your `.env` file**
+**3. Set environment variables**
 
-```env
-DATABASE_URL=postgres://postgres:yourpassword@localhost:5432/bookroom_db?sslmode=disable
-PORT=8080
+The app reads configuration directly from environment variables — there is no `.env` loading in the Go code.
+
+```bash
+export DATABASE_URL=postgres://postgres:yourpassword@localhost:5432/bookroom_db?sslmode=disable
+export PORT=8080                   # optional, defaults to 8080
+export APP_ENV=production          # optional, set when running behind HTTPS
 ```
 
-Set `APP_ENV=production` only when deploying with HTTPS — it enables the `Secure` flag on the session cookie.
+> **Dev container users:** the `.devcontainer/docker-compose.yml` picks up a `.env` file at the project root automatically. Copy the values above into `.env` instead of exporting them.
+
+`APP_ENV=production` enables the `Secure` flag on the session cookie (HTTPS-only). Leave it unset for local HTTP development.
 
 **4. Install Go dependencies**
 
