@@ -9,8 +9,8 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file:
-       # Ensure that the variables in .env match the same variables in devcontainer.json
-       - .env
+       # Path is relative to this docker-compose.yml file (inside .devcontainer/)
+       - ../.env
 
     volumes:
       - ../..:/workspaces:cached
@@ -27,9 +27,8 @@ services:
     image: postgres:latest
     restart: unless-stopped
     volumes:
-      - postgres-data:/var/lib/postgresql
+      - postgres-data:/var/lib/postgresql/data
     env_file:
-      # Ensure that the variables in .env match the same variables in devcontainer.json
-      - .env
+      - ../.env
     # Add "forwardPorts": ["5432"] to **devcontainer.json** to forward PostgreSQL locally.
     # (Adding the "ports" property to this file will not forward from a Codespace.)

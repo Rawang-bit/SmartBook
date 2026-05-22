@@ -4,7 +4,13 @@
 	"name": "Go & PostgreSQL",
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "app",
-	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+	// Inject env vars into every VS Code terminal shell
+	"remoteEnv": {
+		"DATABASE_URL": "postgres://postgres:postgres@localhost:5432/bookroom_db?sslmode=disable",
+		"PORT": "8080"
+	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},

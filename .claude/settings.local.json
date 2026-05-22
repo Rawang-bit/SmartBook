@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(sed -n '48,70p' /workspaces/smartbook/web/rooms.html)",
+      "Bash(sed -n '48,70p' /workspaces/smartbook/web/users.html)",
+      "Bash(sed -n '48,70p' /workspaces/smartbook/web/bookings.html)",
+      "Bash(sed -n '48,70p' /workspaces/smartbook/web/book-room.html)",
+      "Bash(go get *)",
+      "Bash(go vet *)"
+    ]
+  }
+}
