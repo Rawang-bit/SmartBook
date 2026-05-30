@@ -1,19 +1,45 @@
-// sidebar-extras.js — loaded by every admin page.
-// Handles role-based Admins nav link visibility and the Change Password modal.
+// sidebar-extras.js
+// Loaded by every admin page. Responsibilities:
+//   1. Show/hide the Admins nav link based on role (super_admin only)
+//   2. Populate the header admin name badge
+//   3. Populate the sidebar admin info panel (name, initial, role)
+//   4. Inject and wire up the shared Change Password modal
+//      (used only by admins.html own-row "Change PW" action)
 
 (function () {
-  // Show the Admins nav link only for super_admin, and populate admin name badge
+
+  // ── UI Population ────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
-    const link = document.getElementById('adminsNavLink');
-    if (link && localStorage.getItem('adminRole') === 'super_admin') {
-      link.classList.remove('hidden');
+    const role = localStorage.getItem('adminRole') || 'general_admin';
+    const name = localStorage.getItem('adminName') || 'Admin';
+
+    // Admins nav link is hidden by default in HTML; show it only for super_admin.
+    // Anchor elements default to inline when hidden is removed, so block is required.
+    const adminsLink = document.getElementById('adminsNavLink');
+    if (adminsLink && role === 'super_admin') {
+      adminsLink.classList.remove('hidden');
+      adminsLink.classList.add('block');
     }
 
-    const nameEl = document.getElementById('adminName');
-    if (nameEl) nameEl.textContent = localStorage.getItem('adminName') || 'Admin';
+    // Header admin name badge (present on every admin page)
+    const headerNameEl = document.getElementById('adminName');
+    if (headerNameEl) headerNameEl.textContent = name;
+
+    // Sidebar admin panel: avatar initial, full name, and human-readable role
+    const sidebarNameEl = document.getElementById('sidebarAdminName');
+    if (sidebarNameEl) sidebarNameEl.textContent = name;
+
+    const sidebarInitialEl = document.getElementById('sidebarAdminInitial');
+    if (sidebarInitialEl) sidebarInitialEl.textContent = name.charAt(0).toUpperCase();
+
+    const sidebarRoleEl = document.getElementById('sidebarAdminRole');
+    if (sidebarRoleEl) {
+      sidebarRoleEl.textContent = role === 'super_admin' ? 'Super Admin' : 'General Admin';
+    }
   });
 
-  // Inject the Change Password modal once, after the page loads
+  // ── Change Password Modal ────────────────────────────────────────────────
+  // Injected once into the body so every page gets it without duplicating markup.
   document.addEventListener('DOMContentLoaded', function () {
     const modal = document.createElement('div');
     modal.id = 'sharedChangePasswordModal';
@@ -24,19 +50,19 @@
         <div id="sharedCpMsg" class="mb-4 hidden rounded-xl px-4 py-3 font-bold text-sm"></div>
         <form id="sharedCpForm" class="space-y-4">
           <div>
-            <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Current Password</label>
+            <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Current Password</label>
             <input id="sharedCpCurrent" type="password" required
               class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               placeholder="Your current password" />
           </div>
           <div>
-            <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">New Password</label>
+            <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">New Password</label>
             <input id="sharedCpNew" type="password" required minlength="6"
               class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               placeholder="At least 6 characters" />
           </div>
           <div>
-            <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Confirm New Password</label>
+            <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Confirm New Password</label>
             <input id="sharedCpConfirm" type="password" required minlength="6"
               class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               placeholder="Re-enter new password" />
@@ -55,17 +81,17 @@
       </div>`;
     document.body.appendChild(modal);
 
-    // Close on backdrop click
+    // Close when clicking the backdrop (outside the card)
     modal.addEventListener('click', function (e) {
       if (e.target === modal) closeSharedCpModal();
     });
 
     document.getElementById('sharedCpForm').addEventListener('submit', async function (e) {
       e.preventDefault();
+
       const current = document.getElementById('sharedCpCurrent').value;
       const newPw   = document.getElementById('sharedCpNew').value;
       const confirm = document.getElementById('sharedCpConfirm').value;
-      const msgEl   = document.getElementById('sharedCpMsg');
       const btn     = document.getElementById('sharedCpSubmit');
 
       if (newPw !== confirm) {
@@ -73,7 +99,7 @@
         return;
       }
 
-      btn.disabled = true;
+      btn.disabled    = true;
       btn.textContent = 'Updating…';
 
       try {
@@ -82,12 +108,15 @@
         setTimeout(() => logout(), 2000);
       } catch (err) {
         showSharedCpMsg(err.message, 'error');
-        btn.disabled = false;
+        btn.disabled    = false;
         btn.textContent = 'Update Password';
       }
     });
   });
+
 })();
+
+// ── Modal API ──────────────────────────────────────────────────────────────
 
 function openSharedCpModal() {
   document.getElementById('sharedCpForm').reset();
@@ -107,9 +136,11 @@ function closeSharedCpModal() {
 
 function showSharedCpMsg(text, type) {
   const el = document.getElementById('sharedCpMsg');
-  el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${type === 'success'
-    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-    : 'bg-red-50 text-red-700 border border-red-200'}`;
+  el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${
+    type === 'success'
+      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+      : 'bg-red-50 text-red-700 border border-red-200'
+  }`;
   el.textContent = text;
   el.classList.remove('hidden');
 }
