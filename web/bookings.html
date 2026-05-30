@@ -181,10 +181,12 @@
 
       const bookings = allBookings
         .filter(function(booking) {
-          const roomOk = !roomFilter || Number(booking.roomId) === Number(roomFilter);
-          const dateOk = !dateFilter || booking.date === dateFilter;
+          const roomOk   = !roomFilter || Number(booking.roomId) === Number(roomFilter);
+          const dateOk   = !dateFilter || booking.date === dateFilter;
+          // Exclude completed and cancelled — those belong in History
+          const statusOk = booking.status !== 'Completed' && booking.status !== 'Cancelled';
 
-          return roomOk && dateOk;
+          return roomOk && dateOk && statusOk;
         })
         .sort(function(a, b) {
           return getBookingSortDateTime(b) - getBookingSortDateTime(a);
