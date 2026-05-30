@@ -45,7 +45,7 @@
       <div class="mt-auto space-y-1 border-t border-white/10 pt-4">
         <a
           href="#"
-          onclick="openChangePasswordModal()"
+          onclick="openSharedCpModal()"
           class="flex items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-slate-700 hover:text-white"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -86,6 +86,12 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             Add Admin
+          </button>
+          <button onclick="logout()" class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-extrabold text-red-600 transition hover:bg-red-600 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
           </button>
         </div>
       </div>
@@ -265,45 +271,6 @@
     </div>
   </div>
 
-  <!-- ── Change Own Password Modal ────────────────────────────────────────── -->
-  <div id="changePasswordModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-    <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-      <h2 class="mb-5 text-xl font-black text-slate-900">Change My Password</h2>
-      <div id="changePasswordMsg" class="mb-4 hidden rounded-xl px-4 py-3 font-bold text-sm"></div>
-
-      <form id="changePasswordForm" onsubmit="submitChangePassword(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Current Password</label>
-          <input id="currentPassword" type="password" required
-            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-            placeholder="Your current password" />
-        </div>
-        <div>
-          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">New Password</label>
-          <input id="newPassword" type="password" required minlength="6"
-            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-            placeholder="At least 6 characters" />
-        </div>
-        <div>
-          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Confirm New Password</label>
-          <input id="confirmNewPassword" type="password" required minlength="6"
-            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-            placeholder="Re-enter new password" />
-        </div>
-        <div class="flex gap-3 pt-2">
-          <button type="button" onclick="closeChangePasswordModal()"
-            class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
-            Cancel
-          </button>
-          <button type="submit"
-            class="flex-1 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700">
-            Update Password
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <!-- ── Delete Confirm Modal ──────────────────────────────────────────────── -->
   <div id="deleteModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
     <div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
@@ -327,6 +294,7 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="sidebar-extras.js"></script>
   <script>
     let allAdmins = [];
     let pendingDeleteId = null;
@@ -338,9 +306,6 @@
         window.location.replace('dashboard.html');
         return;
       }
-
-      const name = localStorage.getItem('adminName') || 'Admin';
-      document.getElementById('adminName').textContent = name;
 
       await loadAdmins();
     });
@@ -364,6 +329,7 @@
     }
 
     function renderTable(admins) {
+      const myId  = Number(localStorage.getItem('adminId') || '0');
       const tbody = document.getElementById('adminsTableBody');
       if (!admins.length) {
         tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 font-semibold">No admins found.</td></tr>`;
@@ -371,6 +337,7 @@
       }
 
       tbody.innerHTML = admins.map(a => {
+        const isSelf    = Number(a.id) === myId;
         const isRevoked = a.status === 'revoked';
         const rowClass  = isRevoked ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50';
 
@@ -382,39 +349,50 @@
           ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
           : `<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>`;
 
-        const toggleBtn = isRevoked
-          ? `<button onclick="toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')"
-               class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 transition hover:bg-emerald-100"
-             >Restore</button>`
-          : `<button onclick="toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')"
-               class="rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-extrabold text-orange-700 transition hover:bg-orange-100"
-             >Revoke</button>`;
+        const editBtn = `<button
+            onclick="openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}')"
+            class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-100"
+          >Edit</button>`;
+
+        let actions;
+        if (isSelf) {
+          actions = `
+            ${editBtn}
+            <button onclick="openSharedCpModal()"
+              class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-700 transition hover:bg-slate-200"
+            >Change PW</button>`;
+        } else {
+          const toggleBtn = isRevoked
+            ? `<button onclick="toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')"
+                 class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 transition hover:bg-emerald-100"
+               >Restore</button>`
+            : `<button onclick="toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')"
+                 class="rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-extrabold text-orange-700 transition hover:bg-orange-100"
+               >Revoke</button>`;
+
+          actions = `
+            ${editBtn}
+            <button onclick="openResetModal(${a.id}, '${escapeHtml(a.username)}')"
+              class="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-extrabold text-amber-700 transition hover:bg-amber-100"
+            >Reset PW</button>
+            ${toggleBtn}
+            <button onclick="openDeleteModal(${a.id}, '${escapeHtml(a.username)}')"
+              class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-100"
+            >Delete</button>`;
+        }
 
         return `
           <tr class="transition-colors ${rowClass}">
             <td class="px-6 py-4">
               <span class="font-black text-slate-900">${escapeHtml(a.username)}</span>
+              ${isSelf ? '<span class="ml-1 text-xs font-bold text-indigo-400">(you)</span>' : ''}
             </td>
             <td class="px-6 py-4 font-semibold text-slate-700">${escapeHtml(a.name)}</td>
             <td class="px-6 py-4">${roleBadge}</td>
             <td class="px-6 py-4">${statusBadge}</td>
             <td class="px-6 py-4 text-slate-500 font-semibold">${escapeHtml(a.createdAt || '—')}</td>
             <td class="px-6 py-4 text-right">
-              <div class="inline-flex flex-wrap gap-2 justify-end">
-                <button
-                  onclick="openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}')"
-                  class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-100"
-                >Edit</button>
-                <button
-                  onclick="openResetModal(${a.id}, '${escapeHtml(a.username)}')"
-                  class="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-extrabold text-amber-700 transition hover:bg-amber-100"
-                >Reset PW</button>
-                ${toggleBtn}
-                <button
-                  onclick="openDeleteModal(${a.id}, '${escapeHtml(a.username)}')"
-                  class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-100"
-                >Delete</button>
-              </div>
+              <div class="inline-flex flex-wrap gap-2 justify-end">${actions}</div>
             </td>
           </tr>`;
       }).join('');
@@ -527,9 +505,7 @@
     }
 
     function checkIsSelfById(id) {
-      const me = allAdmins.find(a => a.id === id);
-      if (!me) return false;
-      return me.name === (localStorage.getItem('adminName') || '') && me.role === 'super_admin';
+      return Number(id) === Number(localStorage.getItem('adminId') || '0');
     }
 
     function closeEditModal() {
@@ -579,32 +555,6 @@
         showFlash('Password reset successfully.');
       } catch (err) {
         showModalMsg('resetMsg', err.message);
-      }
-    }
-
-    // ── Change Own Password Modal ───────────────────────────────────────────
-    function openChangePasswordModal() {
-      document.getElementById('changePasswordForm').reset();
-      clearModalMsg('changePasswordMsg');
-      showModal('changePasswordModal');
-    }
-
-    function closeChangePasswordModal() { hideModal('changePasswordModal'); }
-
-    async function submitChangePassword(e) {
-      e.preventDefault();
-      const current  = document.getElementById('currentPassword').value;
-      const newPw    = document.getElementById('newPassword').value;
-      const confirm  = document.getElementById('confirmNewPassword').value;
-      if (newPw !== confirm) { showModalMsg('changePasswordMsg', 'New passwords do not match'); return; }
-
-      try {
-        await changeOwnPasswordApi(current, newPw);
-        closeChangePasswordModal();
-        showFlash('Password changed successfully. Please log in again.');
-        setTimeout(() => logout(), 2000);
-      } catch (err) {
-        showModalMsg('changePasswordMsg', err.message);
       }
     }
 

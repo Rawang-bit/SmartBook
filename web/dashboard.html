@@ -103,6 +103,8 @@
         </div>
       </div>
 
+      <div id="dashboardMessage" style="display:none;"></div>
+
       <section class="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-[1.6fr_1fr]">
         <div class="rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-600 to-indigo-900 p-6 text-white shadow-lg">
           <h2 class="text-3xl font-black">Welcome to SmartBook</h2>
@@ -370,9 +372,6 @@
           })
           .slice(0, 8);
 
-        document.getElementById('adminName').textContent =
-          localStorage.getItem('adminName') || 'Admin';
-
         document.getElementById('totalRooms').textContent = visibleRooms.length;
         document.getElementById('totalBookings').textContent = bookings.length;
         document.getElementById('todayBookings').textContent = todayBookings.length;
@@ -457,7 +456,7 @@
         `;
 
       } catch (err) {
-        alert(err.message);
+        showMessage('dashboardMessage', err.message, 'error');
       }
     }
 

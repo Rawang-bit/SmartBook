@@ -2,12 +2,15 @@
 // Handles role-based Admins nav link visibility and the Change Password modal.
 
 (function () {
-  // Show the Admins nav link only for super_admin
+  // Show the Admins nav link only for super_admin, and populate admin name badge
   document.addEventListener('DOMContentLoaded', function () {
     const link = document.getElementById('adminsNavLink');
     if (link && localStorage.getItem('adminRole') === 'super_admin') {
       link.classList.remove('hidden');
     }
+
+    const nameEl = document.getElementById('adminName');
+    if (nameEl) nameEl.textContent = localStorage.getItem('adminName') || 'Admin';
   });
 
   // Inject the Change Password modal once, after the page loads

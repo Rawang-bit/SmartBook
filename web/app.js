@@ -68,6 +68,7 @@ async function logout() {
     // Even if the server call fails, we still clear local state and redirect
   }
   localStorage.removeItem('adminLoggedIn');
+  localStorage.removeItem('adminId');
   localStorage.removeItem('adminName');
   localStorage.removeItem('adminRole');
   window.location.href = 'login.html';
@@ -79,6 +80,7 @@ async function logout() {
 async function loginAdmin(username, password) {
   const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
   localStorage.setItem('adminLoggedIn', 'true');
+  localStorage.setItem('adminId',   String(result.admin.id));
   localStorage.setItem('adminName', result.admin.name);
   localStorage.setItem('adminRole', result.admin.role || 'general_admin');
   return result;
