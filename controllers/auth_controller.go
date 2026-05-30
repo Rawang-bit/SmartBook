@@ -38,11 +38,12 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	// Fetch the stored bcrypt hash alongside the admin record
 	var admin    models.Admin
 	var hashInDB string
+	var status   string
 	err := c.DB.QueryRow(`
-		SELECT id, username, name, password
+		SELECT id, username, name, role, status, password
 		FROM admins
 		WHERE username = $1
-	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &hashInDB)
+	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hashInDB)
 
 	if err != nil {
 		// Same message whether user does not exist or password is wrong —
@@ -58,8 +59,15 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reject revoked accounts after verifying the password (avoids timing leak
+	// that would reveal whether the username exists).
+	if status == "revoked" {
+		writeError(w, http.StatusForbidden, "your account access has been revoked")
+		return
+	}
+
 	// Create a server-side session and store the admin info in memory
-	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name)
+	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role)
 
 	// Set Secure=true only in production (requires HTTPS).
 	// In local development this is false so the cookie works over plain HTTP.
@@ -118,5 +126,6 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 		"id":       data.AdminID,
 		"username": data.Username,
 		"name":     data.Name,
+		"role":     data.Role,
 	})
 }

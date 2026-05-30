@@ -37,10 +37,20 @@ function adminLoggedIn() {
   return localStorage.getItem('adminLoggedIn') === 'true';
 }
 
+// Returns the current admin's role from localStorage ('super_admin' or 'general_admin').
+function adminRole() {
+  return localStorage.getItem('adminRole') || 'general_admin';
+}
+
+// Returns true if the current admin is a super admin.
+function isSuperAdmin() {
+  return adminRole() === 'super_admin';
+}
+
 // Redirects to login.html if the admin is not logged in.
 function requireAuth() {
   const page = window.location.pathname.split('/').pop() || 'index.html';
-  const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html'];
+  const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html', 'admins.html'];
 
   if (adminPages.includes(page) && !adminLoggedIn()) {
     window.location.replace('login.html');
@@ -59,16 +69,18 @@ async function logout() {
   }
   localStorage.removeItem('adminLoggedIn');
   localStorage.removeItem('adminName');
+  localStorage.removeItem('adminRole');
   window.location.href = 'login.html';
 }
 
 // Sends login credentials to the server.
 // On success, the server sets an HttpOnly session cookie automatically.
-// We save the admin's name in localStorage only for display purposes (e.g. "Welcome, Alice").
+// We save the admin's name and role in localStorage only for display purposes.
 async function loginAdmin(username, password) {
   const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
   localStorage.setItem('adminLoggedIn', 'true');
   localStorage.setItem('adminName', result.admin.name);
+  localStorage.setItem('adminRole', result.admin.role || 'general_admin');
   return result;
 }
 
@@ -231,6 +243,18 @@ function hasConflictInList(bookings, roomId, date, start, end, excludeId = null)
       Number(b.id) !== Number(excludeId) &&
       newStart < b.end && newEnd > b.start;
   });
+}
+
+// Admin management API helpers (super_admin only)
+async function getAdmins() { return api('/admins'); }
+async function createAdminApi(data) { return api('/admins', { method: 'POST', body: JSON.stringify(data) }); }
+async function updateAdminApi(id, data) { return api('/admins/' + id, { method: 'PUT', body: JSON.stringify(data) }); }
+async function resetAdminPasswordApi(id, newPassword) { return api('/admins/' + id, { method: 'PATCH', body: JSON.stringify({ newPassword }) }); }
+async function revokeAdminApi(id) { return api('/admins/' + id + '/revoke', { method: 'POST' }); }
+async function restoreAdminApi(id) { return api('/admins/' + id + '/restore', { method: 'POST' }); }
+async function deleteAdminApi(id) { return api('/admins/' + id, { method: 'DELETE' }); }
+async function changeOwnPasswordApi(currentPassword, newPassword) {
+  return api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
 }
 
 // Shared admin booking slots. Matches the public calendar: 30-minute gaps.

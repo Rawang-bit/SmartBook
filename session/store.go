@@ -16,6 +16,7 @@ type SessionData struct {
 	AdminID   int64
 	Username  string
 	Name      string
+	Role      string // "super_admin" or "general_admin"
 	ExpiresAt time.Time
 }
 
@@ -38,7 +39,7 @@ func New() *Store {
 
 // Create saves a new session and returns a random 64-char hex session ID.
 // Sessions expire after 8 hours.
-func (s *Store) Create(adminID int64, username, name string) string {
+func (s *Store) Create(adminID int64, username, name, role string) string {
 	// 32 random bytes → 64-character hex string, impossible to guess
 	randomBytes := make([]byte, 32)
 	_, _ = rand.Read(randomBytes)
@@ -51,6 +52,7 @@ func (s *Store) Create(adminID int64, username, name string) string {
 		AdminID:   adminID,
 		Username:  username,
 		Name:      name,
+		Role:      role,
 		ExpiresAt: time.Now().Add(8 * time.Hour),
 	}
 

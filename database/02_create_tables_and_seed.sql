@@ -4,11 +4,15 @@
 -- ── Admins table ─────────────────────────────────────────────────────────────
 -- Stores admin login credentials.
 -- Passwords are stored as bcrypt hashes (never plaintext).
+-- role:   'super_admin' (full access + admin management) or 'general_admin'
+-- status: 'active' (can log in) or 'revoked' (access suspended by super admin)
 CREATE TABLE IF NOT EXISTS admins (
     id         BIGSERIAL PRIMARY KEY,
     username   TEXT UNIQUE NOT NULL,
     password   TEXT NOT NULL,           -- bcrypt hash, NOT plaintext
     name       TEXT NOT NULL,
+    role       TEXT NOT NULL DEFAULT 'general_admin',
+    status     TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -57,11 +61,12 @@ CREATE INDEX IF NOT EXISTS idx_users_email_lower  ON users(LOWER(email));
 -- Password below is a bcrypt hash of: Rawang@3013
 -- IMPORTANT: Change this password immediately after first login.
 -- To generate a new hash, run:  go run scripts/hashpw.go <newpassword>
-INSERT INTO admins(username, password, name) VALUES
+INSERT INTO admins(username, password, name, role) VALUES
 (
   'Rawang',
   '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2',
-  'System Admin'
+  'System Admin',
+  'super_admin'
 )
 ON CONFLICT(username) DO NOTHING;
 

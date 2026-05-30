@@ -5,6 +5,25 @@ type Admin struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	Name     string `json:"name"`
+	Role     string `json:"role"` // "super_admin" or "general_admin"
+}
+
+// AdminDetail is returned in admin list responses (includes created_at and status).
+type AdminDetail struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	Status    string `json:"status"` // "active" or "revoked"
+	CreatedAt string `json:"createdAt"`
+}
+
+// AdminRequest is the JSON body for creating or updating an admin account.
+type AdminRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	Role     string `json:"role"` // "super_admin" or "general_admin"
 }
 
 // LoginRequest is the JSON body sent by the admin login form.

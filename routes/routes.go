@@ -25,20 +25,22 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("GET /api/public/users/validate", c.ValidateUser)
 	mux.HandleFunc("GET /api/public/users",          c.ListUsers)
 
-	// Admin: full CRUD on registered users
-	mux.HandleFunc("GET /api/users",     c.RequireAdmin(c.ListUsers))
-	mux.HandleFunc("POST /api/users",    c.RequireAdmin(c.CreateUser))
-	mux.HandleFunc("PUT /api/users/",    c.RequireAdmin(c.UpdateUser))
-	mux.HandleFunc("DELETE /api/users/", c.RequireAdmin(c.DeleteUser))
+	// Admin: list and create — general_admin can add users
+	mux.HandleFunc("GET /api/users",  c.RequireAdmin(c.ListUsers))
+	mux.HandleFunc("POST /api/users", c.RequireAdmin(c.CreateUser))
+
+	// Super admin only: edit and delete users
+	mux.HandleFunc("PUT /api/users/",    c.RequireSuperAdmin(c.UpdateUser))
+	mux.HandleFunc("DELETE /api/users/", c.RequireSuperAdmin(c.DeleteUser))
 
 	// ── Rooms ─────────────────────────────────────────────────────────────────
 	// Public: read room list (needed by the public calendar)
 	mux.HandleFunc("GET /api/rooms", c.ListRooms)
 
-	// Admin: create, update, delete rooms
-	mux.HandleFunc("POST /api/rooms",    c.RequireAdmin(c.CreateRoom))
-	mux.HandleFunc("PUT /api/rooms/",    c.RequireAdmin(c.UpdateRoom))
-	mux.HandleFunc("DELETE /api/rooms/", c.RequireAdmin(c.DeleteRoom))
+	// Super admin only: create, update, delete rooms
+	mux.HandleFunc("POST /api/rooms",    c.RequireSuperAdmin(c.CreateRoom))
+	mux.HandleFunc("PUT /api/rooms/",    c.RequireSuperAdmin(c.UpdateRoom))
+	mux.HandleFunc("DELETE /api/rooms/", c.RequireSuperAdmin(c.DeleteRoom))
 
 	// ── Bookings ──────────────────────────────────────────────────────────────
 	// Public: view all bookings, create a new booking
@@ -48,7 +50,20 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	// Public: cancel own booking — POST /api/bookings/{id}/cancel
 	mux.HandleFunc("POST /api/bookings/", c.PublicCancelBooking)
 
-	// Admin: edit or delete any booking
-	mux.HandleFunc("PUT /api/bookings/",    c.RequireAdmin(c.UpdateBooking))
-	mux.HandleFunc("DELETE /api/bookings/", c.RequireAdmin(c.DeleteBooking))
+	// Super admin only: edit or delete any booking
+	mux.HandleFunc("PUT /api/bookings/",    c.RequireSuperAdmin(c.UpdateBooking))
+	mux.HandleFunc("DELETE /api/bookings/", c.RequireSuperAdmin(c.DeleteBooking))
+
+	// ── Admin management (super_admin only) ───────────────────────────────────
+	mux.HandleFunc("GET /api/admins",     c.RequireSuperAdmin(c.ListAdmins))
+	mux.HandleFunc("POST /api/admins",    c.RequireSuperAdmin(c.CreateAdmin))
+	mux.HandleFunc("PUT /api/admins/",    c.RequireSuperAdmin(c.UpdateAdmin))
+	mux.HandleFunc("PATCH /api/admins/",  c.RequireSuperAdmin(c.ResetAdminPassword))
+	mux.HandleFunc("DELETE /api/admins/", c.RequireSuperAdmin(c.DeleteAdmin))
+
+	// Revoke or restore an admin's access — POST /api/admins/{id}/revoke|restore
+	mux.HandleFunc("POST /api/admins/", c.RequireSuperAdmin(c.ToggleAdminStatus))
+
+	// Any logged-in admin can change their own password
+	mux.HandleFunc("POST /api/admin/change-password", c.RequireAdmin(c.ChangeOwnPassword))
 }

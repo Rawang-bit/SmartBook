@@ -67,6 +67,40 @@ func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// RequireSuperAdmin is a middleware that allows only super_admin role through.
+// Returns 403 if the logged-in admin is a general_admin.
+func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("smartbook_session")
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "admin login required")
+			return
+		}
+
+		data, ok := c.Sessions.Get(cookie.Value)
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "session expired, please log in again")
+			return
+		}
+
+		if data.Role != "super_admin" {
+			writeError(w, http.StatusForbidden, "super admin access required")
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// getSession returns the session data for the current request.
+func (c *Controller) getSession(r *http.Request) (session.SessionData, bool) {
+	cookie, err := r.Cookie("smartbook_session")
+	if err != nil {
+		return session.SessionData{}, false
+	}
+	return c.Sessions.Get(cookie.Value)
+}
+
 // idFromPath extracts a positive integer ID from the URL path.
 // Example: "/api/rooms/42" with prefix "/api/rooms/" returns 42.
 func idFromPath(w http.ResponseWriter, r *http.Request, prefix string) (int64, bool) {
