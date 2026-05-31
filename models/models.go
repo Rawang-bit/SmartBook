@@ -1,6 +1,6 @@
 package models
 
-// Admin is an authenticated administrator account.
+// Admin is an authenticated administrator account. Session data, login response
 type Admin struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
