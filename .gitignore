@@ -19,6 +19,3 @@
 # OS metadata
 .DS_Store
 Thumbs.db
-
-# Claude Code local settings (contains machine-specific permissions)
-.claude/
