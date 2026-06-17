@@ -14,23 +14,25 @@ import (
 // Controller coordinates HTTP requests by delegating to the appropriate domain model.
 // It holds no business logic — that lives exclusively in the model layer.
 type Controller struct {
-	Sessions    *session.Store
-	ResetTokens *session.ResetStore
-	Admins      *models.AdminModel
-	Users       *models.UserModel
-	Rooms       *models.RoomModel
-	Bookings    *models.BookingModel
+	Sessions      *session.Store
+	ResetTokens   *session.ResetStore
+	LoginAttempts *session.AttemptStore
+	Admins        *models.AdminModel
+	Users         *models.UserModel
+	Rooms         *models.RoomModel
+	Bookings      *models.BookingModel
 }
 
 // New wires the database connection into each domain model and returns a Controller.
 func New(db *sql.DB, sessions *session.Store) *Controller {
 	return &Controller{
-		Sessions:    sessions,
-		ResetTokens: session.NewResetStore(),
-		Admins:      &models.AdminModel{DB: db},
-		Users:       &models.UserModel{DB: db},
-		Rooms:       &models.RoomModel{DB: db},
-		Bookings:    &models.BookingModel{DB: db},
+		Sessions:      sessions,
+		ResetTokens:   session.NewResetStore(),
+		LoginAttempts: session.NewAttemptStore(),
+		Admins:        &models.AdminModel{DB: db},
+		Users:         &models.UserModel{DB: db},
+		Rooms:         &models.RoomModel{DB: db},
+		Bookings:      &models.BookingModel{DB: db},
 	}
 }
 

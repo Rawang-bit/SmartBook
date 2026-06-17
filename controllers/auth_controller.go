@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"bookroom-management-system/models"
+	"bookroom-management-system/session"
 	"bookroom-management-system/utils"
 )
 
@@ -31,20 +34,53 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == "" || req.Password == "" {
+	username := strings.TrimSpace(req.Username)
+	password := strings.TrimSpace(req.Password)
+
+	if username == "" || password == "" {
 		writeError(w, http.StatusBadRequest, "username and password are required")
 		return
 	}
 
-	admin, hash, status, err := c.Admins.GetByUsername(req.Username)
-	if errors.Is(err, models.ErrNotFound) || err != nil {
-		// Identical message for missing user and wrong password — prevents username enumeration.
-		writeError(w, http.StatusUnauthorized, "invalid username or password")
+	// ── Lockout check ─────────────────────────────────────────────────────────
+	// Must happen before any database work so locked accounts are rejected
+	// immediately, regardless of whether the password would have been correct.
+	if locked, until := c.LoginAttempts.IsLocked(username); locked {
+		mins := int(time.Until(until).Minutes()) + 1
+		writeError(w, http.StatusTooManyRequests,
+			fmt.Sprintf("account locked after %d failed attempts — try again in %d minute(s)",
+				session.MaxLoginAttempts, mins))
 		return
 	}
 
-	if err := c.Admins.VerifyPassword(hash, req.Password); err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid username or password")
+	admin, hash, status, err := c.Admins.GetByUsername(username)
+	if errors.Is(err, models.ErrNotFound) || err != nil {
+		// Count the failure even for unknown usernames to prevent brute-forcing
+		// the username space; the error message is identical either way.
+		nowLocked := c.LoginAttempts.RecordFailure(username)
+		if nowLocked {
+			writeError(w, http.StatusTooManyRequests,
+				fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
+					session.MaxLoginAttempts))
+			return
+		}
+		remaining := c.LoginAttempts.Remaining(username)
+		writeError(w, http.StatusUnauthorized,
+			fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
+		return
+	}
+
+	if err := c.Admins.VerifyPassword(hash, password); err != nil {
+		nowLocked := c.LoginAttempts.RecordFailure(username)
+		if nowLocked {
+			writeError(w, http.StatusTooManyRequests,
+				fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
+					session.MaxLoginAttempts))
+			return
+		}
+		remaining := c.LoginAttempts.Remaining(username)
+		writeError(w, http.StatusUnauthorized,
+			fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
 		return
 	}
 
@@ -55,6 +91,9 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "your account access has been revoked")
 		return
 	}
+
+	// Successful login — clear the failure counter so the user starts fresh next time.
+	c.LoginAttempts.Reset(username)
 
 	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role)
 

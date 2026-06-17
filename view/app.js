@@ -259,6 +259,17 @@ async function changeOwnPasswordApi(currentPassword, newPassword) {
   return api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
 }
 
+// Toggles a password field between hidden and visible.
+// Call with the toggle button element; it finds the input via the nearest .pw-wrap parent.
+function togglePw(btn) {
+  var wrap   = btn.closest('.pw-wrap');
+  var input  = wrap.querySelector('input');
+  var isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  wrap.querySelector('.eye-open').classList.toggle('hidden', !isHidden);
+  wrap.querySelector('.eye-closed').classList.toggle('hidden', isHidden);
+}
+
 // Password-reset helpers — public endpoints, no session cookie required.
 async function forgotPasswordApi(username, email) {
   return api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email }) });
