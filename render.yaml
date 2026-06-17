@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: smartbook
+    runtime: go
+    buildCommand: go build -o smartbook .
+    startCommand: ./smartbook

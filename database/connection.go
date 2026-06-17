@@ -49,17 +49,23 @@ func Connect() (*sql.DB, error) {
 }
 
 // migrate applies any schema changes that must run at startup.
-// Each statement is idempotent (IF NOT EXISTS / IF EXISTS guards) so it is safe
-// to run on every boot against both fresh and existing databases.
+// Each statement is idempotent (IF NOT EXISTS guards) so it is safe to run on
+// every boot against both fresh and existing databases.
+// Statements are executed individually because pgx does not support multiple
+// statements in a single Exec call.
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`
-		ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
-
-		CREATE INDEX IF NOT EXISTS idx_admins_email_lower
-		    ON admins (LOWER(TRIM(email)))
-		    WHERE email IS NOT NULL;
-	`)
-	return err
+	stmts := []string{
+		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE`,
+		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
+		     ON admins (LOWER(TRIM(email)))
+		     WHERE email IS NOT NULL`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetEnv reads an environment variable and returns fallback if it is empty.
