@@ -1,116 +1,98 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
-	"os"
-	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 
 	"bookroom-management-system/models"
 )
-
-// cookieName is the name of the session cookie placed in the browser.
-const cookieName = "smartbook_session"
 
 // HealthCheck confirms the server is running. Used by monitoring tools.
 func (c *Controller) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// Login checks credentials against the admins table using bcrypt.
-// On success it creates a server-side session and sets an HttpOnly cookie.
-// The browser will automatically send this cookie on every future request.
+// Login validates credentials via the AdminModel, creates a server-side session,
+// and sets an HttpOnly cookie. The browser sends this cookie on every future request.
+//
+// Cookie security attributes applied:
+//   - HttpOnly:   JavaScript cannot read the cookie (mitigates XSS token theft)
+//   - Secure:     HTTPS-only delivery in production (set via APP_ENV=production)
+//   - SameSite:   Strict — cookie is never sent on cross-site requests (CSRF defence)
+//   - __Host-:    prefix applied in production — binds the cookie to the exact host,
+//                 no Domain attribute allowed, path must be "/" (prevents subdomain injection)
 func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 
-	username := strings.TrimSpace(req.Username)
-	password := strings.TrimSpace(req.Password)
-
-	if username == "" || password == "" {
+	if req.Username == "" || req.Password == "" {
 		writeError(w, http.StatusBadRequest, "username and password are required")
 		return
 	}
 
-	// Fetch the stored bcrypt hash alongside the admin record
-	var admin    models.Admin
-	var hashInDB string
-	var status   string
-	err := c.DB.QueryRow(`
-		SELECT id, username, name, role, status, password
-		FROM admins
-		WHERE username = $1
-	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hashInDB)
-
-	if err != nil {
-		// Same message whether user does not exist or password is wrong —
-		// prevents an attacker from discovering valid usernames.
+	admin, hash, status, err := c.Admins.GetByUsername(req.Username)
+	if errors.Is(err, models.ErrNotFound) || err != nil {
+		// Identical message for missing user and wrong password — prevents username enumeration.
 		writeError(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 
-	// bcrypt.CompareHashAndPassword is the safe way to check a password
-	// against a stored hash. Returns nil if they match.
-	if err := bcrypt.CompareHashAndPassword([]byte(hashInDB), []byte(password)); err != nil {
+	if err := c.Admins.VerifyPassword(hash, req.Password); err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 
-	// Reject revoked accounts after verifying the password (avoids timing leak
-	// that would reveal whether the username exists).
+	// Reject revoked accounts only after verifying the password so that the response
+	// time for a revoked account with a correct password is indistinguishable from a
+	// failed login (timing-attack safe).
 	if status == "revoked" {
 		writeError(w, http.StatusForbidden, "your account access has been revoked")
 		return
 	}
 
-	// Create a server-side session and store the admin info in memory
 	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role)
 
-	// Set Secure=true only in production (requires HTTPS).
-	// In local development this is false so the cookie works over plain HTTP.
-	secureCookie := os.Getenv("APP_ENV") == "production"
-
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
+		Name:     sessionCookieName(), // __Host- prefix in production for maximum host binding
 		Value:    sessionID,
 		Path:     "/",
-		MaxAge:   8 * 60 * 60, // 8 hours in seconds
-		HttpOnly: true,         // JavaScript cannot read this cookie
+		MaxAge:   8 * 60 * 60,         // 8 hours in seconds
+		HttpOnly: true,                 // JavaScript cannot access this cookie
 		SameSite: http.SameSiteStrictMode,
-		Secure:   secureCookie,
+		Secure:   isProduction(),       // HTTPS-only in production; allows HTTP in development
 	})
 
-	// Return admin info — no token, no password hash
 	writeJSON(w, http.StatusOK, models.LoginResponse{Admin: admin})
 }
 
-// Logout deletes the session from the server and clears the cookie in the browser.
+// Logout deletes the server-side session and instructs the browser to expire the cookie.
 func (c *Controller) Logout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(cookieName)
+	cookie, err := r.Cookie(sessionCookieName())
 	if err == nil {
 		c.Sessions.Delete(cookie.Value)
 	}
 
-	// MaxAge = -1 tells the browser to delete the cookie immediately
+	// Expire the cookie immediately by setting MaxAge to -1.
+	// The Secure and SameSite attributes must match the original Set-Cookie so
+	// that the browser treats this as the same cookie and actually removes it.
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
+		Name:     sessionCookieName(),
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
+		Secure:   isProduction(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
 
-// Me returns the currently logged-in admin's info.
-// The frontend calls this to get the admin name to display on the page.
+// Me returns the currently logged-in admin's info from the active session.
 func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(cookieName)
+	cookie, err := r.Cookie(sessionCookieName())
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "not logged in")
 		return

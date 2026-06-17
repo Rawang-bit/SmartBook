@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver — the blank import registers it
+	_ "github.com/jackc/pgx/v5/stdlib" // pgx driver registered as "pgx" for database/sql
 )
 
 // Connect reads DATABASE_URL from the environment, opens a connection to
@@ -20,8 +20,8 @@ func Connect() (*sql.DB, error) {
 		return nil, fmt.Errorf("DATABASE_URL environment variable is not set")
 	}
 
-	// Open the driver (does not actually dial the server yet)
-	db, err := sql.Open("postgres", databaseURL)
+	// Open the pgx driver (does not actually dial the server yet)
+	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
