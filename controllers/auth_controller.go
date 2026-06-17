@@ -159,10 +159,10 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	resetURL := appURL + "/login.html?token=" + token
 
 	// ── Development shortcut ────────────────────────────────────────────────
-	// When no SMTP server is configured and we are not in production, return
+	// When no email API key is configured and we are not in production, return
 	// the reset URL directly in the response so the admin can use it without
-	// needing a working mail server. This field is never present in production.
-	if !isProduction() && os.Getenv("SMTP_HOST") == "" {
+	// needing a live email service. This field is never present in production.
+	if !isProduction() && os.Getenv("RESEND_API_KEY") == "" {
 		log.Printf("[PASSWORD RESET DEV] reset link for %q: %s", adminName, resetURL)
 		writeJSON(w, http.StatusOK, map[string]string{
 			"message":     neutralMsg,
@@ -171,7 +171,7 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Production / SMTP configured ────────────────────────────────────────
+	// ── Production / API key configured ────────────────────────────────────
 	// Send the email synchronously so that delivery failures are visible in
 	// the server log immediately. The response is still the neutral message —
 	// we never tell the caller whether the address matched or delivery failed,

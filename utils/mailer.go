@@ -1,51 +1,52 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
-	"net/smtp"
+	"net/http"
 	"os"
 )
 
-// SendPasswordResetEmail sends a password-reset link to an admin's email address.
+// resendPayload is the JSON body sent to the Resend API.
+type resendPayload struct {
+	From    string   `json:"from"`
+	To      []string `json:"to"`
+	Subject string   `json:"subject"`
+	Text    string   `json:"text"`
+}
+
+// SendPasswordResetEmail delivers a password-reset link via the Resend email API.
 //
-// SMTP is configured via environment variables:
+// Required environment variables:
 //
-//	SMTP_HOST     — mail server hostname (e.g. smtp.gmail.com)
-//	SMTP_PORT     — port, defaults to 587 (STARTTLS); use 465 for implicit TLS
-//	SMTP_USERNAME — authentication username (usually the from-address)
-//	SMTP_PASSWORD — authentication password or app-specific password
-//	SMTP_FROM     — envelope From address; falls back to SMTP_USERNAME if omitted
-//	APP_URL       — base URL used to build the reset link (e.g. https://smartbook.company.bt)
+//	RESEND_API_KEY  — API key from https://resend.com (free tier: 3,000 emails/month)
+//	EMAIL_FROM      — Verified "From" address, e.g. "SmartBook <no-reply@yourdomain.com>"
+//	                  During testing you may use "SmartBook <onboarding@resend.dev>"
+//	APP_URL         — Base URL for reset links, e.g. https://smartbook.onrender.com
 //
-// If SMTP_HOST is not set, the function logs the reset URL to the server console
-// instead of sending an email. This lets the feature work during local development
-// without any mail server configuration.
+// If RESEND_API_KEY is not set, the reset URL is logged to the server console
+// (development fallback — no email is sent).
 func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
-	host     := os.Getenv("SMTP_HOST")
-	port     := os.Getenv("SMTP_PORT")
-	username := os.Getenv("SMTP_USERNAME")
-	password := os.Getenv("SMTP_PASSWORD")
-	from     := os.Getenv("SMTP_FROM")
+	apiKey := os.Getenv("RESEND_API_KEY")
+	from   := os.Getenv("EMAIL_FROM")
 
-	if port == "" {
-		port = "587"
-	}
-	if from == "" {
-		from = username
-	}
-
-	if host == "" {
-		// Development fallback: print the link so the developer can test the flow
-		// without a live mail server.
+	if apiKey == "" {
+		// Development fallback: print the link so the developer can test without
+		// a live email API key.
 		log.Printf(
-			"[PASSWORD RESET] No SMTP configured. Reset link for %s (%s):\n  %s",
+			"[PASSWORD RESET] No RESEND_API_KEY set. Reset link for %s (%s):\n  %s",
 			toName, toEmail, resetURL,
 		)
 		return nil
 	}
 
-	subject := "SmartBook — Password Reset Request"
+	if from == "" {
+		from = "SmartBook <onboarding@resend.dev>"
+	}
+
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
 			"You (or someone claiming to be you) requested a password reset for your SmartBook admin account.\r\n\r\n"+
@@ -56,18 +57,33 @@ func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
 		toName, resetURL,
 	)
 
-	msg := []byte(
-		"From: SmartBook <" + from + ">\r\n" +
-			"To: " + toEmail + "\r\n" +
-			"Subject: " + subject + "\r\n" +
-			"Content-Type: text/plain; charset=UTF-8\r\n" +
-			"\r\n" +
-			body,
-	)
-
-	auth := smtp.PlainAuth("", username, password, host)
-	if err := smtp.SendMail(host+":"+port, auth, from, []string{toEmail}, msg); err != nil {
-		return fmt.Errorf("smtp: %w", err)
+	payload, err := json.Marshal(resendPayload{
+		From:    from,
+		To:      []string{toEmail},
+		Subject: "SmartBook — Password Reset Request",
+		Text:    body,
+	})
+	if err != nil {
+		return fmt.Errorf("resend: marshal payload: %w", err)
 	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("resend: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend: send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("resend: API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
 	return nil
 }
