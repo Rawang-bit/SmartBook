@@ -177,7 +177,7 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	const neutralMsg = "If your username and email match a registered admin account, a password reset link has been sent to that address."
+	const neutralMsg = "Success: Password reset link has been sent to your email."
 
 	adminID, adminName, adminEmail, err := c.Admins.GetByUsernameAndEmail(username, email)
 	if err != nil {
