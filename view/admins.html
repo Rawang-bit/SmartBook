@@ -124,6 +124,7 @@
               <tr class="border-b border-slate-100 text-left">
                 <th class="px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-slate-400">Username</th>
                 <th class="px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-slate-400">Name</th>
+                <th class="px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-slate-400">Email</th>
                 <th class="px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-slate-400">Role</th>
                 <th class="px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-slate-400">Status</th>
                 <th class="px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-slate-400">Created</th>
@@ -132,7 +133,7 @@
             </thead>
             <tbody id="adminsTableBody" class="divide-y divide-slate-50">
               <tr>
-                <td colspan="6" class="px-6 py-12 text-center text-slate-400 font-semibold">Loading admins…</td>
+                <td colspan="7" class="px-6 py-12 text-center text-slate-400 font-semibold">Loading admins…</td>
               </tr>
             </tbody>
           </table>
@@ -160,6 +161,15 @@
           <input id="createName" type="text" required
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             placeholder="e.g. Ratu Dorji" />
+        </div>
+        <div>
+          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">
+            Email
+            <span class="ml-1 normal-case font-semibold text-slate-400">(optional — required for password reset)</span>
+          </label>
+          <input id="createEmail" type="email" autocomplete="off"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            placeholder="e.g. admin@company.bt" />
         </div>
         <div>
           <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Role</label>
@@ -209,6 +219,15 @@
           <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Full Name</label>
           <input id="editName" type="text" required
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+        </div>
+        <div>
+          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">
+            Email
+            <span class="ml-1 normal-case font-semibold text-slate-400">(optional — required for password reset)</span>
+          </label>
+          <input id="editEmail" type="email"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            placeholder="e.g. admin@company.bt" />
         </div>
         <div id="editRoleRow">
           <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Role</label>
@@ -329,7 +348,7 @@
       const myId  = Number(localStorage.getItem('adminId') || '0');
       const tbody = document.getElementById('adminsTableBody');
       if (!admins.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 font-semibold">No admins found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-slate-400 font-semibold">No admins found.</td></tr>`;
         return;
       }
 
@@ -346,8 +365,12 @@
           ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
           : `<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>`;
 
+        const emailCell = a.email
+          ? `<span class="text-slate-700 font-semibold">${escapeHtml(a.email)}</span>`
+          : `<span class="text-slate-300 font-semibold italic text-xs">not set</span>`;
+
         const editBtn = `<button
-            onclick="openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}')"
+            onclick="openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}', '${escapeHtml(a.email || '')}')"
             class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-100"
           >Edit</button>`;
 
@@ -385,6 +408,7 @@
               ${isSelf ? '<span class="ml-1 text-xs font-bold text-indigo-400">(you)</span>' : ''}
             </td>
             <td class="px-6 py-4 font-semibold text-slate-700">${escapeHtml(a.name)}</td>
+            <td class="px-6 py-4">${emailCell}</td>
             <td class="px-6 py-4">${roleBadge}</td>
             <td class="px-6 py-4">${statusBadge}</td>
             <td class="px-6 py-4 text-slate-500 font-semibold">${escapeHtml(a.createdAt || '—')}</td>
@@ -462,6 +486,7 @@
         await createAdminApi({
           username: document.getElementById('createUsername').value.trim(),
           name:     document.getElementById('createName').value.trim(),
+          email:    document.getElementById('createEmail').value.trim(),
           role:     document.getElementById('createRole').value,
           password: pw,
         });
@@ -477,10 +502,11 @@
     }
 
     // ── Edit Modal ──────────────────────────────────────────────────────────
-    function openEditModal(id, username, name, role) {
+    function openEditModal(id, username, name, role, email) {
       document.getElementById('editId').value = id;
       document.getElementById('editCurrentRole').value = role;
       document.getElementById('editName').value = name;
+      document.getElementById('editEmail').value = email || '';
       document.getElementById('editUsernameLabel').textContent = '@' + username;
       clearModalMsg('editMsg');
 
@@ -518,8 +544,9 @@
         ? document.getElementById('editCurrentRole').value
         : document.getElementById('editRole').value;
 
+      const email = document.getElementById('editEmail').value.trim();
       try {
-        await updateAdminApi(id, { name, role });
+        await updateAdminApi(id, { name, role, email });
         closeEditModal();
         showFlash('Admin updated successfully.');
         await loadAdmins();

@@ -16,9 +16,11 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("GET /api/health", c.HealthCheck)
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
-	mux.HandleFunc("POST /api/auth/login",  c.Login)
-	mux.HandleFunc("POST /api/auth/logout", c.Logout)
-	mux.HandleFunc("GET  /api/auth/me",     c.Me)
+	mux.HandleFunc("POST /api/auth/login",           c.Login)
+	mux.HandleFunc("POST /api/auth/logout",          c.Logout)
+	mux.HandleFunc("GET  /api/auth/me",              c.Me)
+	mux.HandleFunc("POST /api/auth/forgot-password", c.ForgotPassword)
+	mux.HandleFunc("POST /api/auth/reset-password",  c.ResetPassword)
 
 	// ── Users ─────────────────────────────────────────────────────────────────
 	// Public: validate whether an email is registered (called before booking)

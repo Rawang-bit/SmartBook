@@ -2,9 +2,13 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"bookroom-management-system/models"
+	"bookroom-management-system/utils"
 )
 
 // HealthCheck confirms the server is running. Used by monitoring tools.
@@ -55,13 +59,13 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(), // __Host- prefix in production for maximum host binding
+		Name:     sessionCookieName(),
 		Value:    sessionID,
 		Path:     "/",
-		MaxAge:   8 * 60 * 60,         // 8 hours in seconds
-		HttpOnly: true,                 // JavaScript cannot access this cookie
+		MaxAge:   8 * 60 * 60,
+		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   isProduction(),       // HTTPS-only in production; allows HTTP in development
+		Secure:   isProduction(),
 	})
 
 	writeJSON(w, http.StatusOK, models.LoginResponse{Admin: admin})
@@ -74,9 +78,6 @@ func (c *Controller) Logout(w http.ResponseWriter, r *http.Request) {
 		c.Sessions.Delete(cookie.Value)
 	}
 
-	// Expire the cookie immediately by setting MaxAge to -1.
-	// The Secure and SameSite attributes must match the original Set-Cookie so
-	// that the browser treats this as the same cookie and actually removes it.
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName(),
 		Value:    "",
@@ -109,5 +110,95 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 		"username": data.Username,
 		"name":     data.Name,
 		"role":     data.Role,
+	})
+}
+
+// ForgotPassword initiates a password-reset flow.
+// It requires both username and email to match the same active admin account
+// before issuing a token, preventing account enumeration via either field alone.
+//
+// The response is always 200 OK regardless of whether the combination matched —
+// this prevents an attacker from discovering valid username/email pairs by observing
+// different responses.
+func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req models.ForgotPasswordRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	username := strings.TrimSpace(req.Username)
+	email    := utils.NormalizeEmail(req.Email)
+
+	if username == "" || email == "" {
+		writeError(w, http.StatusBadRequest, "username and email are required")
+		return
+	}
+	if !utils.IsValidEmail(email) {
+		writeError(w, http.StatusBadRequest, "valid email address is required")
+		return
+	}
+
+	const neutralMsg = "If your username and email match a registered admin account, a password reset link has been sent to that address."
+
+	adminID, adminName, adminEmail, err := c.Admins.GetByUsernameAndEmail(username, email)
+	if err != nil {
+		// No match (or DB error) — return the neutral message to prevent enumeration.
+		writeJSON(w, http.StatusOK, map[string]string{"message": neutralMsg})
+		return
+	}
+
+	token   := c.ResetTokens.Create(adminID)
+	appURL  := os.Getenv("APP_URL")
+	if appURL == "" {
+		appURL = "http://localhost:" + os.Getenv("PORT")
+		if appURL == "http://localhost:" {
+			appURL = "http://localhost:8080"
+		}
+	}
+	resetURL := appURL + "/login.html?token=" + token
+
+	// Send in a goroutine so the response is not held up by mail delivery time.
+	go func() {
+		if err := utils.SendPasswordResetEmail(adminEmail, adminName, resetURL); err != nil {
+			log.Printf("[PASSWORD RESET] failed to send email to %s: %v", adminEmail, err)
+		}
+	}()
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": neutralMsg})
+}
+
+// ResetPassword consumes a single-use reset token and updates the admin's password.
+// The token is validated and deleted atomically — replaying the same token always fails.
+func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req models.ResetPasswordRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	token    := strings.TrimSpace(req.Token)
+	password := strings.TrimSpace(req.Password)
+
+	if token == "" {
+		writeError(w, http.StatusBadRequest, "reset token is required")
+		return
+	}
+	if len(password) < 6 {
+		writeError(w, http.StatusBadRequest, "password must be at least 6 characters")
+		return
+	}
+
+	adminID, ok := c.ResetTokens.Consume(token)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "this reset link is invalid or has expired — please request a new one")
+		return
+	}
+
+	if err := c.Admins.ResetPassword(adminID, password); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update password, please try again")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Password reset successfully. You can now log in with your new password.",
 	})
 }

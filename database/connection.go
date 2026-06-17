@@ -40,7 +40,26 @@ func Connect() (*sql.DB, error) {
 		return nil, fmt.Errorf("cannot reach PostgreSQL: %w", err)
 	}
 
+	if err := migrate(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migration failed: %w", err)
+	}
+
 	return db, nil
+}
+
+// migrate applies any schema changes that must run at startup.
+// Each statement is idempotent (IF NOT EXISTS / IF EXISTS guards) so it is safe
+// to run on every boot against both fresh and existing databases.
+func migrate(db *sql.DB) error {
+	_, err := db.Exec(`
+		ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
+
+		CREATE INDEX IF NOT EXISTS idx_admins_email_lower
+		    ON admins (LOWER(TRIM(email)))
+		    WHERE email IS NOT NULL;
+	`)
+	return err
 }
 
 // GetEnv reads an environment variable and returns fallback if it is empty.

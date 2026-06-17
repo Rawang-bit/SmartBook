@@ -1,6 +1,6 @@
 package models
 
-// Admin is an authenticated administrator account. Session data, login response
+// Admin is an authenticated administrator account used in session data and login responses.
 type Admin struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
@@ -8,13 +8,14 @@ type Admin struct {
 	Role     string `json:"role"` // "super_admin" or "general_admin"
 }
 
-// AdminDetail is returned in admin list responses (includes created_at and status).
+// AdminDetail is returned in admin-list responses and includes management fields.
 type AdminDetail struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
 	Name      string `json:"name"`
 	Role      string `json:"role"`
-	Status    string `json:"status"` // "active" or "revoked"
+	Email     string `json:"email"`     // empty string when not set
+	Status    string `json:"status"`    // "active" or "revoked"
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -23,7 +24,8 @@ type AdminRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
-	Role     string `json:"role"` // "super_admin" or "general_admin"
+	Role     string `json:"role"`  // "super_admin" or "general_admin"
+	Email    string `json:"email"` // optional; used for password-reset emails
 }
 
 // LoginRequest is the JSON body sent by the admin login form.
@@ -33,13 +35,24 @@ type LoginRequest struct {
 }
 
 // LoginResponse is returned after a successful login.
-// The session is stored server-side; the browser receives it as an HttpOnly cookie.
 type LoginResponse struct {
 	Admin Admin `json:"admin"`
 }
 
+// ForgotPasswordRequest is the JSON body sent by the forgot-password form.
+// Both username and email must match a single admin account for the reset to proceed.
+type ForgotPasswordRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+// ResetPasswordRequest is the JSON body sent by the reset-password form.
+type ResetPasswordRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
 // User is a pre-registered person who is allowed to make room bookings.
-// Admin must add a user here before they can book.
 type User struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
@@ -56,9 +69,9 @@ type UserRequest struct {
 type Room struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
-	Capacity int    `json:"capacity"` // Maximum number of people
-	Location string `json:"location"` // Building or floor
-	Status   string `json:"status"`   // "Active" or "Inactive"
+	Capacity int    `json:"capacity"`
+	Location string `json:"location"`
+	Status   string `json:"status"` // "Active" or "Inactive"
 }
 
 // RoomRequest is the JSON body sent when creating or updating a room.
@@ -76,8 +89,8 @@ type Booking struct {
 	Email     string `json:"email"`
 	RoomID    int64  `json:"roomId"`
 	RoomName  string `json:"roomName"`
-	Room      string `json:"room,omitempty"`     // Alias for RoomName (legacy frontend compatibility)
-	Location  string `json:"location,omitempty"` // Room location
+	Room      string `json:"room,omitempty"`     // alias for RoomName (legacy frontend)
+	Location  string `json:"location,omitempty"` // room location
 	Date      string `json:"date"`               // YYYY-MM-DD
 	Start     string `json:"start"`              // HH:MM 24-hour (stored in DB)
 	End       string `json:"end"`                // HH:MM 24-hour (stored in DB)
@@ -88,12 +101,11 @@ type Booking struct {
 }
 
 // BookingRequest is the JSON body sent when creating or updating a booking.
-// Accepts both 24-hour (start/end) and 12-hour AM/PM (startTime/endTime) formats.
 type BookingRequest struct {
 	User      string `json:"user"`
 	Email     string `json:"email"`
 	RoomID    int64  `json:"roomId"`
-	Room      string `json:"room"`      // Room name — used if roomId is not provided
+	Room      string `json:"room"`      // room name — used if roomId is not provided
 	Date      string `json:"date"`
 	Start     string `json:"start"`     // 24-hour time
 	End       string `json:"end"`       // 24-hour time
@@ -104,7 +116,6 @@ type BookingRequest struct {
 }
 
 // CancelBookingRequest is the JSON body sent when a public user cancels their booking.
-// They must provide their email to prove they own the booking.
 type CancelBookingRequest struct {
 	Email string `json:"email"`
 }

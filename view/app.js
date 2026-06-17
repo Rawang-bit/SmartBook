@@ -259,6 +259,14 @@ async function changeOwnPasswordApi(currentPassword, newPassword) {
   return api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
 }
 
+// Password-reset helpers — public endpoints, no session cookie required.
+async function forgotPasswordApi(username, email) {
+  return api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email }) });
+}
+async function resetPasswordApi(token, password) {
+  return api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
+}
+
 // Shared admin booking slots. Matches the public calendar: 30-minute gaps.
 const BOOKING_TIME_OPTIONS = [
   '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',

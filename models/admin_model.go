@@ -11,15 +11,14 @@ import (
 )
 
 // AdminModel manages all database operations and authentication logic for admin accounts.
-// It is the single source of truth for admin state and business rules.
 type AdminModel struct {
 	DB *sql.DB
 }
 
-// List returns all admin accounts ordered by creation date.
+// List returns all admin accounts ordered by creation date, including their email.
 func (m *AdminModel) List() ([]AdminDetail, error) {
 	rows, err := m.DB.Query(`
-		SELECT id, username, name, role, status, TO_CHAR(created_at, 'YYYY-MM-DD')
+		SELECT id, username, name, role, COALESCE(email, ''), status, TO_CHAR(created_at, 'YYYY-MM-DD')
 		FROM admins
 		ORDER BY created_at ASC
 	`)
@@ -31,7 +30,7 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 	admins := []AdminDetail{}
 	for rows.Next() {
 		var a AdminDetail
-		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Status, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Email, &a.Status, &a.CreatedAt); err != nil {
 			continue
 		}
 		admins = append(admins, a)
@@ -55,6 +54,36 @@ func (m *AdminModel) GetByUsername(username string) (Admin, string, string, erro
 	return admin, hash, status, err
 }
 
+// GetByUsernameAndEmail looks up an active admin whose username AND email both match.
+// Both comparisons are case-insensitive.
+// Returns the admin's ID, display name, and stored email, or ErrNotFound if no row matches.
+//
+// This is the gating check for the forgot-password flow: an attacker who only knows
+// a username (or only an email) cannot trigger a reset for someone else's account.
+func (m *AdminModel) GetByUsernameAndEmail(username, email string) (int64, string, string, error) {
+	var (
+		id         int64
+		name       string
+		storedEmail sql.NullString
+	)
+	err := m.DB.QueryRow(`
+		SELECT id, name, email
+		FROM admins
+		WHERE LOWER(username)          = LOWER($1)
+		  AND email IS NOT NULL
+		  AND LOWER(TRIM(email))       = $2
+		  AND status                   = 'active'
+	`, username, email).Scan(&id, &name, &storedEmail)
+
+	if err == sql.ErrNoRows {
+		return 0, "", "", ErrNotFound
+	}
+	if err != nil {
+		return 0, "", "", err
+	}
+	return id, name, storedEmail.String, nil
+}
+
 // GetPasswordHash returns only the bcrypt hash for a given admin ID.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) GetPasswordHash(id int64) (string, error) {
@@ -67,12 +96,14 @@ func (m *AdminModel) GetPasswordHash(id int64) (string, error) {
 }
 
 // Create inserts a new admin account after validating and hashing the password.
-// Returns ErrDuplicate if the username is already taken.
+// The email field is optional; if provided it must be a valid, unique address.
+// Returns ErrDuplicate if the username or email is already taken.
 func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.Name     = strings.TrimSpace(req.Name)
 	req.Password = strings.TrimSpace(req.Password)
 	req.Role     = strings.TrimSpace(req.Role)
+	req.Email    = utils.NormalizeEmail(req.Email)
 
 	if req.Username == "" || req.Password == "" || req.Name == "" {
 		return Admin{}, fmt.Errorf("username, password, and name are required")
@@ -83,18 +114,27 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	if req.Role != "super_admin" && req.Role != "general_admin" {
 		req.Role = "general_admin"
 	}
+	if req.Email != "" && !utils.IsValidEmail(req.Email) {
+		return Admin{}, fmt.Errorf("invalid email address")
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return Admin{}, fmt.Errorf("failed to hash password")
 	}
 
+	// Store email as NULL when not provided so the UNIQUE constraint still holds.
+	var emailParam interface{}
+	if req.Email != "" {
+		emailParam = req.Email
+	}
+
 	var admin Admin
 	err = m.DB.QueryRow(`
-		INSERT INTO admins(username, password, name, role)
-		VALUES($1, $2, $3, $4)
+		INSERT INTO admins(username, password, name, role, email)
+		VALUES($1, $2, $3, $4, $5)
 		RETURNING id, username, name, role
-	`, req.Username, string(hash), req.Name, req.Role).Scan(
+	`, req.Username, string(hash), req.Name, req.Role, emailParam).Scan(
 		&admin.ID, &admin.Username, &admin.Name, &admin.Role,
 	)
 	if err != nil {
@@ -106,12 +146,14 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	return admin, nil
 }
 
-// Update changes an admin's name and/or role.
+// Update changes an admin's name, role, and/or email.
 // currentAdminID and currentRole prevent an admin from demoting their own account.
-// Returns ErrNotFound if the target admin does not exist.
+// Setting email to an empty string removes the stored email (sets it to NULL).
+// Returns ErrNotFound if the target admin does not exist, ErrDuplicate on email conflict.
 func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, currentRole string) (Admin, error) {
-	req.Name = strings.TrimSpace(req.Name)
-	req.Role = strings.TrimSpace(req.Role)
+	req.Name  = strings.TrimSpace(req.Name)
+	req.Role  = strings.TrimSpace(req.Role)
+	req.Email = utils.NormalizeEmail(req.Email)
 
 	if req.Name == "" {
 		return Admin{}, fmt.Errorf("name is required")
@@ -119,24 +161,37 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 	if req.Role != "super_admin" && req.Role != "general_admin" {
 		req.Role = "general_admin"
 	}
-	// An admin cannot change their own role
 	if currentAdminID == id {
-		req.Role = currentRole
+		req.Role = currentRole // prevent self-demotion
+	}
+	if req.Email != "" && !utils.IsValidEmail(req.Email) {
+		return Admin{}, fmt.Errorf("invalid email address")
+	}
+
+	// NULL when clearing the email
+	var emailParam interface{}
+	if req.Email != "" {
+		emailParam = req.Email
 	}
 
 	var admin Admin
 	err := m.DB.QueryRow(`
-		UPDATE admins SET name = $1, role = $2 WHERE id = $3
+		UPDATE admins SET name = $1, role = $2, email = $3 WHERE id = $4
 		RETURNING id, username, name, role
-	`, req.Name, req.Role, id).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role)
+	`, req.Name, req.Role, emailParam, id).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role)
 	if err == sql.ErrNoRows {
 		return Admin{}, ErrNotFound
 	}
-	return admin, err
+	if err != nil {
+		if utils.IsUniqueViolation(err) {
+			return Admin{}, ErrDuplicate
+		}
+		return Admin{}, err
+	}
+	return admin, nil
 }
 
 // ResetPassword sets a new bcrypt-hashed password for any admin.
-// Validates minimum length before hashing.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	if len(newPassword) < 6 {
@@ -163,21 +218,17 @@ func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error 
 	if len(newPw) < 6 {
 		return fmt.Errorf("new password must be at least 6 characters")
 	}
-
 	hash, err := m.GetPasswordHash(id)
 	if err != nil {
 		return err
 	}
-
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(currentPw)); err != nil {
 		return ErrUnauthorized
 	}
-
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPw), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password")
 	}
-
 	_, err = m.DB.Exec(`UPDATE admins SET password = $1 WHERE id = $2`, string(newHash), id)
 	return err
 }
@@ -211,7 +262,6 @@ func (m *AdminModel) Delete(id int64) error {
 }
 
 // VerifyPassword compares a plaintext password against a stored bcrypt hash.
-// Returns nil if they match, non-nil otherwise.
 func (m *AdminModel) VerifyPassword(hash, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
