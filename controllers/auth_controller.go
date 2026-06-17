@@ -147,22 +147,40 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token   := c.ResetTokens.Create(adminID)
-	appURL  := os.Getenv("APP_URL")
+	token  := c.ResetTokens.Create(adminID)
+	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
-		appURL = "http://localhost:" + os.Getenv("PORT")
-		if appURL == "http://localhost:" {
+		if p := os.Getenv("PORT"); p != "" {
+			appURL = "http://localhost:" + p
+		} else {
 			appURL = "http://localhost:8080"
 		}
 	}
 	resetURL := appURL + "/login.html?token=" + token
 
-	// Send in a goroutine so the response is not held up by mail delivery time.
-	go func() {
-		if err := utils.SendPasswordResetEmail(adminEmail, adminName, resetURL); err != nil {
-			log.Printf("[PASSWORD RESET] failed to send email to %s: %v", adminEmail, err)
-		}
-	}()
+	// ── Development shortcut ────────────────────────────────────────────────
+	// When no SMTP server is configured and we are not in production, return
+	// the reset URL directly in the response so the admin can use it without
+	// needing a working mail server. This field is never present in production.
+	if !isProduction() && os.Getenv("SMTP_HOST") == "" {
+		log.Printf("[PASSWORD RESET DEV] reset link for %q: %s", adminName, resetURL)
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message":     neutralMsg,
+			"devResetUrl": resetURL,
+		})
+		return
+	}
+
+	// ── Production / SMTP configured ────────────────────────────────────────
+	// Send the email synchronously so that delivery failures are visible in
+	// the server log immediately. The response is still the neutral message —
+	// we never tell the caller whether the address matched or delivery failed,
+	// which prevents username/email enumeration.
+	if err := utils.SendPasswordResetEmail(adminEmail, adminName, resetURL); err != nil {
+		log.Printf("[PASSWORD RESET ERROR] could not deliver to %s: %v", adminEmail, err)
+	} else {
+		log.Printf("[PASSWORD RESET] reset email sent to %s", adminEmail)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": neutralMsg})
 }
@@ -182,8 +200,8 @@ func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "reset token is required")
 		return
 	}
-	if len(password) < 6 {
-		writeError(w, http.StatusBadRequest, "password must be at least 6 characters")
+	if len(password) < 12 {
+		writeError(w, http.StatusBadRequest, "password must be at least 12 characters")
 		return
 	}
 

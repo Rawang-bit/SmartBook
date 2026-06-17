@@ -108,8 +108,8 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	if req.Username == "" || req.Password == "" || req.Name == "" {
 		return Admin{}, fmt.Errorf("username, password, and name are required")
 	}
-	if len(req.Password) < 6 {
-		return Admin{}, fmt.Errorf("password must be at least 6 characters")
+	if len(req.Password) < 12 {
+		return Admin{}, fmt.Errorf("password must be at least 12 characters")
 	}
 	if req.Role != "super_admin" && req.Role != "general_admin" {
 		req.Role = "general_admin"
@@ -194,8 +194,8 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 // ResetPassword sets a new bcrypt-hashed password for any admin.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
-	if len(newPassword) < 6 {
-		return fmt.Errorf("password must be at least 6 characters")
+	if len(newPassword) < 12 {
+		return fmt.Errorf("password must be at least 12 characters")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -215,8 +215,8 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 // ChangeOwnPassword verifies the admin's current password then stores the new one.
 // Returns ErrUnauthorized if the current password is wrong.
 func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error {
-	if len(newPw) < 6 {
-		return fmt.Errorf("new password must be at least 6 characters")
+	if len(newPw) < 12 {
+		return fmt.Errorf("new password must be at least 12 characters")
 	}
 	hash, err := m.GetPasswordHash(id)
 	if err != nil {

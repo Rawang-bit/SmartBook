@@ -57,13 +57,13 @@
           </div>
           <div>
             <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">New Password</label>
-            <input id="sharedCpNew" type="password" required minlength="6"
+            <input id="sharedCpNew" type="password" required minlength="12"
               class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-              placeholder="At least 6 characters" />
+              placeholder="At least 12 characters" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Confirm New Password</label>
-            <input id="sharedCpConfirm" type="password" required minlength="6"
+            <input id="sharedCpConfirm" type="password" required minlength="12"
               class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               placeholder="Re-enter new password" />
           </div>
