@@ -145,6 +145,22 @@
               />
             </label>
 
+            <label id="userRoleWrap" class="hidden text-sm font-bold text-slate-700">
+              Role
+              <select
+                id="userRole"
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="normal_user">Normal User — book &amp; cancel rooms only</option>
+                <option value="general_admin">General Admin</option>
+                <option value="super_admin">Super Admin</option>
+              </select>
+            </label>
+
+            <div class="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-slate-600">
+              The new entry stays pending — they'll get an email with a button to confirm before the account (or admin access) activates.
+            </div>
+
             <div class="flex flex-wrap items-center gap-3">
               <button
                 type="submit"
@@ -173,15 +189,15 @@
 
           <div class="space-y-3 text-sm font-semibold text-slate-600">
             <p>
-              Only users registered here can create bookings from the public calendar page.
+              Only approved users registered here can create bookings from the public calendar page.
             </p>
 
             <p>
-              When a user enters their email while booking, the backend checks this users table in PostgreSQL.
+              Adding someone here does not activate them immediately — they receive an email with a button to confirm before the account (or admin access, if assigned) goes live.
             </p>
 
             <p>
-              If the email does not exist, the booking is blocked automatically.
+              If the email does not exist or isn't approved yet, the booking is blocked automatically.
             </p>
           </div>
         </div>
@@ -266,6 +282,11 @@
 
     if (!isSuperAdmin()) {
       document.getElementById('usersSubtitle').textContent = 'Add new users. Contact a Super Admin to edit or delete.';
+    } else {
+      // Only a super admin may grant an admin role directly from this form.
+      const roleWrap = document.getElementById('userRoleWrap');
+      roleWrap.classList.remove('hidden');
+      roleWrap.classList.add('block');
     }
 
     let users = [];
@@ -274,6 +295,8 @@
       document.getElementById('userId').value = '';
       document.getElementById('userName').value = '';
       document.getElementById('userEmail').value = '';
+      const roleSelect = document.getElementById('userRole');
+      if (roleSelect) roleSelect.value = 'normal_user';
       document.getElementById('formTitle').textContent = 'Add User';
       document.getElementById('saveBtn').textContent = 'Save User';
     }
@@ -496,21 +519,25 @@
       e.preventDefault();
 
       const id = document.getElementById('userId').value;
+      const roleSelect = document.getElementById('userRole');
 
       const payload = {
         name: document.getElementById('userName').value.trim(),
-        email: document.getElementById('userEmail').value.trim().toLowerCase()
+        email: document.getElementById('userEmail').value.trim().toLowerCase(),
+        role: roleSelect ? roleSelect.value : 'normal_user'
       };
 
       try {
         if (id) {
           await updateUser(id, payload);
+          resetForm();
+          showMessage('userMessage', 'User updated successfully.');
         } else {
           await createUser(payload);
+          resetForm();
+          showMessage('userMessage', 'Invite sent — a confirmation email has been emailed to them. The account activates once they click it.');
         }
 
-        resetForm();
-        showMessage('userMessage', id ? 'User updated successfully.' : 'User added successfully.');
         await loadUsers();
       } catch (err) {
         showMessage('userMessage', err.message, 'error');

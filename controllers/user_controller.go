@@ -23,13 +23,33 @@ func (c *Controller) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateUser pre-registers a new user. Admin only.
+//
+// The new entry is never approved instantly — the admin typing in someone
+// else's email hasn't proven they actually own it, so it starts as
+// "pending" and a confirmation link is emailed to that address. Only once
+// the recipient clicks it does the account (or admin promotion, if role
+// is not "normal_user") actually activate. Choosing a role other than
+// normal_user is a privilege grant, so it requires a super_admin.
 func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req models.UserRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 
-	u, err := c.Users.Create(req)
+	role := strings.TrimSpace(req.Role)
+	if role == "" {
+		role = "normal_user"
+	}
+	if role != "normal_user" {
+		sess, ok := c.getSession(r)
+		if !ok || sess.Role != "super_admin" {
+			writeError(w, http.StatusForbidden, "only a super admin can add a user with this role")
+			return
+		}
+	}
+	req.Role = role
+
+	u, token, err := c.Users.Create(req)
 	if errors.Is(err, models.ErrDuplicate) {
 		writeError(w, http.StatusBadRequest, "a user with this email already exists")
 		return
@@ -39,7 +59,74 @@ func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sendErr := utils.SendRegistrationConfirmationEmail(u.Email, u.Name, token); sendErr != nil {
+		log.Printf("[USER INVITE] failed to email confirmation link to %s: %v", u.Email, sendErr)
+	}
+
 	writeJSON(w, http.StatusCreated, u)
+}
+
+// ConfirmRegistration activates an admin-added user once they click the
+// confirmation link emailed to them. Public endpoint — the token itself,
+// not a session cookie, is the proof that the request comes from the
+// person who actually owns that email address.
+//
+// If the role chosen when the entry was created is "normal_user", this just
+// marks the booking-user row approved. Any other role instead promotes the
+// confirmation into a brand-new admin account — the same path used when a
+// super_admin approves a self-registration with an admin role.
+func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request) {
+	var req models.ConfirmRegistrationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	token := strings.TrimSpace(req.Token)
+	if token == "" {
+		writeError(w, http.StatusBadRequest, "confirmation token is required")
+		return
+	}
+
+	user, err := c.Users.ConsumeConfirmToken(token)
+	if errors.Is(err, models.ErrNotFound) {
+		writeError(w, http.StatusBadRequest, "this confirmation link is invalid or has already been used")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if user.IntendedRole == "" || user.IntendedRole == "normal_user" {
+		if _, err := c.Users.SetStatus(user.ID, "approved"); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to activate your account, please contact an admin")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message": "Your account is now active. You can book rooms from the access page.",
+			"role":    "normal_user",
+		})
+		return
+	}
+
+	admin, tempPassword, err := c.createAdminFromApproval(user.Name, user.Email, user.IntendedRole)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if sendErr := utils.SendTemporaryAdminPasswordEmail(user.Email, user.Name, admin.Username, tempPassword); sendErr != nil {
+		log.Printf("[ADMIN PROMOTED] failed to email temp password to %s: %v", user.Email, sendErr)
+	}
+
+	if delErr := c.Users.Delete(user.ID); delErr != nil {
+		log.Printf("[ADMIN PROMOTED] failed to remove confirmed user row %d: %v", user.ID, delErr)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Your admin account is ready. Check your email for login credentials.",
+		"role":    user.IntendedRole,
+	})
 }
 
 // UpdateUser changes the name or email of a registered user. Admin only.

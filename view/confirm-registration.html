@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm Your Account - SmartBook</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+</head>
+
+<body class="relative min-h-screen overflow-hidden font-['Plus_Jakarta_Sans']">
+
+  <div class="absolute inset-0 bg-cover bg-center bg-no-repeat blur-sm scale-105"
+       style="background-image: url('images/background.png');"></div>
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md rounded-3xl bg-white/85 backdrop-blur-xl shadow-2xl border border-white/40 p-8">
+
+      <div class="flex justify-center mb-4">
+        <img src="images/logo.png" alt="SmartBook Logo" class="h-16 w-auto max-w-[180px] object-contain" />
+      </div>
+
+      <!-- ─── Pending confirmation ───────────────────────────────────────────── -->
+      <div id="pendingStep">
+        <h1 class="text-center text-3xl font-black text-slate-900">Confirm Your Account</h1>
+        <p class="text-center text-sm font-semibold text-slate-500 mt-2 mb-6">
+          Smart<span class="text-indigo-600">Book</span>
+        </p>
+
+        <div id="confirmMsg" class="mb-4 hidden rounded-xl px-4 py-3 font-bold text-sm"></div>
+
+        <p class="text-center text-sm font-semibold text-slate-600 mb-6">
+          An administrator has added you to SmartBook. Click below to confirm your email and activate your account.
+        </p>
+
+        <button id="confirmBtn"
+          class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white shadow-xl transition hover:bg-indigo-700">
+          Confirm &amp; Activate Account
+        </button>
+      </div>
+
+      <!-- ─── No token in URL ────────────────────────────────────────────────── -->
+      <div id="noTokenStep" class="hidden text-center">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+          <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </div>
+        <h1 class="text-center text-3xl font-black text-slate-900">Invalid Link</h1>
+        <p class="text-center text-sm font-semibold text-slate-500 mt-2">
+          This confirmation link is missing its token. Please use the exact link from your email, or ask an admin to add you again.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('confirmMsg');
+      el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${
+        type === 'success'
+          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          : 'bg-red-50 text-red-700 border border-red-200'
+      }`;
+      el.textContent = text;
+      el.classList.remove('hidden');
+    }
+
+    const token = new URLSearchParams(window.location.search).get('token');
+
+    if (!token) {
+      document.getElementById('pendingStep').classList.add('hidden');
+      document.getElementById('noTokenStep').classList.remove('hidden');
+    } else {
+      document.getElementById('confirmBtn').addEventListener('click', async function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Confirming…';
+
+        try {
+          const res = await api('/api/users/confirm', {
+            method: 'POST',
+            body: JSON.stringify({ token }),
+          });
+          showMsg(res.message, 'success');
+          btn.textContent = 'Confirmed ✓';
+
+          setTimeout(() => {
+            window.location.href = res.role === 'normal_user' ? 'index.html' : 'login.html';
+          }, 2000);
+        } catch (err) {
+          showMsg(err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Confirm & Activate Account';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

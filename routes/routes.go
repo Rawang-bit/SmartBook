@@ -30,6 +30,10 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("POST /api/register/verify-otp", c.VerifyRegistrationOTP)
 
 	// ── Users ─────────────────────────────────────────────────────────────────
+	// Public: an admin-added user clicks this link from their email to confirm
+	// ownership and activate the account. The token itself is the credential.
+	mux.HandleFunc("POST /api/users/confirm", c.ConfirmRegistration)
+
 	// Admin: list and create — general_admin can add users
 	mux.HandleFunc("GET /api/users",  c.RequireAdmin(c.ListUsers))
 	mux.HandleFunc("POST /api/users", c.RequireAdmin(c.CreateUser))

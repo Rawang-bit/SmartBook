@@ -135,6 +135,27 @@ func sendSimpleEmail(toEmail, subject, body, logTag string) error {
 	return nil
 }
 
+// SendRegistrationConfirmationEmail notifies a person an admin has added to
+// SmartBook. They must click the link to confirm their email and activate
+// the account before it becomes usable — admin-added entries are never
+// approved instantly, since the admin typing the address hasn't proven they
+// actually own it.
+func SendRegistrationConfirmationEmail(toEmail, toName, token string) error {
+	confirmURL := baseAppURL() + "/confirm-registration.html?token=" + token
+
+	body := fmt.Sprintf(
+		"Hi %s,\r\n\r\n"+
+			"An administrator has added you to SmartBook.\r\n\r\n"+
+			"Click the link below to confirm your email and activate your account. This link is valid for 7 days and can only be used once:\r\n\r\n"+
+			"  %s\r\n\r\n"+
+			"If you weren't expecting this, you can safely ignore this email.\r\n\r\n"+
+			"— SmartBook",
+		toName, confirmURL,
+	)
+
+	return sendSimpleEmail(toEmail, "SmartBook — Confirm Your Account", body, "USER INVITE")
+}
+
 // SendApprovalEmail notifies a self-registered user that an admin approved
 // their access request. They can now return to the access page and book rooms.
 func SendApprovalEmail(toEmail, toName string) error {

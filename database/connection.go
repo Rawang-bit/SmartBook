@@ -74,6 +74,10 @@ func migrate(db *sql.DB) error {
 		    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS intended_role TEXT NOT NULL DEFAULT 'normal_user'`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token TEXT UNIQUE`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token_expires_at TIMESTAMPTZ`,
+		`CREATE INDEX IF NOT EXISTS idx_users_confirm_token ON users(confirm_token) WHERE confirm_token IS NOT NULL`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
