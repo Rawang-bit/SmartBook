@@ -3,6 +3,7 @@ package controllers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -65,23 +66,44 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 // blocked server-side until the temporary password is replaced.
 const forcePasswordChangePath = "/api/admin/change-password"
 
+// requireAdminSession does the shared cookie + session lookup for RequireAdmin
+// and RequireSuperAdmin. Returns ok=false after already writing the
+// appropriate error response — callers should return immediately when ok is
+// false. A database error during lookup responds with 503, not 401, so a
+// momentary connectivity hiccup never gets mistaken for an expired session
+// and force-logs-out an admin whose session is actually still valid.
+func (c *Controller) requireAdminSession(w http.ResponseWriter, r *http.Request) (session.SessionData, bool) {
+	cookie, err := r.Cookie(sessionCookieName())
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "admin login required")
+		return session.SessionData{}, false
+	}
+
+	data, found, sessErr := c.Sessions.Get(cookie.Value)
+	if sessErr != nil {
+		log.Printf("[SESSION ERROR] lookup failed: %v", sessErr)
+		writeError(w, http.StatusServiceUnavailable, "temporary server issue, please try again in a moment")
+		return session.SessionData{}, false
+	}
+	if !found {
+		writeError(w, http.StatusUnauthorized, "session expired, please log in again")
+		return session.SessionData{}, false
+	}
+
+	if data.MustResetPassword && r.URL.Path != forcePasswordChangePath {
+		writeError(w, http.StatusForbidden, "you must change your temporary password before continuing")
+		return session.SessionData{}, false
+	}
+
+	return data, true
+}
+
 // RequireAdmin is middleware that rejects requests without a valid session cookie.
 // It also blocks every endpoint except forcePasswordChangePath for accounts
 // that still need to replace a generated temporary password.
 func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sessionCookieName())
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "admin login required")
-			return
-		}
-		data, ok := c.Sessions.Get(cookie.Value)
-		if !ok {
-			writeError(w, http.StatusUnauthorized, "session expired, please log in again")
-			return
-		}
-		if data.MustResetPassword && r.URL.Path != forcePasswordChangePath {
-			writeError(w, http.StatusForbidden, "you must change your temporary password before continuing")
+		if _, ok := c.requireAdminSession(w, r); !ok {
 			return
 		}
 		next(w, r)
@@ -92,18 +114,8 @@ func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 // Like RequireAdmin, it also enforces the temporary-password-change block.
 func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sessionCookieName())
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "admin login required")
-			return
-		}
-		data, ok := c.Sessions.Get(cookie.Value)
+		data, ok := c.requireAdminSession(w, r)
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "session expired, please log in again")
-			return
-		}
-		if data.MustResetPassword && r.URL.Path != forcePasswordChangePath {
-			writeError(w, http.StatusForbidden, "you must change your temporary password before continuing")
 			return
 		}
 		if data.Role != "super_admin" {
@@ -115,12 +127,19 @@ func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // getSession returns the session data attached to the current request.
+// A database error during lookup is treated the same as "no session" here —
+// this helper is only ever called from inside a handler that RequireAdmin/
+// RequireSuperAdmin already gated, so a fresh DB error on this second lookup
+// within the same request is vanishingly unlikely, and failing closed
+// (denying whatever privilege check the caller is making) is the safe
+// default either way.
 func (c *Controller) getSession(r *http.Request) (session.SessionData, bool) {
 	cookie, err := r.Cookie(sessionCookieName())
 	if err != nil {
 		return session.SessionData{}, false
 	}
-	return c.Sessions.Get(cookie.Value)
+	data, found, _ := c.Sessions.Get(cookie.Value)
+	return data, found
 }
 
 // idFromPath extracts a positive integer ID from the URL path segment after prefix.

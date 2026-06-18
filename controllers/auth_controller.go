@@ -142,7 +142,12 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, ok := c.Sessions.Get(cookie.Value)
+	data, ok, sessErr := c.Sessions.Get(cookie.Value)
+	if sessErr != nil {
+		log.Printf("[SESSION ERROR] lookup failed: %v", sessErr)
+		writeError(w, http.StatusServiceUnavailable, "temporary server issue, please try again in a moment")
+		return
+	}
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "session expired, please log in again")
 		return

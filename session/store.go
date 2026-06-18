@@ -74,8 +74,16 @@ func (s *Store) Create(adminID int64, username, name, role string, mustResetPass
 }
 
 // Get looks up a session by ID.
-// Returns the data and true if found and not expired, or empty and false otherwise.
-func (s *Store) Get(sessionID string) (SessionData, bool) {
+//
+// Returns (data, true, nil) if found and not expired.
+// Returns (zero, false, nil) if the session genuinely does not exist or has
+// expired — callers should treat this as "not authenticated."
+// Returns (zero, false, err) if the lookup itself failed, e.g. a transient
+// database connection error. Callers MUST NOT treat this the same as "not
+// authenticated" — the session may still be perfectly valid. Forcing a
+// logout here would log an admin out over a momentary DB hiccup rather than
+// an actual 30-minute expiry, which is confusing and unnecessary.
+func (s *Store) Get(sessionID string) (SessionData, bool, error) {
 	var data SessionData
 	var expiresAt time.Time
 
@@ -83,17 +91,20 @@ func (s *Store) Get(sessionID string) (SessionData, bool) {
 		SELECT admin_id, username, name, role, must_reset_password, expires_at
 		FROM sessions WHERE id = $1
 	`, sessionID).Scan(&data.AdminID, &data.Username, &data.Name, &data.Role, &data.MustResetPassword, &expiresAt)
+	if err == sql.ErrNoRows {
+		return SessionData{}, false, nil
+	}
 	if err != nil {
-		return SessionData{}, false
+		return SessionData{}, false, err
 	}
 
 	if time.Now().After(expiresAt) {
 		_, _ = s.db.Exec(`DELETE FROM sessions WHERE id = $1`, sessionID)
-		return SessionData{}, false
+		return SessionData{}, false, nil
 	}
 
 	data.ExpiresAt = expiresAt
-	return data, true
+	return data, true, nil
 }
 
 // Delete removes a session immediately. Called when the admin logs out.
