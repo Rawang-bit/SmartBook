@@ -63,6 +63,17 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS agenda TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants TEXT NOT NULL DEFAULT ''`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+		    id                  TEXT PRIMARY KEY,
+		    admin_id            BIGINT NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+		    username            TEXT NOT NULL,
+		    name                TEXT NOT NULL,
+		    role                TEXT NOT NULL,
+		    must_reset_password BOOLEAN NOT NULL DEFAULT FALSE,
+		    expires_at          TIMESTAMPTZ NOT NULL,
+		    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

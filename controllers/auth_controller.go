@@ -95,7 +95,11 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	// Successful login — clear the failure counter so the user starts fresh next time.
 	c.LoginAttempts.Reset(username)
 
-	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role, admin.MustResetPassword)
+	sessionID, err := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role, admin.MustResetPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create session, please try again")
+		return
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName(),

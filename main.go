@@ -20,7 +20,7 @@ func main() {
 	defer db.Close()
 
 	port       := database.GetEnv("PORT", "8080")
-	sessions   := session.New()
+	sessions   := session.New(db)
 	controller := controllers.New(db, sessions)
 
 	go runBookingRetentionJob(controller.Bookings)
