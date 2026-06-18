@@ -17,6 +17,21 @@ type UserModel struct {
 	DB *sql.DB
 }
 
+// normalizeAndValidateUserInput trims/normalizes Name and Email in place and
+// returns an error if either is invalid. Shared by Create, Register, and Update.
+func normalizeAndValidateUserInput(req *UserRequest) error {
+	req.Name  = strings.TrimSpace(req.Name)
+	req.Email = utils.NormalizeEmail(req.Email)
+
+	if req.Name == "" {
+		return fmt.Errorf("user name is required")
+	}
+	if !utils.IsValidEmail(req.Email) {
+		return fmt.Errorf("valid email address is required")
+	}
+	return nil
+}
+
 // List returns all users ordered alphabetically by name.
 func (m *UserModel) List() ([]User, error) {
 	rows, err := m.DB.Query(`
@@ -86,18 +101,12 @@ func (m *UserModel) GetByEmail(email string) (User, error) {
 // logs and is cleared the moment it's used.
 // Returns ErrDuplicate if the email address is already registered.
 func (m *UserModel) Create(req UserRequest) (User, string, error) {
-	req.Name  = strings.TrimSpace(req.Name)
-	req.Email = utils.NormalizeEmail(req.Email)
+	if err := normalizeAndValidateUserInput(&req); err != nil {
+		return User{}, "", err
+	}
 	role := strings.TrimSpace(req.Role)
 	if role != "general_admin" && role != "super_admin" {
 		role = "normal_user"
-	}
-
-	if req.Name == "" {
-		return User{}, "", fmt.Errorf("user name is required")
-	}
-	if !utils.IsValidEmail(req.Email) {
-		return User{}, "", fmt.Errorf("valid email address is required")
 	}
 
 	token, err := generateConfirmToken()
@@ -166,14 +175,8 @@ func generateConfirmToken() (string, error) {
 // so this row always shows up in the Users page for an admin to review.
 // Returns ErrDuplicate if the email address is already registered.
 func (m *UserModel) Register(req UserRequest) (User, error) {
-	req.Name  = strings.TrimSpace(req.Name)
-	req.Email = utils.NormalizeEmail(req.Email)
-
-	if req.Name == "" {
-		return User{}, fmt.Errorf("user name is required")
-	}
-	if !utils.IsValidEmail(req.Email) {
-		return User{}, fmt.Errorf("valid email address is required")
+	if err := normalizeAndValidateUserInput(&req); err != nil {
+		return User{}, err
 	}
 
 	var u User
@@ -209,14 +212,8 @@ func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 // Update changes a user's name or email.
 // Returns ErrNotFound if the user does not exist, ErrDuplicate if the new email is taken.
 func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
-	req.Name  = strings.TrimSpace(req.Name)
-	req.Email = utils.NormalizeEmail(req.Email)
-
-	if req.Name == "" {
-		return User{}, fmt.Errorf("user name is required")
-	}
-	if !utils.IsValidEmail(req.Email) {
-		return User{}, fmt.Errorf("valid email address is required")
+	if err := normalizeAndValidateUserInput(&req); err != nil {
+		return User{}, err
 	}
 
 	var u User

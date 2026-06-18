@@ -125,7 +125,6 @@ async function getBookings() {
 }
 
 async function createBooking(booking) { return api('/bookings', { method: 'POST', body: JSON.stringify(booking) }); }
-async function updateBooking(id, booking) { return api('/bookings/' + id, { method: 'PUT', body: JSON.stringify(booking) }); }
 async function cancelBookingApi(id) { return api('/bookings/' + id, { method: 'DELETE' }); }
 async function deleteBookingApi(id) { return api('/bookings/' + id + '?hard=1', { method: 'DELETE' }); }
 
@@ -177,6 +176,20 @@ function showMessage(id, text, type='success') {
   el.textContent = text;
   el.style.display = 'block';
   setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// Generic show/hide for any modal built with the "hidden flex" pattern used
+// throughout the admin panel (admins.html, users.html, sidebar-extras.js).
+function showModal(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('hidden');
+  el.classList.add('flex');
+}
+
+function hideModal(id) {
+  const el = document.getElementById(id);
+  el.classList.add('hidden');
+  el.classList.remove('flex');
 }
 
 function escapeHtml(value) {
@@ -255,12 +268,6 @@ function normalizeBookingWithDynamicStatus(booking) {
 
 function bookingStartMinutes(booking) {
   const time = toTime24(booking.start || booking.startTime || '');
-  const parts = time.split(':').map(Number);
-  return parts[0] * 60 + parts[1];
-}
-
-function bookingEndMinutes(booking) {
-  const time = toTime24(booking.end || booking.endTime || '');
   const parts = time.split(':').map(Number);
   return parts[0] * 60 + parts[1];
 }

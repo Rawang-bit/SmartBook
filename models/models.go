@@ -1,5 +1,10 @@
 package models
 
+// MinPasswordLength is the minimum number of characters required for any
+// admin password — set at login, reset, self-service change, or creation.
+// Centralized so a future policy change only needs to happen in one place.
+const MinPasswordLength = 12
+
 // Admin is an authenticated administrator account used in session data and login responses.
 type Admin struct {
 	ID                int64  `json:"id"`

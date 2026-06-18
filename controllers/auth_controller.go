@@ -19,6 +19,23 @@ func (c *Controller) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// recordFailedLoginAttempt counts one more failed attempt for username and
+// writes either a lockout notice or a "remaining attempts" warning. Shared by
+// the unknown-username and wrong-password branches of Login, which must
+// respond identically so an attacker can't distinguish "no such user" from
+// "wrong password".
+func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, username string) {
+	if c.LoginAttempts.RecordFailure(username) {
+		writeError(w, http.StatusTooManyRequests,
+			fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
+				session.MaxLoginAttempts))
+		return
+	}
+	remaining := c.LoginAttempts.Remaining(username)
+	writeError(w, http.StatusUnauthorized,
+		fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
+}
+
 // Login validates credentials via the AdminModel, creates a server-side session,
 // and sets an HttpOnly cookie. The browser sends this cookie on every future request.
 //
@@ -57,30 +74,12 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, models.ErrNotFound) || err != nil {
 		// Count the failure even for unknown usernames to prevent brute-forcing
 		// the username space; the error message is identical either way.
-		nowLocked := c.LoginAttempts.RecordFailure(username)
-		if nowLocked {
-			writeError(w, http.StatusTooManyRequests,
-				fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
-					session.MaxLoginAttempts))
-			return
-		}
-		remaining := c.LoginAttempts.Remaining(username)
-		writeError(w, http.StatusUnauthorized,
-			fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
+		c.recordFailedLoginAttempt(w, username)
 		return
 	}
 
 	if err := c.Admins.VerifyPassword(hash, password); err != nil {
-		nowLocked := c.LoginAttempts.RecordFailure(username)
-		if nowLocked {
-			writeError(w, http.StatusTooManyRequests,
-				fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
-					session.MaxLoginAttempts))
-			return
-		}
-		remaining := c.LoginAttempts.Remaining(username)
-		writeError(w, http.StatusUnauthorized,
-			fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
+		c.recordFailedLoginAttempt(w, username)
 		return
 	}
 
@@ -101,15 +100,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(),
-		Value:    sessionID,
-		Path:     "/",
-		MaxAge:   int(session.SessionDuration.Seconds()),
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		Secure:   isProduction(),
-	})
+	setSessionCookie(w, sessionID, int(session.SessionDuration.Seconds()))
 
 	writeJSON(w, http.StatusOK, models.LoginResponse{Admin: admin})
 }
@@ -121,15 +112,7 @@ func (c *Controller) Logout(w http.ResponseWriter, r *http.Request) {
 		c.Sessions.Delete(cookie.Value)
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(),
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		Secure:   isProduction(),
-	})
+	setSessionCookie(w, "", -1)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
@@ -249,8 +232,8 @@ func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "reset token is required")
 		return
 	}
-	if len(password) < 12 {
-		writeError(w, http.StatusBadRequest, "password must be at least 12 characters")
+	if len(password) < models.MinPasswordLength {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("password must be at least %d characters", models.MinPasswordLength))
 		return
 	}
 

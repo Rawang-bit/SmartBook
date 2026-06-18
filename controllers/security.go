@@ -29,6 +29,22 @@ func sessionCookieName() string {
 	return "smartbook_session"
 }
 
+// setSessionCookie writes the session cookie with the security attributes
+// described on sessionCookieName, sharing them between login (value =
+// session ID, maxAge = session lifetime) and logout (value = "", maxAge =
+// -1, which tells the browser to delete it immediately).
+func setSessionCookie(w http.ResponseWriter, value string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName(),
+		Value:    value,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   isProduction(),
+	})
+}
+
 // SecureHeaders wraps every HTTP response with a hardened set of security headers.
 // It must be applied as the outermost middleware so headers appear on every response,
 // including error pages and redirects.

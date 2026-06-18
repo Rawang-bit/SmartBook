@@ -315,33 +315,13 @@
     </div>
   </div>
 
-  <!-- ── Delete Confirm Modal ──────────────────────────────────────────────── -->
-  <div id="deleteModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-    <div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
-      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-        </svg>
-      </div>
-      <h3 class="mb-2 text-lg font-black text-slate-900">Delete Admin?</h3>
-      <p id="deleteConfirmText" class="mb-6 text-sm font-semibold text-slate-500"></p>
-      <div class="flex gap-3">
-        <button onclick="closeDeleteModal()" class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
-          Cancel
-        </button>
-        <button id="deleteConfirmBtn" onclick="confirmDelete()"
-          class="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-red-700">
-          Delete
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- Delete and revoke/restore confirmations use the shared confirm modal
+       injected by sidebar-extras.js (see confirmAction()). -->
 
   <script src="app.js"></script>
   <script src="sidebar-extras.js"></script>
   <script>
     let allAdmins = [];
-    let pendingDeleteId = null;
 
     // ── Initialisation ──────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', async () => {
@@ -448,32 +428,35 @@
     }
 
     // ── Toggle Access (Revoke / Restore) ────────────────────────────────────
-    async function toggleAccess(id, action, username) {
-      const label = action === 'revoke' ? 'Revoke' : 'Restore';
-      if (!confirm(`${label} access for @${username}?`)) return;
-      try {
-        if (action === 'revoke') {
-          await revokeAdminApi(id);
-          showFlash(`Access revoked for @${username}.`, 'success');
-        } else {
-          await restoreAdminApi(id);
-          showFlash(`Access restored for @${username}.`, 'success');
+    function toggleAccess(id, action, username) {
+      const isRevoke = action === 'revoke';
+      const label = isRevoke ? 'Revoke' : 'Restore';
+
+      confirmAction(`${label} access for @${username}?`, async function () {
+        try {
+          if (isRevoke) {
+            await revokeAdminApi(id);
+            showFlash(`Access revoked for @${username}.`, 'success');
+          } else {
+            await restoreAdminApi(id);
+            showFlash(`Access restored for @${username}.`, 'success');
+          }
+          await loadAdmins();
+        } catch (err) {
+          showFlash(err.message, 'error');
         }
-        await loadAdmins();
-      } catch (err) {
-        showFlash(err.message, 'error');
-      }
+      }, {
+        title: `${label} Access?`,
+        confirmLabel: label,
+        tone: isRevoke ? 'danger' : 'positive'
+      });
     }
 
     // ── Flash Message ───────────────────────────────────────────────────────
+    // Thin alias over the shared showMessage() in app.js, scoped to this
+    // page's #flashMsg element.
     function showFlash(text, type = 'success') {
-      const el = document.getElementById('flashMsg');
-      el.className = `mb-4 rounded-xl px-4 py-3 font-bold ${type === 'success'
-        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-        : 'bg-red-50 text-red-700 border border-red-200'}`;
-      el.textContent = text;
-      el.classList.remove('hidden');
-      setTimeout(() => el.classList.add('hidden'), 4000);
+      showMessage('flashMsg', text, type);
     }
 
     function showModalMsg(id, text, type = 'error') {
@@ -610,51 +593,21 @@
       }
     }
 
-    // ── Delete Modal ────────────────────────────────────────────────────────
+    // ── Delete Admin ─────────────────────────────────────────────────────────
     function openDeleteModal(id, username) {
-      pendingDeleteId = id;
-      document.getElementById('deleteConfirmText').textContent =
-        `Admin "@${username}" will be permanently removed. This cannot be undone.`;
-      showModal('deleteModal');
+      confirmAction(`Admin "@${username}" will be permanently removed. This cannot be undone.`, async function () {
+        try {
+          await deleteAdminApi(id);
+          showFlash('Admin deleted.');
+          await loadAdmins();
+        } catch (err) {
+          showFlash(err.message, 'error');
+        }
+      }, { title: 'Delete Admin?', confirmLabel: 'Delete' });
     }
 
-    function closeDeleteModal() {
-      pendingDeleteId = null;
-      hideModal('deleteModal');
-    }
-
-    async function confirmDelete() {
-      if (!pendingDeleteId) return;
-      const btn = document.getElementById('deleteConfirmBtn');
-      btn.disabled = true;
-      btn.textContent = 'Deleting…';
-
-      try {
-        await deleteAdminApi(pendingDeleteId);
-        closeDeleteModal();
-        showFlash('Admin deleted.');
-        await loadAdmins();
-      } catch (err) {
-        closeDeleteModal();
-        showFlash(err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Delete';
-      }
-    }
-
-    // ── Modal Helpers ───────────────────────────────────────────────────────
-    function showModal(id) {
-      const el = document.getElementById(id);
-      el.classList.remove('hidden');
-      el.classList.add('flex');
-    }
-
-    function hideModal(id) {
-      const el = document.getElementById(id);
-      el.classList.add('hidden');
-      el.classList.remove('flex');
-    }
+    // showModal/hideModal/confirmAction are shared across all admin pages —
+    // see app.js and sidebar-extras.js.
 
     // Close modals on backdrop click
     document.querySelectorAll('[id$="Modal"]').forEach(modal => {

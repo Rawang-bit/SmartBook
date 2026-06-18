@@ -30,23 +30,6 @@ type resendPayload struct {
 // If RESEND_API_KEY is not set, the reset URL is logged to the server console
 // (development fallback — no email is sent).
 func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
-	apiKey := os.Getenv("RESEND_API_KEY")
-	from   := os.Getenv("EMAIL_FROM")
-
-	if apiKey == "" {
-		// Development fallback: print the link so the developer can test without
-		// a live email API key.
-		log.Printf(
-			"[PASSWORD RESET] No RESEND_API_KEY set. Reset link for %s (%s):\n  %s",
-			toName, toEmail, resetURL,
-		)
-		return nil
-	}
-
-	if from == "" {
-		from = "SmartBook <onboarding@resend.dev>"
-	}
-
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
 			"You (or someone claiming to be you) requested a password reset for your SmartBook admin account.\r\n\r\n"+
@@ -56,36 +39,7 @@ func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
 			"— SmartBook",
 		toName, resetURL,
 	)
-
-	payload, err := json.Marshal(resendPayload{
-		From:    from,
-		To:      []string{toEmail},
-		Subject: "SmartBook — Password Reset Request",
-		Text:    body,
-	})
-	if err != nil {
-		return fmt.Errorf("resend: marshal payload: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("resend: build request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("resend: send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("resend: API returned %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
+	return sendSimpleEmail(toEmail, "SmartBook — Password Reset Request", body, "PASSWORD RESET")
 }
 
 // sendSimpleEmail is a shared helper for the short notification emails
@@ -251,24 +205,7 @@ func loginURL() string {
 
 // SendOTPEmail delivers a one-time verification code used during public
 // self-registration on the booking access page.
-// Falls back to logging the code to the server console when RESEND_API_KEY
-// is not set, identical in spirit to SendPasswordResetEmail.
 func SendOTPEmail(toEmail, toName, code string) error {
-	apiKey := os.Getenv("RESEND_API_KEY")
-	from   := os.Getenv("EMAIL_FROM")
-
-	if apiKey == "" {
-		log.Printf(
-			"[REGISTRATION OTP] No RESEND_API_KEY set. Code for %s (%s): %s",
-			toName, toEmail, code,
-		)
-		return nil
-	}
-
-	if from == "" {
-		from = "SmartBook <onboarding@resend.dev>"
-	}
-
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
 			"Your SmartBook verification code is:\r\n\r\n"+
@@ -278,34 +215,5 @@ func SendOTPEmail(toEmail, toName, code string) error {
 			"— SmartBook",
 		toName, code,
 	)
-
-	payload, err := json.Marshal(resendPayload{
-		From:    from,
-		To:      []string{toEmail},
-		Subject: "SmartBook — Your Verification Code",
-		Text:    body,
-	})
-	if err != nil {
-		return fmt.Errorf("resend: marshal payload: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("resend: build request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("resend: send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("resend: API returned %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
+	return sendSimpleEmail(toEmail, "SmartBook — Your Verification Code", body, "REGISTRATION OTP")
 }

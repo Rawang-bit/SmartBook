@@ -5,6 +5,9 @@
 //   3. Populate the sidebar admin info panel (name, initial, role)
 //   4. Inject and wire up the shared Change Password modal
 //      (used only by admins.html own-row "Change PW" action)
+//   5. Inject and wire up the shared Confirm modal — a generic replacement
+//      for native confirm() used by every admin page's destructive actions
+//      (delete room, cancel/delete booking, delete user, revoke/restore admin)
 
 (function () {
 
@@ -135,7 +138,85 @@
     });
   });
 
+  // ── Shared Confirm Modal ─────────────────────────────────────────────────
+  // Generic yes/no confirmation used everywhere a page previously called the
+  // native confirm(). Injected once into the body so no page duplicates the
+  // markup. See confirmAction() below for the call-site API.
+  document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.createElement('div');
+    modal.id = 'sharedConfirmModal';
+    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+    modal.innerHTML = `
+      <div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
+        <div id="sharedConfirmIconWrap" class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+          <svg id="sharedConfirmIcon" class="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+        </div>
+        <h3 id="sharedConfirmTitle" class="mb-2 text-lg font-black text-slate-900">Are you sure?</h3>
+        <p id="sharedConfirmText" class="mb-6 text-sm font-semibold text-slate-500"></p>
+        <div class="flex gap-3">
+          <button type="button" onclick="closeSharedConfirm()"
+            class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
+            Cancel
+          </button>
+          <button type="button" id="sharedConfirmBtn"
+            class="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-red-700">
+            Confirm
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) closeSharedConfirm();
+    });
+
+    document.getElementById('sharedConfirmBtn').addEventListener('click', function () {
+      const callback = _sharedConfirmCallback;
+      closeSharedConfirm();
+      if (callback) callback();
+    });
+  });
+
 })();
+
+// ── Confirm Modal API ─────────────────────────────────────────────────────
+
+let _sharedConfirmCallback = null;
+
+// Shows the shared confirmation modal and calls onConfirm() if the admin
+// clicks the confirm button. Replaces native confirm() across the admin panel.
+//
+// options (all optional):
+//   title          — heading text, defaults to "Are you sure?"
+//   confirmLabel   — confirm button text, defaults to "Confirm"
+//   tone           — "danger" (red, default) or "positive" (emerald) —
+//                     controls the icon and confirm button color
+function confirmAction(message, onConfirm, options = {}) {
+  const tone = options.tone === 'positive'
+    ? { wrap: 'bg-emerald-100', icon: 'text-emerald-600', btn: 'bg-emerald-600 hover:bg-emerald-700' }
+    : { wrap: 'bg-red-100',     icon: 'text-red-600',     btn: 'bg-red-600 hover:bg-red-700' };
+
+  document.getElementById('sharedConfirmTitle').textContent = options.title || 'Are you sure?';
+  document.getElementById('sharedConfirmText').textContent = message;
+
+  document.getElementById('sharedConfirmIconWrap').className =
+    `mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${tone.wrap}`;
+  document.getElementById('sharedConfirmIcon').setAttribute('class', `h-8 w-8 ${tone.icon}`);
+
+  const btn = document.getElementById('sharedConfirmBtn');
+  btn.textContent = options.confirmLabel || 'Confirm';
+  btn.className = `flex-1 rounded-xl px-4 py-3 text-sm font-extrabold text-white transition ${tone.btn}`;
+
+  _sharedConfirmCallback = onConfirm;
+  showModal('sharedConfirmModal');
+}
+
+function closeSharedConfirm() {
+  _sharedConfirmCallback = null;
+  hideModal('sharedConfirmModal');
+}
 
 // ── Modal API ──────────────────────────────────────────────────────────────
 

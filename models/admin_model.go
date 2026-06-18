@@ -15,6 +15,24 @@ type AdminModel struct {
 	DB *sql.DB
 }
 
+// normalizeAdminRole defaults any role other than "super_admin" to "general_admin".
+func normalizeAdminRole(role string) string {
+	if role == "super_admin" {
+		return role
+	}
+	return "general_admin"
+}
+
+// nullableString converts an empty string to SQL NULL so a unique constraint
+// on an optional column (e.g. admins.email) doesn't treat multiple blank
+// values as duplicates of each other.
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // List returns all admin accounts ordered by creation date, including their email.
 func (m *AdminModel) List() ([]AdminDetail, error) {
 	rows, err := m.DB.Query(`
@@ -110,12 +128,10 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	if req.Username == "" || req.Password == "" || req.Name == "" {
 		return Admin{}, fmt.Errorf("username, password, and name are required")
 	}
-	if len(req.Password) < 12 {
-		return Admin{}, fmt.Errorf("password must be at least 12 characters")
+	if len(req.Password) < MinPasswordLength {
+		return Admin{}, fmt.Errorf("password must be at least %d characters", MinPasswordLength)
 	}
-	if req.Role != "super_admin" && req.Role != "general_admin" {
-		req.Role = "general_admin"
-	}
+	req.Role = normalizeAdminRole(req.Role)
 	if req.Email != "" && !utils.IsValidEmail(req.Email) {
 		return Admin{}, fmt.Errorf("invalid email address")
 	}
@@ -125,11 +141,7 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 		return Admin{}, fmt.Errorf("failed to hash password")
 	}
 
-	// Store email as NULL when not provided so the UNIQUE constraint still holds.
-	var emailParam interface{}
-	if req.Email != "" {
-		emailParam = req.Email
-	}
+	emailParam := nullableString(req.Email)
 
 	var admin Admin
 	err = m.DB.QueryRow(`
@@ -160,10 +172,7 @@ func (m *AdminModel) CreateWithGeneratedPassword(username, name, role, email str
 	username = strings.TrimSpace(username)
 	name     = strings.TrimSpace(name)
 	email    = utils.NormalizeEmail(email)
-
-	if role != "super_admin" && role != "general_admin" {
-		role = "general_admin"
-	}
+	role     = normalizeAdminRole(role)
 
 	password, err := utils.GenerateRandomPassword(16)
 	if err != nil {
@@ -175,10 +184,7 @@ func (m *AdminModel) CreateWithGeneratedPassword(username, name, role, email str
 		return Admin{}, "", fmt.Errorf("failed to hash password")
 	}
 
-	var emailParam interface{}
-	if email != "" {
-		emailParam = email
-	}
+	emailParam := nullableString(email)
 
 	var admin Admin
 	err = m.DB.QueryRow(`
@@ -209,9 +215,7 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 	if req.Name == "" {
 		return Admin{}, fmt.Errorf("name is required")
 	}
-	if req.Role != "super_admin" && req.Role != "general_admin" {
-		req.Role = "general_admin"
-	}
+	req.Role = normalizeAdminRole(req.Role)
 	if currentAdminID == id {
 		req.Role = currentRole // prevent self-demotion
 	}
@@ -219,11 +223,7 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 		return Admin{}, fmt.Errorf("invalid email address")
 	}
 
-	// NULL when clearing the email
-	var emailParam interface{}
-	if req.Email != "" {
-		emailParam = req.Email
-	}
+	emailParam := nullableString(req.Email)
 
 	var admin Admin
 	err := m.DB.QueryRow(`
@@ -245,8 +245,8 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 // ResetPassword sets a new bcrypt-hashed password for any admin.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
-	if len(newPassword) < 12 {
-		return fmt.Errorf("password must be at least 12 characters")
+	if len(newPassword) < MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -268,8 +268,8 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 // usable once.
 // Returns ErrUnauthorized if the current password is wrong.
 func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error {
-	if len(newPw) < 12 {
-		return fmt.Errorf("new password must be at least 12 characters")
+	if len(newPw) < MinPasswordLength {
+		return fmt.Errorf("new password must be at least %d characters", MinPasswordLength)
 	}
 	hash, err := m.GetPasswordHash(id)
 	if err != nil {

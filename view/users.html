@@ -480,17 +480,7 @@
       }
     }
 
-    function showModal(id) {
-      const el = document.getElementById(id);
-      el.classList.remove('hidden');
-      el.classList.add('flex');
-    }
-
-    function hideModal(id) {
-      const el = document.getElementById(id);
-      el.classList.add('hidden');
-      el.classList.remove('flex');
-    }
+    // showModal/hideModal are defined once in app.js and shared by every admin page.
 
     // Close the confirm modal on backdrop click
     document.getElementById('confirmActionModal').addEventListener('click', function(e) {
@@ -513,16 +503,16 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    async function removeUser(id) {
-      if (!confirm('Delete this registered user?')) return;
-
-      try {
-        await deleteUserApi(id);
-        showMessage('userMessage', 'User deleted successfully.');
-        await loadUsers();
-      } catch (err) {
-        showMessage('userMessage', err.message, 'error');
-      }
+    function removeUser(id) {
+      confirmAction('This registered user will be permanently deleted. This cannot be undone.', async function () {
+        try {
+          await deleteUserApi(id);
+          showMessage('userMessage', 'User deleted successfully.');
+          await loadUsers();
+        } catch (err) {
+          showMessage('userMessage', err.message, 'error');
+        }
+      }, { title: 'Delete User?', confirmLabel: 'Delete' });
     }
 
     document.getElementById('userForm').addEventListener('submit', async function(e) {

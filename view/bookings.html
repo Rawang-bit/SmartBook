@@ -256,28 +256,28 @@
       `;
     }
 
-    async function cancelBooking(id) {
-      if (!confirm('Cancel this booking?')) return;
-
-      try {
-        await cancelBookingApi(id);
-        showMessage('bookingMessage', 'Booking cancelled successfully.');
-        await renderBookings();
-      } catch (err) {
-        showMessage('bookingMessage', err.message, 'error');
-      }
+    function cancelBooking(id) {
+      confirmAction('The room will be freed up and the booking owner will no longer see this meeting as active.', async function () {
+        try {
+          await cancelBookingApi(id);
+          showMessage('bookingMessage', 'Booking cancelled successfully.');
+          await renderBookings();
+        } catch (err) {
+          showMessage('bookingMessage', err.message, 'error');
+        }
+      }, { title: 'Cancel This Booking?', confirmLabel: 'Cancel Booking' });
     }
 
-    async function hardDelete(id) {
-      if (!confirm('Delete this booking permanently?')) return;
-
-      try {
-        await deleteBookingApi(id);
-        showMessage('bookingMessage', 'Booking deleted successfully.');
-        await renderBookings();
-      } catch (err) {
-        showMessage('bookingMessage', err.message, 'error');
-      }
+    function hardDelete(id) {
+      confirmAction('This booking will be permanently removed from the database. This cannot be undone.', async function () {
+        try {
+          await deleteBookingApi(id);
+          showMessage('bookingMessage', 'Booking deleted successfully.');
+          await renderBookings();
+        } catch (err) {
+          showMessage('bookingMessage', err.message, 'error');
+        }
+      }, { title: 'Delete Booking Permanently?', confirmLabel: 'Delete' });
     }
 
     renderBookings().catch(function(err) {
