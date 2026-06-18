@@ -176,28 +176,18 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 	writeJSON(w, http.StatusOK, map[string]string{"status": "approved", "role": role, "username": admin.Username})
 }
 
-// createAdminFromApproval derives a username from email and creates the admin
-// account, retrying with a numeric suffix if the derived username collides
-// with an existing account.
+// createAdminFromApproval creates the admin account using the applicant's
+// email address as their login username, so admins promoted this way always
+// log in with the same email they registered and were approved with.
 func (c *Controller) createAdminFromApproval(name, email, role string) (models.Admin, string, error) {
-	base := utils.DeriveUsernameFromEmail(email)
-
-	const maxAttempts = 6
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		username := base
-		if attempt > 0 {
-			username = fmt.Sprintf("%s%d", base, attempt)
+	admin, password, err := c.Admins.CreateWithGeneratedPassword(email, name, role, email)
+	if err != nil {
+		if errors.Is(err, models.ErrDuplicate) {
+			return models.Admin{}, "", fmt.Errorf("an admin with this email already exists")
 		}
-
-		admin, password, err := c.Admins.CreateWithGeneratedPassword(username, name, role, email)
-		if err == nil {
-			return admin, password, nil
-		}
-		if !errors.Is(err, models.ErrDuplicate) {
-			return models.Admin{}, "", err
-		}
+		return models.Admin{}, "", err
 	}
-	return models.Admin{}, "", fmt.Errorf("could not create admin account — username or email already in use")
+	return admin, password, nil
 }
 
 // rejectUser handles POST /api/users/{id}/reject. Any admin may reject —
