@@ -26,6 +26,15 @@ async function api(path, options = {}) {
 
   let data = null;
   try { data = await res.json(); } catch (_) {}
+
+  // A 401 from any endpoint other than the login attempt itself means the
+  // session cookie is missing or has expired server-side (RequireAdmin /
+  // RequireSuperAdmin rejected the request). Force the admin back to the
+  // login page instead of leaving them looking at a broken admin page.
+  if (res.status === 401 && path !== '/auth/login') {
+    forceLogout();
+  }
+
   if (!res.ok) throw new Error((data && data.error) || 'Request failed');
   return data;
 }
@@ -57,6 +66,20 @@ function requireAuth() {
   }
 }
 
+// Clears the local admin session markers and sends the browser to the login
+// page. Used both for manual "Sign Out" and when the server reports a missing
+// or expired session (401) on any admin API call.
+function forceLogout() {
+  localStorage.removeItem('adminLoggedIn');
+  localStorage.removeItem('adminId');
+  localStorage.removeItem('adminName');
+  localStorage.removeItem('adminRole');
+
+  if (window.location.pathname.split('/').pop() !== 'login.html') {
+    window.location.href = 'login.html';
+  }
+}
+
 // Logs out the admin by:
 // 1. Calling the server to delete the session
 // 2. Clearing the localStorage UI flag
@@ -67,11 +90,7 @@ async function logout() {
   } catch (_) {
     // Even if the server call fails, we still clear local state and redirect
   }
-  localStorage.removeItem('adminLoggedIn');
-  localStorage.removeItem('adminId');
-  localStorage.removeItem('adminName');
-  localStorage.removeItem('adminRole');
-  window.location.href = 'login.html';
+  forceLogout();
 }
 
 // Sends login credentials to the server.
