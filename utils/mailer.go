@@ -88,6 +88,90 @@ func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
 	return nil
 }
 
+// sendSimpleEmail is a shared helper for the short notification emails
+// (approval / rejection) that just need a subject and a plain-text body.
+// Falls back to logging when RESEND_API_KEY is not set.
+func sendSimpleEmail(toEmail, subject, body, logTag string) error {
+	apiKey := os.Getenv("RESEND_API_KEY")
+	from   := os.Getenv("EMAIL_FROM")
+
+	if apiKey == "" {
+		log.Printf("[%s] No RESEND_API_KEY set. Would have sent to %s:\n%s", logTag, toEmail, body)
+		return nil
+	}
+
+	if from == "" {
+		from = "SmartBook <onboarding@resend.dev>"
+	}
+
+	payload, err := json.Marshal(resendPayload{
+		From:    from,
+		To:      []string{toEmail},
+		Subject: subject,
+		Text:    body,
+	})
+	if err != nil {
+		return fmt.Errorf("resend: marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("resend: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend: send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("resend: API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+// SendApprovalEmail notifies a self-registered user that an admin approved
+// their access request. They can now return to the access page and book rooms.
+func SendApprovalEmail(toEmail, toName string) error {
+	body := fmt.Sprintf(
+		"Hi %s,\r\n\r\n"+
+			"Good news — your SmartBook access request has been approved.\r\n\r\n"+
+			"You can now return to the booking page and enter your email to access the calendar:\r\n"+
+			"  %s\r\n\r\n"+
+			"— SmartBook",
+		toName, accessURL(),
+	)
+	return sendSimpleEmail(toEmail, "SmartBook — Access Approved", body, "USER APPROVED")
+}
+
+// SendRejectionEmail notifies a self-registered user that an admin rejected
+// their access request.
+func SendRejectionEmail(toEmail, toName string) error {
+	body := fmt.Sprintf(
+		"Hi %s,\r\n\r\n"+
+			"Your SmartBook access request was not approved.\r\n\r\n"+
+			"If you believe this is a mistake, please contact your administrator.\r\n\r\n"+
+			"— SmartBook",
+		toName,
+	)
+	return sendSimpleEmail(toEmail, "SmartBook — Access Request Declined", body, "USER REJECTED")
+}
+
+// accessURL returns the base URL of the public access page, used in
+// approval emails so the user has a direct link back to the app.
+func accessURL() string {
+	appURL := os.Getenv("APP_URL")
+	if appURL == "" {
+		appURL = "http://localhost:8080"
+	}
+	return appURL + "/index.html"
+}
+
 // SendOTPEmail delivers a one-time verification code used during public
 // self-registration on the booking access page.
 // Falls back to logging the code to the server console when RESEND_API_KEY

@@ -52,11 +52,14 @@ type ResetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// User is a pre-registered person who is allowed to make room bookings.
+// User is a registered person who is allowed to make room bookings.
+// Self-registered users start as "pending" until an admin approves them;
+// users added directly by an admin are approved immediately.
 type User struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Status string `json:"status"` // "pending", "approved", or "rejected"
 }
 
 // UserRequest is the JSON body sent when creating or updating a user.

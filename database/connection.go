@@ -59,6 +59,7 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
 		     ON admins (LOWER(TRIM(email)))
 		     WHERE email IS NOT NULL`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved'`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

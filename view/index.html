@@ -122,6 +122,46 @@
         </div>
       </div>
 
+      <!-- ─── STEP 4: Pending admin approval ─────────────────────────────────── -->
+      <div id="pendingStep" class="hidden text-center">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+          <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+
+        <h1 class="text-center text-3xl font-black text-slate-900">Pending Approval</h1>
+        <p class="text-center text-sm font-semibold text-slate-500 mt-2 mb-6">
+          Your access request for <span id="pendingEmail" class="font-bold text-slate-700"></span> is awaiting admin review.
+          You will receive an approval or rejection email once a decision is made.
+        </p>
+
+        <button onclick="showStep('emailStep')"
+          class="w-full rounded-2xl bg-slate-100 py-4 font-black text-slate-700 transition hover:bg-slate-200">
+          Check Again Later
+        </button>
+      </div>
+
+      <!-- ─── STEP 5: Rejected ───────────────────────────────────────────────── -->
+      <div id="rejectedStep" class="hidden text-center">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+          <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </div>
+
+        <h1 class="text-center text-3xl font-black text-slate-900">Access Denied</h1>
+        <p class="text-center text-sm font-semibold text-slate-500 mt-2 mb-6">
+          Your access request for <span id="rejectedEmail" class="font-bold text-slate-700"></span> was not approved.
+          Please contact your administrator for further assistance.
+        </p>
+
+        <button onclick="showStep('emailStep')"
+          class="w-full rounded-2xl bg-slate-100 py-4 font-black text-slate-700 transition hover:bg-slate-200">
+          Back
+        </button>
+      </div>
+
     </div>
   </div>
 
@@ -139,7 +179,7 @@
     }
 
     function showStep(id) {
-      ['emailStep', 'registerStep', 'otpStep'].forEach(s => {
+      ['emailStep', 'registerStep', 'otpStep', 'pendingStep', 'rejectedStep'].forEach(s => {
         document.getElementById(s).classList.toggle('hidden', s !== id);
       });
       ['emailMsg', 'registerMsg', 'otpMsg'].forEach(clearMsg);
@@ -186,7 +226,15 @@
         const res = await api('/api/access/check-email', { method: 'POST', body: JSON.stringify({ email }) });
 
         if (res.exists) {
-          grantAccess(res.name, res.email);
+          if (res.status === 'approved') {
+            grantAccess(res.name, res.email);
+          } else if (res.status === 'pending') {
+            document.getElementById('pendingEmail').textContent = res.email;
+            showStep('pendingStep');
+          } else {
+            document.getElementById('rejectedEmail').textContent = res.email;
+            showStep('rejectedStep');
+          }
         } else {
           pendingRegistration = { email };
           document.getElementById('registerEmail').value = email;
@@ -244,12 +292,17 @@
           }),
         });
 
-        // Keep the button disabled and show success briefly before redirecting,
+        // Keep the button disabled and show success briefly before moving on,
         // so the user gets clear confirmation that the code was accepted.
-        showMsg('otpMsg', 'Email verified successfully! Redirecting to your calendar…', 'success');
+        // Registration always lands as "pending" — an admin must approve it
+        // before the calendar is unlocked.
+        showMsg('otpMsg', 'Email verified successfully!', 'success');
         btn.textContent = 'Verified ✓';
 
-        setTimeout(() => grantAccess(res.name, res.email), 1200);
+        setTimeout(() => {
+          document.getElementById('pendingEmail').textContent = res.email;
+          showStep('pendingStep');
+        }, 1200);
       } catch (err) {
         showMsg('otpMsg', err.message, 'error');
         btn.disabled = false;

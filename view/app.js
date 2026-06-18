@@ -106,6 +106,8 @@ async function getUsers() { return api('/users'); }
 async function createUser(user) { return api('/users', { method: 'POST', body: JSON.stringify(user) }); }
 async function updateUser(id, user) { return api('/users/' + id, { method: 'PUT', body: JSON.stringify(user) }); }
 async function deleteUserApi(id) { return api('/users/' + id, { method: 'DELETE' }); }
+async function approveUserApi(id) { return api('/users/' + id + '/approve', { method: 'POST' }); }
+async function rejectUserApi(id) { return api('/users/' + id + '/reject', { method: 'POST' }); }
 
 function normalizeBookingRecord(b) {
   const startRaw = b.start || b.startTime || '';

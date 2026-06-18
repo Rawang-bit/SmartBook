@@ -38,6 +38,7 @@ func (c *Controller) CheckEmail(w http.ResponseWriter, r *http.Request) {
 		"exists": true,
 		"name":   user.Name,
 		"email":  user.Email,
+		"status": user.Status,
 	})
 }
 
@@ -79,7 +80,8 @@ func (c *Controller) SendRegistrationOTP(w http.ResponseWriter, r *http.Request)
 }
 
 // VerifyRegistrationOTP checks the submitted code and, on success, creates
-// the user so they can immediately access the booking calendar.
+// the user with status "pending". They cannot book yet — an admin must
+// approve the request first, and the user is notified by email either way.
 func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyOTPRequest
 	if !decodeJSON(w, r, &req) {
@@ -100,12 +102,12 @@ func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	user, err := c.Users.Create(models.UserRequest{Name: name, Email: email})
+	user, err := c.Users.Register(models.UserRequest{Name: name, Email: email})
 	if errors.Is(err, models.ErrDuplicate) {
 		// Someone else registered this exact email between send-otp and verify-otp.
 		existing, getErr := c.Users.GetByEmail(email)
 		if getErr == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"name": existing.Name, "email": existing.Email})
+			writeJSON(w, http.StatusOK, map[string]any{"name": existing.Name, "email": existing.Email, "status": existing.Status})
 			return
 		}
 		writeError(w, http.StatusBadRequest, "this email is already registered")
@@ -116,5 +118,5 @@ func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"name": user.Name, "email": user.Email})
+	writeJSON(w, http.StatusOK, map[string]any{"name": user.Name, "email": user.Email, "status": user.Status})
 }

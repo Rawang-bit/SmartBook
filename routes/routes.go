@@ -38,6 +38,9 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("PUT /api/users/",    c.RequireSuperAdmin(c.UpdateUser))
 	mux.HandleFunc("DELETE /api/users/", c.RequireSuperAdmin(c.DeleteUser))
 
+	// Approve or reject a pending self-registration — POST /api/users/{id}/approve|reject
+	mux.HandleFunc("POST /api/users/", c.RequireAdmin(c.ToggleUserStatus))
+
 	// ── Rooms ─────────────────────────────────────────────────────────────────
 	// Public: read room list (needed by the public calendar)
 	mux.HandleFunc("GET /api/rooms", c.ListRooms)
