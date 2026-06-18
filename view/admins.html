@@ -364,36 +364,21 @@
           ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
           : `<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>`;
 
-        const editBtn = `<button
-            onclick="openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}', '${escapeHtml(a.email || '')}')"
-            class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-extrabold text-indigo-700 transition hover:bg-indigo-100"
-          >Edit</button>`;
+        const editOnclick = `openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}', '${escapeHtml(a.email || '')}')`;
+        const editBtn = iconButton('edit', editOnclick, 'Edit admin', 'indigo');
 
         let actions;
         if (isSelf) {
-          actions = `
-            ${editBtn}
-            <button onclick="openSharedCpModal()"
-              class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-700 transition hover:bg-slate-200"
-            >Change PW</button>`;
+          actions = editBtn + iconButton('lock', 'openSharedCpModal()', 'Change my password', 'slate');
         } else {
           const toggleBtn = isRevoked
-            ? `<button onclick="toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')"
-                 class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 transition hover:bg-emerald-100"
-               >Restore</button>`
-            : `<button onclick="toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')"
-                 class="rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-extrabold text-orange-700 transition hover:bg-orange-100"
-               >Revoke</button>`;
+            ? iconButton('refresh', `toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')`, 'Restore access', 'emerald')
+            : iconButton('ban', `toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')`, 'Revoke access', 'orange');
 
-          actions = `
-            ${editBtn}
-            <button onclick="openResetModal(${a.id}, '${escapeHtml(a.username)}')"
-              class="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-extrabold text-amber-700 transition hover:bg-amber-100"
-            >Reset PW</button>
-            ${toggleBtn}
-            <button onclick="openDeleteModal(${a.id}, '${escapeHtml(a.username)}')"
-              class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-100"
-            >Delete</button>`;
+          actions = editBtn +
+            iconButton('lock', `openResetModal(${a.id}, '${escapeHtml(a.username)}')`, 'Reset password', 'amber') +
+            toggleBtn +
+            iconButton('trash', `openDeleteModal(${a.id}, '${escapeHtml(a.username)}')`, 'Delete admin', 'red');
         }
 
         return `
@@ -407,7 +392,7 @@
             <td class="px-6 py-4">${statusBadge}</td>
             <td class="px-6 py-4 text-slate-500 font-semibold">${escapeHtml(a.createdAt || '—')}</td>
             <td class="px-6 py-4 text-right">
-              <div class="inline-flex flex-wrap gap-2 justify-end">${actions}</div>
+              <div class="inline-flex flex-wrap items-center justify-end gap-1">${actions}</div>
             </td>
           </tr>`;
       }).join('');

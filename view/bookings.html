@@ -225,19 +225,10 @@
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              <div class="flex flex-wrap gap-2">
-                ${isSuperAdmin() && canCancel
-                    ? `<button
-                        onclick="cancelBooking(${booking.id})"
-                        class="inline-flex min-h-10 items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-red-700"
-                      >Cancel</button>`
-                    : ''
-                }
+              <div class="flex flex-wrap items-center gap-1">
+                ${isSuperAdmin() && canCancel ? iconButton('x', `cancelBooking(${booking.id})`, 'Cancel booking', 'red') : ''}
                 ${isSuperAdmin()
-                    ? `<button
-                        onclick="hardDelete(${booking.id})"
-                        class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition hover:bg-slate-200"
-                      >Delete</button>`
+                    ? iconButton('trash', `hardDelete(${booking.id})`, 'Delete booking permanently', 'slate')
                     : (!canCancel ? '' : '<span class="text-xs font-semibold text-slate-400">View only</span>')
                 }
               </div>

@@ -342,15 +342,10 @@
         // Admin-added pending rows are never reviewed in the UI — they activate only
         // when the recipient clicks the confirmation link emailed to them, so no
         // action buttons are shown for those; a hint explains why.
-        const approvalActions = (isPending && !u.awaitingConfirmation) ? `
-          <button
-            onclick="approveUser(${u.id})"
-            class="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-extrabold text-emerald-700 transition hover:bg-emerald-100"
-          >Approve</button>
-          <button
-            onclick="rejectUser(${u.id})"
-            class="inline-flex min-h-10 items-center justify-center rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-extrabold text-amber-700 transition hover:bg-amber-100"
-          >Reject</button>` : '';
+        const approvalActions = (isPending && !u.awaitingConfirmation)
+          ? iconButton('check', `approveUser(${u.id})`, 'Approve user', 'emerald') +
+            iconButton('x', `rejectUser(${u.id})`, 'Reject user', 'amber')
+          : '';
 
         const statusCell = (isPending && u.awaitingConfirmation)
           ? `${statusBadge(u.status)}<div class="mt-1 text-[10px] font-semibold text-slate-400">Awaiting their email confirmation</div>`
@@ -371,17 +366,12 @@
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap items-center gap-1">
                 ${approvalActions}
-                ${isSuperAdmin() ? `
-                <button
-                  onclick="editUser(${u.id})"
-                  class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition hover:bg-slate-200"
-                >Edit</button>
-                <button
-                  onclick="removeUser(${u.id})"
-                  class="inline-flex min-h-10 items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-red-700"
-                >Delete</button>` : (approvalActions ? '' : '<span class="text-xs font-semibold text-slate-400">—</span>')}
+                ${isSuperAdmin()
+                  ? iconButton('edit', `editUser(${u.id})`, 'Edit user', 'indigo') +
+                    iconButton('trash', `removeUser(${u.id})`, 'Delete user', 'red')
+                  : (approvalActions ? '' : '<span class="text-xs font-semibold text-slate-400">—</span>')}
               </div>
             </td>
           </tr>

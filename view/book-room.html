@@ -371,15 +371,37 @@
 
       document.getElementById('availableRooms').innerHTML = activeRooms.map(function(room) {
         return `
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div class="font-black text-slate-900">${escapeHtml(room.name)}</div>
-            <div class="mt-1 text-sm font-semibold text-slate-500">Capacity: ${room.capacity}</div>
-            <div class="text-sm font-semibold text-slate-500">Location: ${escapeHtml(room.location)}</div>
+          <div class="group flex overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md transition hover:-translate-y-0.5 hover:shadow-xl">
+            <div class="w-1.5 shrink-0 bg-emerald-400"></div>
+            <div class="flex-1 p-4">
+              <div class="font-black leading-tight text-slate-900">${escapeHtml(room.name)}</div>
+              <div class="mt-3 space-y-2 text-sm font-semibold text-slate-500">
+                <div class="flex items-center gap-2">
+                  <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  ${room.capacity} seats
+                </div>
+                <div class="flex items-center gap-2">
+                  <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  ${escapeHtml(room.location)}
+                </div>
+              </div>
+            </div>
           </div>
         `;
       }).join('') || `
-        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
-          No active rooms found.
+        <div class="col-span-full flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-white/60 p-12 text-center">
+          <div class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+            <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
+            </svg>
+          </div>
+          <p class="font-bold text-slate-600">No active rooms found</p>
+          <p class="mt-1 text-sm font-semibold text-slate-400">Ask a super admin to add or activate a room.</p>
         </div>
       `;
     }
