@@ -320,7 +320,7 @@
 
     function statusBadge(status) {
       if (status === 'pending') {
-        return '<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">Pending</span>';
+        return '<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">Pending Approval</span>';
       }
       if (status === 'rejected') {
         return '<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Rejected</span>';
@@ -338,7 +338,13 @@
       });
 
       document.getElementById('userRows').innerHTML = filtered.map(function(u) {
-        const approvalActions = u.status === 'pending' ? `
+        const isPending = u.status === 'pending';
+
+        // Self-registered pending rows are reviewed by an admin here (Approve/Reject).
+        // Admin-added pending rows are never reviewed in the UI — they activate only
+        // when the recipient clicks the confirmation link emailed to them, so no
+        // action buttons are shown for those; a hint explains why.
+        const approvalActions = (isPending && !u.awaitingConfirmation) ? `
           <button
             onclick="approveUser(${u.id})"
             class="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-extrabold text-emerald-700 transition hover:bg-emerald-100"
@@ -347,6 +353,10 @@
             onclick="rejectUser(${u.id})"
             class="inline-flex min-h-10 items-center justify-center rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-extrabold text-amber-700 transition hover:bg-amber-100"
           >Reject</button>` : '';
+
+        const statusCell = (isPending && u.awaitingConfirmation)
+          ? `${statusBadge(u.status)}<div class="mt-1 text-[10px] font-semibold text-slate-400">Awaiting their email confirmation</div>`
+          : statusBadge(u.status);
 
         return `
           <tr>
@@ -359,7 +369,7 @@
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              ${statusBadge(u.status)}
+              ${statusCell}
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">

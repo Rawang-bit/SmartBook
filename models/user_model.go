@@ -19,7 +19,10 @@ type UserModel struct {
 
 // List returns all users ordered alphabetically by name.
 func (m *UserModel) List() ([]User, error) {
-	rows, err := m.DB.Query(`SELECT id, name, email, status, intended_role FROM users ORDER BY name ASC`)
+	rows, err := m.DB.Query(`
+		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
+		FROM users ORDER BY name ASC
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +31,7 @@ func (m *UserModel) List() ([]User, error) {
 	users := []User{}
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -41,8 +44,9 @@ func (m *UserModel) List() ([]User, error) {
 func (m *UserModel) GetByID(id int64) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
-		SELECT id, name, email, status, intended_role FROM users WHERE id = $1
-	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole)
+		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
+		FROM users WHERE id = $1
+	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -54,8 +58,9 @@ func (m *UserModel) GetByID(id int64) (User, error) {
 func (m *UserModel) GetByEmail(email string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
-		SELECT id, name, email, status, intended_role FROM users WHERE LOWER(TRIM(email)) = $1
-	`, email).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole)
+		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
+		FROM users WHERE LOWER(TRIM(email)) = $1
+	`, email).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -66,7 +71,10 @@ func (m *UserModel) GetByEmail(email string) (User, error) {
 // registration (which already proves email ownership via OTP), an admin
 // typing in someone else's email address hasn't proven anything — so the
 // new entry starts as "pending" and stays inactive until the recipient
-// clicks the confirmation link emailed to them.
+// clicks the confirmation link emailed to them. It never appears in the
+// Users page as something an admin reviews/approves — AwaitingConfirmation
+// tells the frontend to hide the Approve/Reject actions for this row and
+// show a "Pending Approval" status instead.
 //
 // req.Role records what should happen once they confirm: "normal_user"
 // simply activates the booking-user row; "general_admin"/"super_admin"
@@ -109,6 +117,7 @@ func (m *UserModel) Create(req UserRequest) (User, string, error) {
 		}
 		return User{}, "", err
 	}
+	u.AwaitingConfirmation = true
 	return u, token, nil
 }
 
@@ -152,7 +161,9 @@ func generateConfirmToken() (string, error) {
 
 // Register self-registers a new user through the public access gate.
 // The user is created with status "pending" and must be approved by an
-// admin before they can book rooms.
+// admin before they can book rooms. Unlike admin-added users, no email
+// confirmation step is needed — the OTP already proved they own the address —
+// so this row always shows up in the Users page for an admin to review.
 // Returns ErrDuplicate if the email address is already registered.
 func (m *UserModel) Register(req UserRequest) (User, error) {
 	req.Name  = strings.TrimSpace(req.Name)
@@ -176,6 +187,7 @@ func (m *UserModel) Register(req UserRequest) (User, error) {
 		}
 		return User{}, err
 	}
+	u.AwaitingConfirmation = false
 	return u, nil
 }
 
@@ -186,8 +198,8 @@ func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
 		UPDATE users SET status = $1 WHERE id = $2
-		RETURNING id, name, email, status, intended_role
-	`, status, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole)
+		RETURNING id, name, email, status, intended_role, confirm_token IS NOT NULL
+	`, status, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -210,8 +222,8 @@ func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
 		UPDATE users SET name = $1, email = $2 WHERE id = $3
-		RETURNING id, name, email, status, intended_role
-	`, req.Name, req.Email, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole)
+		RETURNING id, name, email, status, intended_role, confirm_token IS NOT NULL
+	`, req.Name, req.Email, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}

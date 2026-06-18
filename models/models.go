@@ -54,16 +54,19 @@ type ResetPasswordRequest struct {
 }
 
 // User is a registered person who is allowed to make room bookings.
-// Self-registered users start as "pending" until an admin approves them.
-// Users added directly by an admin also start as "pending" — the admin
-// chooses IntendedRole, but the account only activates once the new person
-// clicks the confirmation link emailed to them.
+// Self-registered users start as "pending" until an admin approves or
+// rejects them in the Users page.
+// Users added directly by an admin also start as "pending", but they are
+// never reviewed by an admin in the UI — AwaitingConfirmation is true until
+// the new person clicks the confirmation link emailed to them, at which
+// point the account (or admin promotion, per IntendedRole) activates itself.
 type User struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	Status       string `json:"status"`       // "pending", "approved", or "rejected"
-	IntendedRole string `json:"intendedRole"` // "normal_user", "general_admin", or "super_admin"
+	ID                   int64  `json:"id"`
+	Name                 string `json:"name"`
+	Email                string `json:"email"`
+	Status               string `json:"status"`               // "pending", "approved", or "rejected"
+	IntendedRole         string `json:"intendedRole"`         // "normal_user", "general_admin", or "super_admin"
+	AwaitingConfirmation bool   `json:"awaitingConfirmation"` // true only for admin-added rows still awaiting the recipient's email click
 }
 
 // UserRequest is the JSON body sent when creating or updating a user.
