@@ -17,6 +17,7 @@ type Controller struct {
 	Sessions      *session.Store
 	ResetTokens   *session.ResetStore
 	LoginAttempts *session.AttemptStore
+	OTPs          *session.OTPStore
 	Admins        *models.AdminModel
 	Users         *models.UserModel
 	Rooms         *models.RoomModel
@@ -29,6 +30,7 @@ func New(db *sql.DB, sessions *session.Store) *Controller {
 		Sessions:      sessions,
 		ResetTokens:   session.NewResetStore(),
 		LoginAttempts: session.NewAttemptStore(),
+		OTPs:          session.NewOTPStore(),
 		Admins:        &models.AdminModel{DB: db},
 		Users:         &models.UserModel{DB: db},
 		Rooms:         &models.RoomModel{DB: db},

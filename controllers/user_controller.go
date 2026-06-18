@@ -5,10 +5,9 @@ import (
 	"net/http"
 
 	"bookroom-management-system/models"
-	"bookroom-management-system/utils"
 )
 
-// ListUsers returns all pre-registered users.
+// ListUsers returns all pre-registered users. Admin only.
 func (c *Controller) ListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := c.Users.List()
 	if err != nil {
@@ -16,34 +15,6 @@ func (c *Controller) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, users)
-}
-
-// ValidateUser checks whether an email belongs to a registered user.
-// The public booking form calls this before allowing someone to book a room.
-func (c *Controller) ValidateUser(w http.ResponseWriter, r *http.Request) {
-	email := utils.NormalizeEmail(r.URL.Query().Get("email"))
-
-	if !utils.IsValidEmail(email) {
-		writeError(w, http.StatusBadRequest, "valid email address is required")
-		return
-	}
-
-	u, err := c.Users.GetByEmail(email)
-	if errors.Is(err, models.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "user is not pre-registered")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":    true,
-		"id":    u.ID,
-		"name":  u.Name,
-		"email": u.Email,
-	})
 }
 
 // CreateUser pre-registers a new user. Admin only.

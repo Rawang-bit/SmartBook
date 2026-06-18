@@ -22,11 +22,14 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("POST /api/auth/forgot-password", c.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset-password",  c.ResetPassword)
 
-	// ── Users ─────────────────────────────────────────────────────────────────
-	// Public: validate whether an email is registered (called before booking)
-	mux.HandleFunc("GET /api/public/users/validate", c.ValidateUser)
-	mux.HandleFunc("GET /api/public/users",          c.ListUsers)
+	// ── Public access gate (self-registration with OTP) ─────────────────────────
+	// Email check happens once, up front, on the public access page.
+	// Booking itself no longer asks for email verification; only cancellation does.
+	mux.HandleFunc("POST /api/access/check-email",  c.CheckEmail)
+	mux.HandleFunc("POST /api/register/send-otp",   c.SendRegistrationOTP)
+	mux.HandleFunc("POST /api/register/verify-otp", c.VerifyRegistrationOTP)
 
+	// ── Users ─────────────────────────────────────────────────────────────────
 	// Admin: list and create — general_admin can add users
 	mux.HandleFunc("GET /api/users",  c.RequireAdmin(c.ListUsers))
 	mux.HandleFunc("POST /api/users", c.RequireAdmin(c.CreateUser))

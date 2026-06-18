@@ -1,6 +1,9 @@
 /*
   SmartBook Public Calendar Frontend
-  Public users do not sign in.
+  Loaded only by calendar.html. Requires a gate session (set by index.html
+  after email check / OTP registration) — see getGateUser() / window.onload.
+  Booking uses the gate-verified identity directly; only cancellation asks
+  for an email, to confirm ownership of that specific meeting.
   Shows only upcoming and in-progress bookings.
 */
 
@@ -54,6 +57,28 @@ async function api(path, options = {}) {
   if (!res.ok) throw new Error(data.error || 'Request failed');
 
   return data;
+}
+
+// The public access gate (index.html) verifies the user's email once and stores
+// {name, email} here. The calendar trusts this for booking — no further email
+// entry is required to create a booking. Cancellation still asks for the email
+// to confirm ownership of that specific meeting.
+function getGateUser() {
+  try {
+    return JSON.parse(localStorage.getItem('sbUser') || 'null');
+  } catch (_) {
+    return null;
+  }
+}
+
+function exitAccess() {
+  localStorage.removeItem('sbUser');
+  window.location.href = 'index.html';
+}
+
+function renderGateUserBadge(user) {
+  const el = document.getElementById('gateUserName');
+  if (el) el.innerText = user.name;
 }
 
 function updateHeaderClock() {
@@ -417,7 +442,8 @@ function resetBookingFormFields() {
 
 function resetTransientState() {
   state.pending = null;
-  state.activeUser = null;
+  // state.activeUser is the gate-verified user for this browser session — it
+  // persists across bookings and must not be cleared here.
   state.currentBookingId = null;
   state.cancelVerified = false;
 }
@@ -653,9 +679,18 @@ function switchView(view) {
   renderCalendar();
 }
 
+// Booking no longer asks the user to (re-)verify their email — that already
+// happened once on the public access gate (index.html). We go straight to
+// the booking form using the gate-verified identity in state.activeUser.
 function openBookingFlow(date, time) {
   if (isPastSlot(date, time)) {
     showMessageModal('Invalid Time Slot', 'Past time slots cannot be booked.', 'circle-alert');
+    return;
+  }
+
+  if (!state.activeUser || !state.activeUser.email) {
+    showMessageModal('Session Expired', 'Please verify your email again to continue.', 'shield-alert');
+    exitAccess();
     return;
   }
 
@@ -667,45 +702,11 @@ function openBookingFlow(date, time) {
   };
 
   clearBookingValidation();
-
-  showStep('verify');
-
-  document.getElementById('verifySubmitBtn').onclick = handleBookingVerify;
+  prepareBookStep();
 }
 
-async function handleBookingVerify() {
-  const email = document.getElementById('verifyEmail').value.toLowerCase().trim();
-
-  if (!/.+@.+\..+/.test(email)) {
-    showMessageModal('Invalid Email', 'Please enter a valid email address.', 'circle-alert');
-    return;
-  }
-
-  let user;
-
-  try {
-    user = await api('/api/public/users/validate?email=' + encodeURIComponent(email) + '&t=' + Date.now());
-  } catch (err) {
-    try {
-      const registeredUsers = await api('/api/public/users?t=' + Date.now());
-      user = registeredUsers.find(item =>
-        String(item.email || '').trim().toLowerCase() === email
-      );
-    } catch (_) {
-      user = null;
-    }
-
-    if (!user) {
-      showMessageModal(
-        'User Not Registered',
-        'The email ' + email + ' is not in the registered user list. Please check the exact email spelling in Admin > Users.',
-        'circle-alert'
-      );
-      return;
-    }
-  }
-
-  state.activeUser = user;
+function prepareBookStep() {
+  const user = state.activeUser;
 
   document.getElementById('userNameDisplay').innerText = user.name;
   document.getElementById('userEmailDisplay').innerText = user.email;
@@ -869,6 +870,16 @@ async function confirmCancelBooking() {
 }
 
 window.onload = async function() {
+  // The calendar is only for users who already verified their email on the
+  // public access gate (index.html). Bounce anyone without a gate session.
+  const gateUser = getGateUser();
+  if (!gateUser || !gateUser.email) {
+    window.location.href = 'index.html';
+    return;
+  }
+  state.activeUser = gateUser;
+  renderGateUserBadge(gateUser);
+
   try {
     await loadRooms();
     await loadUsers();

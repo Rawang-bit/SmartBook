@@ -65,6 +65,26 @@ type UserRequest struct {
 	Email string `json:"email"`
 }
 
+// CheckEmailRequest is the JSON body sent by the public access gate to find
+// out whether an email already belongs to a registered user.
+type CheckEmailRequest struct {
+	Email string `json:"email"`
+}
+
+// SendOTPRequest is the JSON body sent to request a registration verification code.
+type SendOTPRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// VerifyOTPRequest is the JSON body sent to verify a registration code and
+// create the user record on success.
+type VerifyOTPRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	OTP   string `json:"otp"`
+}
+
 // Room is a meeting room that can be booked.
 type Room struct {
 	ID       int64  `json:"id"`
