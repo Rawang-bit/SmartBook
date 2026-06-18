@@ -162,14 +162,45 @@ func SendRejectionEmail(toEmail, toName string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Access Request Declined", body, "USER REJECTED")
 }
 
-// accessURL returns the base URL of the public access page, used in
-// approval emails so the user has a direct link back to the app.
-func accessURL() string {
+// SendTemporaryAdminPasswordEmail notifies a newly promoted admin of their
+// login credentials. The recipient must change this password immediately —
+// the server enforces that regardless of whether they read this email.
+func SendTemporaryAdminPasswordEmail(toEmail, toName, username, tempPassword string) error {
+	body := fmt.Sprintf(
+		"Hi %s,\r\n\r\n"+
+			"Your SmartBook access request has been approved and you have been granted admin access.\r\n\r\n"+
+			"Your login credentials:\r\n"+
+			"  Username: %s\r\n"+
+			"  Temporary Password: %s\r\n\r\n"+
+			"Log in here:\r\n"+
+			"  %s\r\n\r\n"+
+			"You will be required to set your own password immediately after logging in.\r\n\r\n"+
+			"— SmartBook",
+		toName, username, tempPassword, loginURL(),
+	)
+	return sendSimpleEmail(toEmail, "SmartBook — Your Admin Account Is Ready", body, "ADMIN TEMP PASSWORD")
+}
+
+// baseAppURL returns the application's configured public base URL,
+// defaulting to localhost for development.
+func baseAppURL() string {
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
 		appURL = "http://localhost:8080"
 	}
-	return appURL + "/index.html"
+	return appURL
+}
+
+// accessURL returns the base URL of the public access page, used in
+// approval emails so the user has a direct link back to the app.
+func accessURL() string {
+	return baseAppURL() + "/index.html"
+}
+
+// loginURL returns the base URL of the admin login page, used in admin
+// promotion emails so the recipient has a direct link to sign in.
+func loginURL() string {
+	return baseAppURL() + "/login.html"
 }
 
 // SendOTPEmail delivers a one-time verification code used during public

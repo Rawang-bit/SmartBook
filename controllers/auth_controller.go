@@ -95,13 +95,13 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	// Successful login — clear the failure counter so the user starts fresh next time.
 	c.LoginAttempts.Reset(username)
 
-	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role)
+	sessionID := c.Sessions.Create(admin.ID, admin.Username, admin.Name, admin.Role, admin.MustResetPassword)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName(),
 		Value:    sessionID,
 		Path:     "/",
-		MaxAge:   8 * 60 * 60,
+		MaxAge:   int(session.SessionDuration.Seconds()),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   isProduction(),
@@ -145,10 +145,11 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":       data.AdminID,
-		"username": data.Username,
-		"name":     data.Name,
-		"role":     data.Role,
+		"id":                data.AdminID,
+		"username":          data.Username,
+		"name":              data.Name,
+		"role":              data.Role,
+		"mustResetPassword": data.MustResetPassword,
 	})
 }
 

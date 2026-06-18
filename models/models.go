@@ -2,10 +2,11 @@ package models
 
 // Admin is an authenticated administrator account used in session data and login responses.
 type Admin struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Role     string `json:"role"` // "super_admin" or "general_admin"
+	ID                int64  `json:"id"`
+	Username          string `json:"username"`
+	Name              string `json:"name"`
+	Role              string `json:"role"`              // "super_admin" or "general_admin"
+	MustResetPassword bool   `json:"mustResetPassword"` // true for accounts created with a generated temporary password
 }
 
 // AdminDetail is returned in admin-list responses and includes management fields.
@@ -66,6 +67,15 @@ type User struct {
 type UserRequest struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+// ApproveUserRequest is the JSON body sent when an admin approves a pending
+// self-registration. Role defaults to "normal_user" when omitted, which
+// keeps the existing behaviour (the applicant can only book/cancel rooms).
+// Any other role ("general_admin" or "super_admin") promotes the request
+// into a new admin account instead — only a super_admin may grant that.
+type ApproveUserRequest struct {
+	Role string `json:"role"`
 }
 
 // CheckEmailRequest is the JSON body sent by the public access gate to find

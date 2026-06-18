@@ -211,11 +211,13 @@
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       try {
-        await loginAdmin(
+        const result = await loginAdmin(
           document.getElementById('username').value.trim(),
           document.getElementById('password').value.trim()
         );
-        window.location.href = 'dashboard.html';
+        window.location.href = result.admin.mustResetPassword
+          ? 'force-password-change.html'
+          : 'dashboard.html';
       } catch (err) {
         showMessage('loginMsg', err.message, 'error');
       }

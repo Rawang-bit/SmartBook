@@ -39,15 +39,17 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 }
 
 // GetByUsername fetches an admin by username along with its bcrypt hash and account status.
+// The returned Admin's MustResetPassword field tells the caller whether this
+// account still needs to replace a generated temporary password.
 // Returns ErrNotFound if the username does not exist.
 func (m *AdminModel) GetByUsername(username string) (Admin, string, string, error) {
 	var admin  Admin
 	var hash   string
 	var status string
 	err := m.DB.QueryRow(`
-		SELECT id, username, name, role, status, password
+		SELECT id, username, name, role, status, password, must_reset_password
 		FROM admins WHERE username = $1
-	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hash)
+	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hash, &admin.MustResetPassword)
 	if err == sql.ErrNoRows {
 		return Admin{}, "", "", ErrNotFound
 	}
@@ -146,6 +148,55 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	return admin, nil
 }
 
+// CreateWithGeneratedPassword creates a new admin account with a securely
+// generated random temporary password and marks it as requiring a password
+// change on first login. Used when a pending self-registration is promoted
+// to an admin role instead of approved as a normal booking user.
+//
+// Returns the created admin and the plaintext temporary password — the
+// caller is responsible for emailing it and must never log or persist it.
+// Returns ErrDuplicate if the username or email is already taken.
+func (m *AdminModel) CreateWithGeneratedPassword(username, name, role, email string) (Admin, string, error) {
+	username = strings.TrimSpace(username)
+	name     = strings.TrimSpace(name)
+	email    = utils.NormalizeEmail(email)
+
+	if role != "super_admin" && role != "general_admin" {
+		role = "general_admin"
+	}
+
+	password, err := utils.GenerateRandomPassword(16)
+	if err != nil {
+		return Admin{}, "", fmt.Errorf("failed to generate temporary password")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return Admin{}, "", fmt.Errorf("failed to hash password")
+	}
+
+	var emailParam interface{}
+	if email != "" {
+		emailParam = email
+	}
+
+	var admin Admin
+	err = m.DB.QueryRow(`
+		INSERT INTO admins(username, password, name, role, email, must_reset_password)
+		VALUES($1, $2, $3, $4, $5, TRUE)
+		RETURNING id, username, name, role, must_reset_password
+	`, username, string(hash), name, role, emailParam).Scan(
+		&admin.ID, &admin.Username, &admin.Name, &admin.Role, &admin.MustResetPassword,
+	)
+	if err != nil {
+		if utils.IsUniqueViolation(err) {
+			return Admin{}, "", ErrDuplicate
+		}
+		return Admin{}, "", err
+	}
+	return admin, password, nil
+}
+
 // Update changes an admin's name, role, and/or email.
 // currentAdminID and currentRole prevent an admin from demoting their own account.
 // Setting email to an empty string removes the stored email (sets it to NULL).
@@ -212,7 +263,9 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	return nil
 }
 
-// ChangeOwnPassword verifies the admin's current password then stores the new one.
+// ChangeOwnPassword verifies the admin's current password then stores the new
+// one, and clears must_reset_password so a temporary password is only ever
+// usable once.
 // Returns ErrUnauthorized if the current password is wrong.
 func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error {
 	if len(newPw) < 12 {
@@ -229,7 +282,7 @@ func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error 
 	if err != nil {
 		return fmt.Errorf("failed to hash password")
 	}
-	_, err = m.DB.Exec(`UPDATE admins SET password = $1 WHERE id = $2`, string(newHash), id)
+	_, err = m.DB.Exec(`UPDATE admins SET password = $1, must_reset_password = FALSE WHERE id = $2`, string(newHash), id)
 	return err
 }
 

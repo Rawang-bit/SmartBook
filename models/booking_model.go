@@ -268,3 +268,20 @@ func (m *BookingModel) Delete(id int64) error {
 	}
 	return nil
 }
+
+// BookingRetentionDays is how long a booking record is kept (counting from
+// its booking_date) before it is permanently purged from the database.
+const BookingRetentionDays = 365
+
+// PurgeOldBookings permanently deletes every booking — regardless of status —
+// whose booking_date is older than BookingRetentionDays. Returns the number
+// of rows removed.
+func (m *BookingModel) PurgeOldBookings() (int64, error) {
+	result, err := m.DB.Exec(`
+		DELETE FROM bookings WHERE booking_date < CURRENT_DATE - $1::int
+	`, BookingRetentionDays)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

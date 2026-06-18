@@ -11,13 +11,18 @@ import (
 	"time"
 )
 
+// SessionDuration is how long an admin session stays valid after login.
+// The browser cookie's MaxAge is set to match this value (see auth_controller.go).
+const SessionDuration = 30 * time.Minute
+
 // SessionData holds the information we keep for one logged-in admin session.
 type SessionData struct {
-	AdminID   int64
-	Username  string
-	Name      string
-	Role      string // "super_admin" or "general_admin"
-	ExpiresAt time.Time
+	AdminID           int64
+	Username          string
+	Name              string
+	Role              string // "super_admin" or "general_admin"
+	MustResetPassword bool   // true until a temporary password is replaced
+	ExpiresAt         time.Time
 }
 
 // Store is an in-memory session map protected by a mutex so it is safe
@@ -38,8 +43,9 @@ func New() *Store {
 }
 
 // Create saves a new session and returns a random 64-char hex session ID.
-// Sessions expire after 8 hours.
-func (s *Store) Create(adminID int64, username, name, role string) string {
+// Sessions expire after SessionDuration. mustResetPassword should mirror the
+// admin's current Admin.MustResetPassword value at login time.
+func (s *Store) Create(adminID int64, username, name, role string, mustResetPassword bool) string {
 	// 32 random bytes → 64-character hex string, impossible to guess
 	randomBytes := make([]byte, 32)
 	_, _ = rand.Read(randomBytes)
@@ -49,11 +55,12 @@ func (s *Store) Create(adminID int64, username, name, role string) string {
 	defer s.mu.Unlock()
 
 	s.sessions[sessionID] = SessionData{
-		AdminID:   adminID,
-		Username:  username,
-		Name:      name,
-		Role:      role,
-		ExpiresAt: time.Now().Add(8 * time.Hour),
+		AdminID:           adminID,
+		Username:          username,
+		Name:              name,
+		Role:              role,
+		MustResetPassword: mustResetPassword,
+		ExpiresAt:         time.Now().Add(SessionDuration),
 	}
 
 	return sessionID
@@ -86,10 +93,22 @@ func (s *Store) Delete(sessionID string) {
 	delete(s.sessions, sessionID)
 }
 
-// cleanupLoop runs forever, waking every hour to remove expired sessions.
+// ClearMustResetPassword removes the forced-password-reset flag from an
+// active session in memory. Called immediately after ChangeOwnPassword
+// succeeds so the admin doesn't have to log out and back in to get unblocked.
+func (s *Store) ClearMustResetPassword(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if data, ok := s.sessions[sessionID]; ok {
+		data.MustResetPassword = false
+		s.sessions[sessionID] = data
+	}
+}
+
+// cleanupLoop runs forever, waking every 10 minutes to remove expired sessions.
 // This prevents memory from growing if sessions are created but never logged out.
 func (s *Store) cleanupLoop() {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {

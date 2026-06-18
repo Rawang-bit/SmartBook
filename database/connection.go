@@ -60,6 +60,7 @@ func migrate(db *sql.DB) error {
 		     ON admins (LOWER(TRIM(email)))
 		     WHERE email IS NOT NULL`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved'`,
+		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

@@ -60,7 +60,14 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	return true
 }
 
+// forcePasswordChangePath is the only admin-authenticated endpoint reachable
+// while a session has MustResetPassword set — every other admin endpoint is
+// blocked server-side until the temporary password is replaced.
+const forcePasswordChangePath = "/api/admin/change-password"
+
 // RequireAdmin is middleware that rejects requests without a valid session cookie.
+// It also blocks every endpoint except forcePasswordChangePath for accounts
+// that still need to replace a generated temporary password.
 func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName())
@@ -68,9 +75,13 @@ func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "admin login required")
 			return
 		}
-		_, ok := c.Sessions.Get(cookie.Value)
+		data, ok := c.Sessions.Get(cookie.Value)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "session expired, please log in again")
+			return
+		}
+		if data.MustResetPassword && r.URL.Path != forcePasswordChangePath {
+			writeError(w, http.StatusForbidden, "you must change your temporary password before continuing")
 			return
 		}
 		next(w, r)
@@ -78,6 +89,7 @@ func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // RequireSuperAdmin is middleware that allows only the super_admin role through.
+// Like RequireAdmin, it also enforces the temporary-password-change block.
 func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName())
@@ -88,6 +100,10 @@ func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 		data, ok := c.Sessions.Get(cookie.Value)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "session expired, please log in again")
+			return
+		}
+		if data.MustResetPassword && r.URL.Path != forcePasswordChangePath {
+			writeError(w, http.StatusForbidden, "you must change your temporary password before continuing")
 			return
 		}
 		if data.Role != "super_admin" {

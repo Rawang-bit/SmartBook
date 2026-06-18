@@ -59,11 +59,17 @@ function isSuperAdmin() {
 // Redirects to login.html if the admin is not logged in.
 function requireAuth() {
   const page = window.location.pathname.split('/').pop() || 'index.html';
-  const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html', 'admins.html'];
+  const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html', 'admins.html', 'force-password-change.html'];
 
   if (adminPages.includes(page) && !adminLoggedIn()) {
     window.location.replace('login.html');
   }
+}
+
+// Returns true if the current admin must replace a temporary password
+// before they can use anything else in the admin panel.
+function mustResetPassword() {
+  return localStorage.getItem('adminMustResetPassword') === 'true';
 }
 
 // Clears the local admin session markers and sends the browser to the login
@@ -74,6 +80,7 @@ function forceLogout() {
   localStorage.removeItem('adminId');
   localStorage.removeItem('adminName');
   localStorage.removeItem('adminRole');
+  localStorage.removeItem('adminMustResetPassword');
 
   if (window.location.pathname.split('/').pop() !== 'login.html') {
     window.location.href = 'login.html';
@@ -102,6 +109,7 @@ async function loginAdmin(username, password) {
   localStorage.setItem('adminId',   String(result.admin.id));
   localStorage.setItem('adminName', result.admin.name);
   localStorage.setItem('adminRole', result.admin.role || 'general_admin');
+  localStorage.setItem('adminMustResetPassword', result.admin.mustResetPassword ? 'true' : 'false');
   return result;
 }
 
@@ -125,7 +133,9 @@ async function getUsers() { return api('/users'); }
 async function createUser(user) { return api('/users', { method: 'POST', body: JSON.stringify(user) }); }
 async function updateUser(id, user) { return api('/users/' + id, { method: 'PUT', body: JSON.stringify(user) }); }
 async function deleteUserApi(id) { return api('/users/' + id, { method: 'DELETE' }); }
-async function approveUserApi(id) { return api('/users/' + id + '/approve', { method: 'POST' }); }
+async function approveUserApi(id, role) {
+  return api('/users/' + id + '/approve', { method: 'POST', body: JSON.stringify({ role: role || 'normal_user' }) });
+}
 async function rejectUserApi(id) { return api('/users/' + id + '/reject', { method: 'POST' }); }
 
 function normalizeBookingRecord(b) {
@@ -277,7 +287,9 @@ async function revokeAdminApi(id) { return api('/admins/' + id + '/revoke', { me
 async function restoreAdminApi(id) { return api('/admins/' + id + '/restore', { method: 'POST' }); }
 async function deleteAdminApi(id) { return api('/admins/' + id, { method: 'DELETE' }); }
 async function changeOwnPasswordApi(currentPassword, newPassword) {
-  return api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+  const result = await api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+  localStorage.setItem('adminMustResetPassword', 'false');
+  return result;
 }
 
 // Toggles a password field between hidden and visible.

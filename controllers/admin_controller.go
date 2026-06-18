@@ -118,6 +118,12 @@ func (c *Controller) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Lift the forced-reset block on the live session immediately so the admin
+	// doesn't have to log out and back in after replacing a temporary password.
+	if cookie, err := r.Cookie(sessionCookieName()); err == nil {
+		c.Sessions.ClearMustResetPassword(cookie.Value)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password changed"})
 }
 
