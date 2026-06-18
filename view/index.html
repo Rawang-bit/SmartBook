@@ -243,10 +243,15 @@
             otp,
           }),
         });
-        grantAccess(res.name, res.email);
+
+        // Keep the button disabled and show success briefly before redirecting,
+        // so the user gets clear confirmation that the code was accepted.
+        showMsg('otpMsg', 'Email verified successfully! Redirecting to your calendar…', 'success');
+        btn.textContent = 'Verified ✓';
+
+        setTimeout(() => grantAccess(res.name, res.email), 1200);
       } catch (err) {
         showMsg('otpMsg', err.message, 'error');
-      } finally {
         btn.disabled = false;
         btn.textContent = 'Verify & Continue';
       }

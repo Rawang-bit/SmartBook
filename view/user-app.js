@@ -81,6 +81,16 @@ function renderGateUserBadge(user) {
   if (el) el.innerText = user.name;
 }
 
+// Fades out and removes the full-screen loading spinner shown while the
+// calendar's initial data (rooms, users, bookings) is being fetched.
+function hideLoadingOverlay() {
+  const el = document.getElementById('loadingOverlay');
+  if (!el) return;
+  el.style.transition = 'opacity 300ms ease';
+  el.style.opacity = '0';
+  setTimeout(() => el.remove(), 300);
+}
+
 function updateHeaderClock() {
   const now = new Date();
 
@@ -892,6 +902,8 @@ window.onload = async function() {
     updateHeaderClock();
   } catch (err) {
     showMessageModal('Loading Failed', err.message, 'circle-alert');
+  } finally {
+    hideLoadingOverlay();
   }
 
   setInterval(async function() {
