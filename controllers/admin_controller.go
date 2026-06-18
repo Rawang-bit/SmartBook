@@ -27,7 +27,7 @@ func (c *Controller) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 
 	admin, err := c.Admins.Create(req)
 	if errors.Is(err, models.ErrDuplicate) {
-		writeError(w, http.StatusConflict, "username already exists")
+		writeError(w, http.StatusConflict, "an admin with this email already exists")
 		return
 	}
 	if err != nil {

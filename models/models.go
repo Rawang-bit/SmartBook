@@ -26,12 +26,14 @@ type AdminDetail struct {
 }
 
 // AdminRequest is the JSON body for creating or updating an admin account.
+// There is no separate username field — Email doubles as the login username
+// for every admin (see AdminModel.Create) — and Password is only meaningful
+// when creating a new account; Update ignores it.
 type AdminRequest struct {
-	Username string `json:"username"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
 	Role     string `json:"role"`  // "super_admin" or "general_admin"
-	Email    string `json:"email"` // optional; used for password-reset emails
+	Email    string `json:"email"`
 }
 
 // LoginRequest is the JSON body sent by the admin login form.

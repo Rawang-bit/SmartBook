@@ -116,39 +116,42 @@ func (m *AdminModel) GetPasswordHash(id int64) (string, error) {
 }
 
 // Create inserts a new admin account after validating and hashing the password.
-// The email field is optional; if provided it must be a valid, unique address.
-// Returns ErrDuplicate if the username or email is already taken.
+// The admin's email address doubles as their login username — there is no
+// separate username field — so every admin created here logs in with the
+// same address used for password-reset emails, matching the username
+// assigned when a self-registration is promoted to an admin role (see
+// createAdminFromApproval in the users controller).
+// Returns ErrDuplicate if the email is already taken.
 func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
-	req.Username = strings.TrimSpace(req.Username)
 	req.Name     = strings.TrimSpace(req.Name)
 	req.Password = strings.TrimSpace(req.Password)
 	req.Role     = strings.TrimSpace(req.Role)
 	req.Email    = utils.NormalizeEmail(req.Email)
 
-	if req.Username == "" || req.Password == "" || req.Name == "" {
-		return Admin{}, fmt.Errorf("username, password, and name are required")
+	if req.Email == "" || req.Password == "" || req.Name == "" {
+		return Admin{}, fmt.Errorf("email, password, and name are required")
+	}
+	if !utils.IsValidEmail(req.Email) {
+		return Admin{}, fmt.Errorf("invalid email address")
 	}
 	if len(req.Password) < MinPasswordLength {
 		return Admin{}, fmt.Errorf("password must be at least %d characters", MinPasswordLength)
 	}
 	req.Role = normalizeAdminRole(req.Role)
-	if req.Email != "" && !utils.IsValidEmail(req.Email) {
-		return Admin{}, fmt.Errorf("invalid email address")
-	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return Admin{}, fmt.Errorf("failed to hash password")
 	}
 
-	emailParam := nullableString(req.Email)
+	username := req.Email
 
 	var admin Admin
 	err = m.DB.QueryRow(`
 		INSERT INTO admins(username, password, name, role, email)
 		VALUES($1, $2, $3, $4, $5)
 		RETURNING id, username, name, role
-	`, req.Username, string(hash), req.Name, req.Role, emailParam).Scan(
+	`, username, string(hash), req.Name, req.Role, req.Email).Scan(
 		&admin.ID, &admin.Username, &admin.Name, &admin.Role,
 	)
 	if err != nil {
