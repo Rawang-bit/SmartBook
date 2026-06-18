@@ -192,6 +192,24 @@ function hideModal(id) {
   el.classList.remove('flex');
 }
 
+// Shows a persistent message inside a modal (no auto-dismiss timeout, unlike
+// showMessage) — used for in-form validation/error feedback that should stay
+// visible until the admin fixes the input or closes the modal.
+function showModalMsg(id, text, type = 'error') {
+  const el = document.getElementById(id);
+  el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${type === 'success'
+    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+    : 'bg-red-50 text-red-700 border border-red-200'}`;
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+
+function clearModalMsg(id) {
+  const el = document.getElementById(id);
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
