@@ -200,7 +200,7 @@
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label class="mb-2 ml-1 block text-[10px] font-black uppercase text-slate-400">Meeting Title</label>
+            <label class="mb-2 ml-1 block text-[10px] font-black uppercase text-slate-400">Meeting Purpose</label>
             <input
               type="text"
               id="meetingPurpose"
@@ -218,6 +218,27 @@
               class="w-full rounded-2xl bg-slate-100 p-4 text-center font-bold text-slate-500"
             />
           </div>
+        </div>
+
+        <div>
+          <label class="mb-2 ml-1 block text-[10px] font-black uppercase text-slate-400">Agenda <span class="text-slate-300">(optional)</span></label>
+          <textarea
+            id="meetingAgenda"
+            rows="3"
+            placeholder="What will be discussed in this meeting?"
+            class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+          ></textarea>
+        </div>
+
+        <div>
+          <label class="mb-2 ml-1 block text-[10px] font-black uppercase text-slate-400">Participants <span class="text-slate-300">(optional)</span></label>
+          <input
+            type="text"
+            id="meetingParticipants"
+            placeholder="email1@company.com, email2@company.com"
+            class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <p class="mt-1 ml-1 text-[10px] font-bold text-slate-400">Separate multiple emails with commas. They'll be notified once the room is booked.</p>
         </div>
 
         <p id="bookingValidationMessage" class="hidden -mt-2 text-xs font-bold text-red-500"></p>
@@ -245,7 +266,7 @@
 
       <div class="mb-8 space-y-4 rounded-3xl border border-slate-100 bg-slate-50 p-6 text-left">
         <div>
-          <label class="mb-1 block text-[9px] font-black uppercase text-slate-400">Meeting Title</label>
+          <label class="mb-1 block text-[9px] font-black uppercase text-slate-400">Meeting Purpose</label>
           <p id="viewMeetingTitle" class="text-lg font-bold text-slate-800"></p>
         </div>
 
@@ -259,6 +280,11 @@
             <label class="mb-1 block text-[9px] font-black uppercase text-slate-400">Location</label>
             <p id="viewMeetingLocation" class="text-sm font-bold text-slate-700"></p>
           </div>
+        </div>
+
+        <div id="viewMeetingAgendaRow" class="hidden">
+          <label class="mb-1 block text-[9px] font-black uppercase text-slate-400">Agenda</label>
+          <p id="viewMeetingAgenda" class="text-sm font-bold text-slate-700 whitespace-pre-wrap"></p>
         </div>
 
         <div class="grid grid-cols-2 gap-4">

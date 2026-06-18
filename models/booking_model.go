@@ -29,6 +29,8 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 			b.start_time,
 			b.end_time,
 			b.purpose,
+			b.agenda,
+			b.participants,
 			b.status
 		FROM bookings b
 		JOIN rooms r ON r.id = b.room_id
@@ -52,7 +54,7 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 		if err := rows.Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
 			&b.RoomName, &b.Location, &b.Date,
-			&b.Start, &b.End, &b.Purpose, &b.Status,
+			&b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -68,6 +70,12 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
 	// ── Step 1: Clean up input ────────────────────────────────────────────────
 	NormalizeBookingInput(&req)
+
+	participants, err := NormalizeParticipants(req.Participants)
+	if err != nil {
+		return Booking{}, err
+	}
+	req.Participants = participants
 
 	// ── Step 2: Look up room ID if only a room name was given ─────────────────
 	if req.RoomID == 0 && req.Room != "" {
@@ -181,12 +189,12 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
 	if id == 0 {
 		err = m.DB.QueryRow(`
-			INSERT INTO bookings(user_name, email, room_id, booking_date, start_time, end_time, purpose, status)
-			VALUES($1, $2, $3, $4, $5, $6, $7, $8)
-			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, status
-		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Status).Scan(
+			INSERT INTO bookings(user_name, email, room_id, booking_date, start_time, end_time, purpose, agenda, participants, status)
+			VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, status
+		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status).Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
-			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Status,
+			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.Status,
 		)
 	} else {
 		err = m.DB.QueryRow(`
@@ -198,13 +206,15 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 			    start_time   = $5,
 			    end_time     = $6,
 			    purpose      = $7,
-			    status       = $8,
+			    agenda       = $8,
+			    participants = $9,
+			    status       = $10,
 			    updated_at   = NOW()
-			WHERE id = $9
-			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, status
-		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Status, id).Scan(
+			WHERE id = $11
+			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, status
+		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status, id).Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
-			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Status,
+			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.Status,
 		)
 	}
 

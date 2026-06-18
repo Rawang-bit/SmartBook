@@ -162,6 +162,31 @@ func SendRejectionEmail(toEmail, toName string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Access Request Declined", body, "USER REJECTED")
 }
 
+// SendBookingConfirmationEmail notifies a recipient that a room has been
+// booked. toName may be empty (e.g. for participants, whose names are never
+// collected) — the greeting falls back to a generic "Hello,".
+func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, agenda string) error {
+	greeting := "Hello,"
+	if toName != "" {
+		greeting = fmt.Sprintf("Hi %s,", toName)
+	}
+
+	agendaBlock := ""
+	if agenda != "" {
+		agendaBlock = fmt.Sprintf("\r\nAgenda:\r\n  %s\r\n", agenda)
+	}
+
+	body := fmt.Sprintf(
+		"%s\r\n\r\n"+
+			"This room %s has been booked for \"%s\" on %s at %s - %s.\r\n"+
+			"%s\r\n"+
+			"— SmartBook",
+		greeting, roomName, purpose, date, startTime, endTime, agendaBlock,
+	)
+
+	return sendSimpleEmail(toEmail, fmt.Sprintf("SmartBook — Room Booked: %s", roomName), body, "BOOKING CONFIRMATION")
+}
+
 // SendTemporaryAdminPasswordEmail notifies a newly promoted admin of their
 // login credentials. The recipient must change this password immediately —
 // the server enforces that regardless of whether they read this email.

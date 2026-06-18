@@ -117,35 +117,39 @@ type RoomRequest struct {
 
 // Booking is a room reservation.
 type Booking struct {
-	ID        int64  `json:"id"`
-	User      string `json:"user"`
-	Email     string `json:"email"`
-	RoomID    int64  `json:"roomId"`
-	RoomName  string `json:"roomName"`
-	Room      string `json:"room,omitempty"`     // alias for RoomName (legacy frontend)
-	Location  string `json:"location,omitempty"` // room location
-	Date      string `json:"date"`               // YYYY-MM-DD
-	Start     string `json:"start"`              // HH:MM 24-hour (stored in DB)
-	End       string `json:"end"`                // HH:MM 24-hour (stored in DB)
-	StartTime string `json:"startTime"`          // HH:MM AM/PM (for display)
-	EndTime   string `json:"endTime"`            // HH:MM AM/PM (for display)
-	Purpose   string `json:"purpose"`
-	Status    string `json:"status"` // "Booked", "In Progress", "Completed", or "Cancelled"
+	ID           int64  `json:"id"`
+	User         string `json:"user"`
+	Email        string `json:"email"`
+	RoomID       int64  `json:"roomId"`
+	RoomName     string `json:"roomName"`
+	Room         string `json:"room,omitempty"`     // alias for RoomName (legacy frontend)
+	Location     string `json:"location,omitempty"` // room location
+	Date         string `json:"date"`               // YYYY-MM-DD
+	Start        string `json:"start"`              // HH:MM 24-hour (stored in DB)
+	End          string `json:"end"`                // HH:MM 24-hour (stored in DB)
+	StartTime    string `json:"startTime"`          // HH:MM AM/PM (for display)
+	EndTime      string `json:"endTime"`            // HH:MM AM/PM (for display)
+	Purpose      string `json:"purpose"`
+	Agenda       string `json:"agenda"`              // optional free-text meeting agenda
+	Participants string `json:"participants"`        // optional comma-separated participant emails
+	Status       string `json:"status"`              // "Booked", "In Progress", "Completed", or "Cancelled"
 }
 
 // BookingRequest is the JSON body sent when creating or updating a booking.
 type BookingRequest struct {
-	User      string `json:"user"`
-	Email     string `json:"email"`
-	RoomID    int64  `json:"roomId"`
-	Room      string `json:"room"`      // room name — used if roomId is not provided
-	Date      string `json:"date"`
-	Start     string `json:"start"`     // 24-hour time
-	End       string `json:"end"`       // 24-hour time
-	StartTime string `json:"startTime"` // 12-hour AM/PM time
-	EndTime   string `json:"endTime"`   // 12-hour AM/PM time
-	Purpose   string `json:"purpose"`
-	Status    string `json:"status"`
+	User         string `json:"user"`
+	Email        string `json:"email"`
+	RoomID       int64  `json:"roomId"`
+	Room         string `json:"room"`      // room name — used if roomId is not provided
+	Date         string `json:"date"`
+	Start        string `json:"start"`     // 24-hour time
+	End          string `json:"end"`       // 24-hour time
+	StartTime    string `json:"startTime"` // 12-hour AM/PM time
+	EndTime      string `json:"endTime"`   // 12-hour AM/PM time
+	Purpose      string `json:"purpose"`
+	Agenda       string `json:"agenda"`
+	Participants string `json:"participants"` // comma-separated email addresses
+	Status       string `json:"status"`
 }
 
 // CancelBookingRequest is the JSON body sent when a public user cancels their booking.

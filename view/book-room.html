@@ -153,16 +153,37 @@
               </label>
 
               <label class="block text-sm font-bold text-slate-700">
-                Purpose
+                Meeting Purpose
                 <input
                   type="text"
                   id="purpose"
-                  placeholder="Meeting title"
+                  placeholder="Meeting purpose"
                   required
                   class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
                 />
               </label>
             </div>
+
+            <label class="block text-sm font-bold text-slate-700">
+              Agenda <span class="font-semibold text-slate-400">(optional)</span>
+              <textarea
+                id="agenda"
+                rows="3"
+                placeholder="What will be discussed in this meeting?"
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              ></textarea>
+            </label>
+
+            <label class="block text-sm font-bold text-slate-700">
+              Participants <span class="font-semibold text-slate-400">(optional)</span>
+              <input
+                type="text"
+                id="participants"
+                placeholder="email1@company.com, email2@company.com"
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              />
+              <span class="mt-1 block text-xs font-semibold text-slate-400">Separate multiple emails with commas. They'll be notified once the room is booked.</span>
+            </label>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label class="block text-sm font-bold text-slate-700">
@@ -395,6 +416,8 @@
           start,
           end,
           purpose: document.getElementById('purpose').value.trim(),
+          agenda: document.getElementById('agenda').value.trim(),
+          participants: document.getElementById('participants').value.trim(),
           status: 'Booked'
         });
 
@@ -405,7 +428,7 @@
 
         fillTimeDropdowns();
 
-        showMessage('formMessage', 'Booking created successfully.', 'success');
+        showMessage('formMessage', 'Booking created successfully. A confirmation email has been sent to the user and any participants.', 'success');
 
         bookings = await getBookings();
       } catch (err) {

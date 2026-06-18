@@ -194,6 +194,7 @@ async function loadBookings() {
       user: booking.user,
       email: booking.email,
       purpose: booking.purpose,
+      agenda: booking.agenda || '',
       status: booking.status
     }))
     .filter(shouldShowOnPublicCalendar);
@@ -445,6 +446,8 @@ function showMessageModal(title, text, icon = 'info') {
 function resetBookingFormFields() {
   document.getElementById('verifyEmail').value = '';
   document.getElementById('meetingPurpose').value = '';
+  document.getElementById('meetingAgenda').value = '';
+  document.getElementById('meetingParticipants').value = '';
   document.getElementById('endTimeSelect').innerHTML = '';
 
   clearBookingValidation();
@@ -749,6 +752,8 @@ async function submitBooking() {
   clearBookingValidation();
 
   const meetingPurpose = document.getElementById('meetingPurpose').value.trim();
+  const meetingAgenda = document.getElementById('meetingAgenda').value.trim();
+  const meetingParticipants = document.getElementById('meetingParticipants').value.trim();
   const endTime = document.getElementById('endTimeSelect').value;
 
   if (!state.pending || !state.activeUser) {
@@ -757,7 +762,7 @@ async function submitBooking() {
   }
 
   if (!meetingPurpose || meetingPurpose.length < 3) {
-    showBookingValidation('Meeting title must be at least 3 characters.');
+    showBookingValidation('Meeting purpose must be at least 3 characters.');
     return;
   }
 
@@ -790,6 +795,8 @@ async function submitBooking() {
         user: state.activeUser.name,
         email: state.activeUser.email,
         purpose: meetingPurpose,
+        agenda: meetingAgenda,
+        participants: meetingParticipants,
         status: 'Booked'
       })
     });
@@ -797,7 +804,7 @@ async function submitBooking() {
     await loadBookings();
 
     document.getElementById('successTitle').innerText = 'Success!';
-    document.getElementById('successMessage').innerText = 'Your booking has been created successfully.';
+    document.getElementById('successMessage').innerText = 'Your booking has been created successfully. A confirmation email has been sent to you and any participants.';
 
     resetBookingFormFields();
     resetTransientState();
@@ -824,6 +831,14 @@ function showDetails(id) {
   document.getElementById('viewMeetingDuration').innerText =
     formatDuration(booking.startTime, booking.endTime);
   document.getElementById('viewMeetingRoom').innerText = booking.room;
+
+  const agendaRow = document.getElementById('viewMeetingAgendaRow');
+  if (booking.agenda) {
+    document.getElementById('viewMeetingAgenda').innerText = booking.agenda;
+    agendaRow.classList.remove('hidden');
+  } else {
+    agendaRow.classList.add('hidden');
+  }
 
   showStep('details');
 }

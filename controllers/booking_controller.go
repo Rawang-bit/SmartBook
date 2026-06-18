@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -35,7 +36,34 @@ func (c *Controller) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c.sendBookingConfirmations(booking)
+
 	writeJSON(w, http.StatusCreated, booking)
+}
+
+// sendBookingConfirmations emails the booking owner and every listed
+// participant that the room has been reserved. Failures are logged but never
+// block the response — the reservation itself already succeeded.
+func (c *Controller) sendBookingConfirmations(b models.Booking) {
+	recipients := []string{b.Email}
+	if b.Participants != "" {
+		for _, p := range strings.Split(b.Participants, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" && !strings.EqualFold(p, b.Email) {
+				recipients = append(recipients, p)
+			}
+		}
+	}
+
+	for _, email := range recipients {
+		name := ""
+		if strings.EqualFold(email, b.Email) {
+			name = b.User
+		}
+		if err := utils.SendBookingConfirmationEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda); err != nil {
+			log.Printf("[BOOKING CONFIRMATION] failed to notify %s: %v", email, err)
+		}
+	}
 }
 
 // UpdateBooking allows an admin to edit any existing booking.
