@@ -253,15 +253,11 @@
             <thead>
               <tr>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                  User
+                  Booked By
                 </th>
 
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
                   Email
-                </th>
-
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                  Room
                 </th>
 
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
@@ -273,7 +269,7 @@
                 </th>
 
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                  Purpose
+                  Details
                 </th>
 
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
@@ -288,6 +284,43 @@
         </div>
       </section>
 
+      <!-- ── Booking Details Modal ──────────────────────────────────────────────── -->
+      <div id="bookingDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/30 backdrop-blur-md p-4">
+        <div class="w-full max-w-md rounded-3xl border border-white/60 bg-white/75 p-6 shadow-2xl backdrop-blur-xl">
+          <h2 class="mb-4 text-xl font-black text-slate-900">Booking Details</h2>
+
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Room</label>
+              <p id="detailsRoom" class="font-bold text-slate-800"></p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Purpose</label>
+              <p id="detailsPurpose" class="font-bold text-slate-800"></p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Agenda</label>
+              <p id="detailsAgenda" class="whitespace-pre-wrap text-sm font-semibold text-slate-600"></p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Participants</label>
+              <p id="detailsParticipants" class="text-sm font-semibold text-slate-600"></p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onclick="closeBookingDetailsModal()"
+            class="mt-6 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -299,6 +332,7 @@
 
     let historyRoomsCache = [];
     let historyBookingsCache = [];
+    let historyRowsCache = [];
 
     function fillHistoryRoomFilter(rooms) {
       const select = document.getElementById('historyRoomFilter');
@@ -378,6 +412,8 @@
         return bookingStartMinutes(b) - bookingStartMinutes(a);
       });
 
+      historyRowsCache = rows;
+
       document.getElementById('historyTotal').textContent = rows.length;
 
       document.getElementById('completedTotal').textContent =
@@ -403,10 +439,6 @@
               </td>
 
               <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-                ${escapeHtml(booking.roomName)}
-              </td>
-
-              <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
                 ${escapeHtml(formatDateDisplay(booking.date))}
               </td>
 
@@ -416,8 +448,8 @@
                 ${escapeHtml(booking.endTime || formatTime12(booking.end))}
               </td>
 
-              <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-                ${escapeHtml(booking.purpose)}
+              <td class="border-b border-slate-100 px-4 py-3 align-middle">
+                ${iconButton('eye', `viewBookingDetails(${booking.id})`, 'View room, purpose, agenda, and participants', 'indigo')}
               </td>
 
               <td class="border-b border-slate-100 px-4 py-3 align-middle">
@@ -427,12 +459,36 @@
           `;
         }).join('') || `
           <tr>
-            <td colspan="7" class="py-6 text-center font-semibold text-slate-500">
+            <td colspan="6" class="py-6 text-center font-semibold text-slate-500">
               No completed or cancelled meetings found.
             </td>
           </tr>
         `;
     }
+
+    function viewBookingDetails(id) {
+      const booking = historyRowsCache.find(function(b) {
+        return Number(b.id) === Number(id);
+      });
+
+      if (!booking) return;
+
+      document.getElementById('detailsRoom').textContent = booking.roomName +
+        (booking.location ? ' — ' + booking.location : '');
+      document.getElementById('detailsPurpose').textContent = booking.purpose || '—';
+      document.getElementById('detailsAgenda').textContent = booking.agenda || 'No agenda provided.';
+      document.getElementById('detailsParticipants').textContent = booking.participants || 'No participants listed.';
+
+      showModal('bookingDetailsModal');
+    }
+
+    function closeBookingDetailsModal() {
+      hideModal('bookingDetailsModal');
+    }
+
+    document.getElementById('bookingDetailsModal').addEventListener('click', function(e) {
+      if (e.target === this) closeBookingDetailsModal();
+    });
 
     loadHistoryData().catch(function(err) {
       showMessage('historyMessage', err.message, 'error');
