@@ -83,17 +83,24 @@
 
     <main class="flex-1 p-6 md:p-8">
 
-      <div class="mb-6">
-        <h1 class="text-3xl font-black text-slate-900">Admin Dashboard</h1>
-        <p class="mt-1 font-semibold text-slate-500">Overview of rooms, users, bookings, and live meetings</p>
+      <div id="welcomeBanner" class="mb-6 flex items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3.5 transition-opacity duration-500">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+          <svg class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+        <div>
+          <p class="font-extrabold text-indigo-900">Welcome to Smart<span class="text-indigo-600">Book</span></p>
+          <p class="text-sm font-semibold text-indigo-500">Your gateway to the meeting room booking system</p>
+        </div>
       </div>
 
       <div id="dashboardMessage" style="display:none;"></div>
 
       <section class="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-[1.6fr_1fr]">
         <div class="flex flex-col rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-600 to-indigo-900 p-6 text-white shadow-lg">
-          <h2 class="text-3xl font-black">Welcome to Smart<span class="text-violet-300">Book</span></h2>
-          <p class="mt-2 font-semibold text-indigo-100">Your gateway to the meeting room booking system</p>
+          <h2 class="text-3xl font-black">Admin Dashboard</h2>
+          <p class="mt-2 font-semibold text-indigo-100">Overview of rooms, users, bookings, and live meetings</p>
 
           <div class="mt-6 space-y-3.5">
             <div class="flex items-center gap-3">
@@ -543,6 +550,15 @@
 
     loadDashboard();
     setInterval(loadDashboard, 10000);
+
+    // Welcome banner is a one-time greeting — fade it out and remove it
+    // after 5 seconds so it doesn't take up space on every refresh.
+    setTimeout(function() {
+      const banner = document.getElementById('welcomeBanner');
+      if (!banner) return;
+      banner.style.opacity = '0';
+      setTimeout(function() { banner.remove(); }, 500);
+    }, 5000);
   </script>
 </body>
 </html>
