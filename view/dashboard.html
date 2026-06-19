@@ -109,7 +109,7 @@
               Dashboard
             </span>
 
-            <p class="mt-3 text-2xl leading-snug text-slate-800">Overview of rooms, users, bookings, and live meetings</p>
+            <p class="mt-3 max-w-sm text-sm font-semibold leading-relaxed text-slate-500">Overview of rooms, users, bookings, and live meetings</p>
 
             <div class="mt-6 space-y-3.5">
               <div class="flex items-center gap-3">
@@ -473,7 +473,7 @@
           .sort(function(a, b) {
             return getBookingSortDateTime(b) - getBookingSortDateTime(a);
           })
-          .slice(0, 8);
+          .slice(0, 10);
 
         document.getElementById('totalRooms').textContent = visibleRooms.length;
         document.getElementById('totalBookings').textContent = bookings.length;
