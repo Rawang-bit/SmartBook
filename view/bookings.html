@@ -133,10 +133,8 @@
               <tr>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">User</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Email</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Room</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Date</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Time</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Purpose</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Details</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Status</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
@@ -153,6 +151,11 @@
           <h2 class="mb-4 text-xl font-black text-slate-900">Booking Details</h2>
 
           <div class="space-y-4">
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Room</label>
+              <p id="detailsRoom" class="font-bold text-slate-800"></p>
+            </div>
+
             <div>
               <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Purpose</label>
               <p id="detailsPurpose" class="font-bold text-slate-800"></p>
@@ -250,10 +253,6 @@
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              ${escapeHtml(booking.roomName)}
-            </td>
-
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
               ${escapeHtml(formatDateDisplay(booking.date))}
             </td>
 
@@ -263,12 +262,8 @@
               ${escapeHtml(booking.endTime || formatTime12(booking.end))}
             </td>
 
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              ${escapeHtml(booking.purpose)}
-            </td>
-
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              ${iconButton('eye', `viewBookingDetails(${booking.id})`, 'View agenda and participants', 'indigo')}
+              ${iconButton('eye', `viewBookingDetails(${booking.id})`, 'View room, purpose, agenda, and participants', 'indigo')}
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
@@ -288,7 +283,7 @@
         `;
       }).join('') || `
         <tr>
-          <td colspan="9" class="px-4 py-6 text-center font-semibold text-slate-500">
+          <td colspan="7" class="px-4 py-6 text-center font-semibold text-slate-500">
             No bookings found.
           </td>
         </tr>
@@ -302,6 +297,8 @@
 
       if (!booking) return;
 
+      document.getElementById('detailsRoom').textContent = booking.roomName +
+        (booking.location ? ' — ' + booking.location : '');
       document.getElementById('detailsPurpose').textContent = booking.purpose || '—';
       document.getElementById('detailsAgenda').textContent = booking.agenda || 'No agenda provided.';
       document.getElementById('detailsParticipants').textContent = booking.participants || 'No participants listed.';
