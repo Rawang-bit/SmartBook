@@ -7,18 +7,24 @@
   <title>SmartBook</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Browser Tab Logo -->
   <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
-
-  <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
-    rel="stylesheet"
-  />
 </head>
 
-<body class="min-h-screen bg-[#f8fafc] font-['Plus_Jakarta_Sans'] text-slate-900 antialiased">
+<body class="min-h-screen bg-[#f8fafc] text-slate-900 antialiased">
 
   <!-- Loading Spinner Overlay — shown until rooms/bookings finish loading -->
   <div id="loadingOverlay" class="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-4 bg-[#f8fafc]">

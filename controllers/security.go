@@ -71,8 +71,8 @@ func SecureHeaders(next http.Handler) http.Handler {
 
 		// Content Security Policy
 		// script-src  — self + inline scripts (Tailwind/Lucide need it) + trusted CDN hosts
-		// style-src   — self + inline styles (Tailwind generates them) + Google Fonts CSS
-		// font-src    — self + Google Fonts binary assets
+		// style-src   — self + inline styles (Tailwind generates them)
+		// font-src    — self only; every page uses the system Helvetica/Arial stack, no web fonts
 		// img-src     — self + data URIs (base64 favicons / avatars)
 		// connect-src — API calls stay on the same origin only
 		// frame-ancestors — block all framing (aligns with X-Frame-Options: DENY)
@@ -81,8 +81,8 @@ func SecureHeaders(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; "+
-				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
-				"font-src 'self' https://fonts.gstatic.com; "+
+				"style-src 'self' 'unsafe-inline'; "+
+				"font-src 'self'; "+
 				"img-src 'self' data:; "+
 				"connect-src 'self'; "+
 				"frame-ancestors 'none'; "+
