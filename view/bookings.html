@@ -137,8 +137,7 @@
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Date</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Time</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Purpose</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Agenda</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Participants</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Details</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Status</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
               </tr>
@@ -147,6 +146,38 @@
           </table>
         </div>
       </section>
+
+      <!-- ── Booking Details Modal ──────────────────────────────────────────────── -->
+      <div id="bookingDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/30 backdrop-blur-md p-4">
+        <div class="w-full max-w-md rounded-3xl border border-white/60 bg-white/75 p-6 shadow-2xl backdrop-blur-xl">
+          <h2 class="mb-4 text-xl font-black text-slate-900">Booking Details</h2>
+
+          <div class="space-y-4">
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Purpose</label>
+              <p id="detailsPurpose" class="font-bold text-slate-800"></p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Agenda</label>
+              <p id="detailsAgenda" class="whitespace-pre-wrap text-sm font-semibold text-slate-600"></p>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Participants</label>
+              <p id="detailsParticipants" class="text-sm font-semibold text-slate-600"></p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onclick="closeBookingDetailsModal()"
+            class="mt-6 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
 
     </main>
   </div>
@@ -157,6 +188,7 @@
     requireAuth();
 
     let allRoomsCache = [];
+    let bookingsCache = [];
 
     function fillBookingRoomFilter(rooms) {
       const select = document.getElementById('bookingRoomFilter');
@@ -202,6 +234,8 @@
           return getBookingSortDateTime(b) - getBookingSortDateTime(a);
         });
 
+      bookingsCache = bookings;
+
       document.getElementById('bookingRows').innerHTML = bookings.map(function(booking) {
         const canCancel = booking.status !== 'Cancelled' && booking.status !== 'Completed';
 
@@ -233,16 +267,8 @@
               ${escapeHtml(booking.purpose)}
             </td>
 
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              <div class="max-w-[200px] truncate" title="${escapeHtml(booking.agenda || '')}">
-                ${booking.agenda ? escapeHtml(booking.agenda) : '<span class="text-slate-400">—</span>'}
-              </div>
-            </td>
-
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              <div class="max-w-[180px] truncate" title="${escapeHtml(booking.participants || '')}">
-                ${booking.participants ? escapeHtml(booking.participants) : '<span class="text-slate-400">—</span>'}
-              </div>
+            <td class="border-b border-slate-100 px-4 py-3 align-middle">
+              ${iconButton('eye', `viewBookingDetails(${booking.id})`, 'View agenda and participants', 'indigo')}
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
@@ -262,12 +288,34 @@
         `;
       }).join('') || `
         <tr>
-          <td colspan="10" class="px-4 py-6 text-center font-semibold text-slate-500">
+          <td colspan="9" class="px-4 py-6 text-center font-semibold text-slate-500">
             No bookings found.
           </td>
         </tr>
       `;
     }
+
+    function viewBookingDetails(id) {
+      const booking = bookingsCache.find(function(b) {
+        return Number(b.id) === Number(id);
+      });
+
+      if (!booking) return;
+
+      document.getElementById('detailsPurpose').textContent = booking.purpose || '—';
+      document.getElementById('detailsAgenda').textContent = booking.agenda || 'No agenda provided.';
+      document.getElementById('detailsParticipants').textContent = booking.participants || 'No participants listed.';
+
+      showModal('bookingDetailsModal');
+    }
+
+    function closeBookingDetailsModal() {
+      hideModal('bookingDetailsModal');
+    }
+
+    document.getElementById('bookingDetailsModal').addEventListener('click', function(e) {
+      if (e.target === this) closeBookingDetailsModal();
+    });
 
     function cancelBooking(id) {
       confirmAction('The room will be freed up and the booking owner will no longer see this meeting as active.', async function () {
