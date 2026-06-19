@@ -219,9 +219,16 @@
 
       <section class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
-          <div class="mb-4">
-            <h2 class="text-xl font-black text-slate-900">Current Room Occupancy</h2>
-            <p class="mt-1 font-semibold text-slate-500">Live status refreshes automatically.</p>
+          <div class="mb-4 flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-xl font-black text-slate-900">Current Room Occupancy</h2>
+              <p class="text-sm font-semibold text-slate-500">Live status refreshes automatically.</p>
+            </div>
           </div>
 
           <div class="overflow-x-auto rounded-2xl border border-slate-200">
@@ -240,9 +247,16 @@
         </div>
 
         <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
-          <div class="mb-4">
-            <h2 class="text-xl font-black text-slate-900">Upcoming Meetings</h2>
-            <p class="mt-1 font-semibold text-slate-500">Next meetings in the schedule.</p>
+          <div class="mb-4 flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-xl font-black text-slate-900">Upcoming Meetings</h2>
+              <p class="text-sm font-semibold text-slate-500">Next meetings in the schedule.</p>
+            </div>
           </div>
 
           <div class="overflow-x-auto rounded-2xl border border-slate-200">
@@ -262,9 +276,16 @@
       </section>
 
       <section class="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
-        <div class="mb-4">
-          <h2 class="text-xl font-black text-slate-900">Recent Bookings</h2>
-          <p class="mt-1 font-semibold text-slate-500">Latest reservations from the database.</p>
+        <div class="mb-4 flex items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-xl font-black text-slate-900">Recent Bookings</h2>
+            <p class="text-sm font-semibold text-slate-500">Latest reservations from the database.</p>
+          </div>
         </div>
 
         <div class="overflow-x-auto rounded-2xl border border-slate-200">
@@ -337,6 +358,25 @@
       return minutesFromBookingTime(booking.start) > now.getHours() * 60 + now.getMinutes();
     }
 
+    // Renders a centered icon + message empty-state row spanning the full
+    // table width, used by all three dashboard tables.
+    function dashboardEmptyRow(colspan, message) {
+      return `
+        <tr>
+          <td colspan="${colspan}" class="px-4 py-10 text-center">
+            <div class="flex flex-col items-center gap-2">
+              <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p class="text-sm font-bold text-slate-500">${message}</p>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
     function populateDashboardRoomFilter(rooms) {
       const select = document.getElementById('dashboardRoomFilter');
       const selected = select.value;
@@ -403,10 +443,13 @@
           });
 
           return `
-            <tr>
+            <tr class="transition hover:bg-slate-50">
               <td class="border-b border-slate-100 px-4 py-3 align-middle">
                 <div class="flex items-start gap-3">
-                  <span class="mt-1 inline-block h-2.5 w-2.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+                  <span class="relative mt-1 inline-flex h-2.5 w-2.5 shrink-0">
+                    ${active ? '<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>' : ''}
+                    <span class="relative inline-flex h-2.5 w-2.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
+                  </span>
                   <div>
                     <div class="font-bold text-slate-800">${escapeHtml(room.name)}</div>
                     <div class="text-sm text-slate-500">${escapeHtml(room.location)}</div>
@@ -418,29 +461,29 @@
                   ? '<span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">In Progress</span>'
                   : '<span class="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-extrabold text-sky-700">Available</span>'}
               </td>
-              <td class="border-b border-slate-100 px-4 py-3 align-middle">
-                ${active ? escapeHtml(active.purpose) : '-'}
+              <td class="border-b border-slate-100 px-4 py-3 align-middle font-semibold text-slate-700">
+                ${active ? escapeHtml(active.purpose) : '<span class="text-slate-400">—</span>'}
               </td>
-              <td class="border-b border-slate-100 px-4 py-3 align-middle">
-                ${active ? escapeHtml(active.startTime || formatTime12(active.start)) + ' - ' + escapeHtml(active.endTime || formatTime12(active.end)) : '-'}
+              <td class="border-b border-slate-100 px-4 py-3 align-middle font-semibold text-slate-700">
+                ${active ? escapeHtml(active.startTime || formatTime12(active.start)) + ' - ' + escapeHtml(active.endTime || formatTime12(active.end)) : '<span class="text-slate-400">—</span>'}
               </td>
             </tr>
           `;
-        }).join('') || '<tr><td class="px-4 py-3 text-slate-500" colspan="4">No rooms found.</td></tr>';
+        }).join('') || dashboardEmptyRow(4, 'No rooms found.');
 
         document.getElementById('upcomingToday').innerHTML = upcoming.map(function(b) {
           return `
-            <tr>
-              <td class="border-b border-slate-100 px-4 py-3">${escapeHtml(formatDateDisplay(b.date))}</td>
-              <td class="border-b border-slate-100 px-4 py-3">${escapeHtml(b.startTime || formatTime12(b.start))} - ${escapeHtml(b.endTime || formatTime12(b.end))}</td>
-              <td class="border-b border-slate-100 px-4 py-3">${escapeHtml(b.roomName)}</td>
-              <td class="border-b border-slate-100 px-4 py-3">
-                ${escapeHtml(b.purpose)}
+            <tr class="transition hover:bg-slate-50">
+              <td class="border-b border-slate-100 px-4 py-3 align-middle font-semibold text-slate-700">${escapeHtml(formatDateDisplay(b.date))}</td>
+              <td class="border-b border-slate-100 px-4 py-3 align-middle font-semibold text-slate-700">${escapeHtml(b.startTime || formatTime12(b.start))} - ${escapeHtml(b.endTime || formatTime12(b.end))}</td>
+              <td class="border-b border-slate-100 px-4 py-3 align-middle font-bold text-slate-800">${escapeHtml(b.roomName)}</td>
+              <td class="border-b border-slate-100 px-4 py-3 align-middle">
+                <div class="font-bold text-slate-800">${escapeHtml(b.purpose)}</div>
                 <div class="text-sm text-slate-500">${escapeHtml(b.user)}</div>
               </td>
             </tr>
           `;
-        }).join('') || '<tr><td class="px-4 py-3 text-slate-500" colspan="4">No upcoming meetings found.</td></tr>';
+        }).join('') || dashboardEmptyRow(4, 'No upcoming meetings found.');
 
         document.getElementById('recentBookings').innerHTML = recentBookings.map(function(b) {
           return `
@@ -467,13 +510,7 @@
               </td>
             </tr>
           `;
-        }).join('') || `
-          <tr>
-            <td class="px-4 py-4 text-center text-slate-500" colspan="5">
-              No bookings found.
-            </td>
-          </tr>
-        `;
+        }).join('') || dashboardEmptyRow(5, 'No bookings found.');
 
       } catch (err) {
         showMessage('dashboardMessage', err.message, 'error');
