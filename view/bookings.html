@@ -137,7 +137,7 @@
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Time</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Details</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Status</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
+                <th class="bg-slate-50 px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
               </tr>
             </thead>
             <tbody id="bookingRows"></tbody>
@@ -270,8 +270,8 @@
               ${formatStatus(booking.status)}
             </td>
 
-            <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              <div class="flex flex-wrap items-center gap-1">
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-right">
+              <div class="flex flex-wrap items-center justify-end gap-1">
                 ${isSuperAdmin() && canCancel ? iconButton('x', `cancelBooking(${booking.id})`, 'Cancel booking', 'red') : ''}
                 ${isSuperAdmin()
                     ? iconButton('trash', `hardDelete(${booking.id})`, 'Delete booking permanently', 'slate')
