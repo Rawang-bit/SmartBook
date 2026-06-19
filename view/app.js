@@ -136,6 +136,8 @@ async function approveUserApi(id, role) {
   return api('/users/' + id + '/approve', { method: 'POST', body: JSON.stringify({ role: role || 'normal_user' }) });
 }
 async function rejectUserApi(id) { return api('/users/' + id + '/reject', { method: 'POST' }); }
+async function revokeUserApi(id) { return api('/users/' + id + '/revoke', { method: 'POST' }); }
+async function restoreUserApi(id) { return api('/users/' + id + '/restore', { method: 'POST' }); }
 
 function normalizeBookingRecord(b) {
   const startRaw = b.start || b.startTime || '';

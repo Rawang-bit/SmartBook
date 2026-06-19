@@ -137,6 +137,8 @@
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Date</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Time</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Purpose</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Agenda</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Participants</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Status</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
               </tr>
@@ -231,6 +233,18 @@
               ${escapeHtml(booking.purpose)}
             </td>
 
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
+              <div class="max-w-[200px] truncate" title="${escapeHtml(booking.agenda || '')}">
+                ${booking.agenda ? escapeHtml(booking.agenda) : '<span class="text-slate-400">—</span>'}
+              </div>
+            </td>
+
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
+              <div class="max-w-[180px] truncate" title="${escapeHtml(booking.participants || '')}">
+                ${booking.participants ? escapeHtml(booking.participants) : '<span class="text-slate-400">—</span>'}
+              </div>
+            </td>
+
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
               ${formatStatus(booking.status)}
             </td>
@@ -248,7 +262,7 @@
         `;
       }).join('') || `
         <tr>
-          <td colspan="8" class="px-4 py-6 text-center font-semibold text-slate-500">
+          <td colspan="10" class="px-4 py-6 text-center font-semibold text-slate-500">
             No bookings found.
           </td>
         </tr>

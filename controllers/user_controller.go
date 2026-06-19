@@ -158,10 +158,10 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
-// ToggleUserStatus approves or rejects a pending user's self-registration
-// request. Path must end in /approve or /reject — e.g. POST /api/users/5/approve.
-// Admin only (approving with an admin role additionally requires super_admin —
-// see approveUser).
+// ToggleUserStatus approves, rejects, revokes, or restores a registered
+// user. Path must end in /approve, /reject, /revoke, or /restore — e.g.
+// POST /api/users/5/approve. Admin only (approving with an admin role
+// additionally requires super_admin — see approveUser).
 func (c *Controller) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/users/")
 
@@ -175,8 +175,12 @@ func (c *Controller) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 		c.approveUser(w, r, id)
 	case strings.HasSuffix(path, "/reject"):
 		c.rejectUser(w, r, id)
+	case strings.HasSuffix(path, "/revoke"):
+		c.revokeUser(w, r, id)
+	case strings.HasSuffix(path, "/restore"):
+		c.restoreUser(w, r, id)
 	default:
-		writeError(w, http.StatusBadRequest, "use /approve or /reject")
+		writeError(w, http.StatusBadRequest, "use /approve, /reject, /revoke, or /restore")
 	}
 }
 
@@ -295,6 +299,41 @@ func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+}
+
+// revokeUser handles POST /api/users/{id}/revoke. Pulls booking access from
+// an already-approved user without deleting their record — BookingModel.Save
+// only allows status "approved", so a revoked user is blocked from booking
+// the moment this is set, with no other code changes needed. Any admin may
+// revoke, mirroring the reject gate above.
+func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64) {
+	_, err := c.Users.SetStatus(id, "revoked")
+	if errors.Is(err, models.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to revoke access")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
+}
+
+// restoreUser handles POST /api/users/{id}/restore. Re-approves a
+// previously revoked user, restoring their booking access.
+func (c *Controller) restoreUser(w http.ResponseWriter, r *http.Request, id int64) {
+	_, err := c.Users.SetStatus(id, "approved")
+	if errors.Is(err, models.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to restore access")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "approved"})
 }
 
 // DeleteUser removes a pre-registered user. Admin only.
