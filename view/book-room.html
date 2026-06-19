@@ -354,8 +354,10 @@
     }
 
     function fillUsers() {
+      // Only approved users can book — mirrors the server-side check in
+      // BookingModel.Save (pending/rejected/revoked are all blocked there).
       const activeUsers = users.filter(function(user) {
-        return (user.status || 'Active') === 'Active';
+        return user.status === 'approved';
       });
 
       document.getElementById('registeredUser').innerHTML =
