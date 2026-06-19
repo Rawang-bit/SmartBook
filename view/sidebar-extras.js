@@ -46,9 +46,9 @@
   document.addEventListener('DOMContentLoaded', function () {
     const modal = document.createElement('div');
     modal.id = 'sharedChangePasswordModal';
-    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/30 backdrop-blur-md p-4';
     modal.innerHTML = `
-      <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+      <div class="w-full max-w-md rounded-3xl border border-white/60 bg-white/75 p-6 shadow-2xl backdrop-blur-xl">
         <h2 class="mb-5 text-xl font-black text-slate-900">Change My Password</h2>
         <div id="sharedCpMsg" class="mb-4 hidden rounded-xl px-4 py-3 font-bold text-sm"></div>
         <form id="sharedCpForm" class="space-y-4">
@@ -145,9 +145,9 @@
   document.addEventListener('DOMContentLoaded', function () {
     const modal = document.createElement('div');
     modal.id = 'sharedConfirmModal';
-    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/30 backdrop-blur-md p-4';
     modal.innerHTML = `
-      <div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
+      <div class="w-full max-w-sm rounded-3xl border border-white/60 bg-white/75 p-6 shadow-2xl backdrop-blur-xl text-center">
         <div id="sharedConfirmIconWrap" class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
           <svg id="sharedConfirmIcon" class="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
