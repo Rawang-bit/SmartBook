@@ -71,15 +71,13 @@ function getGateUser() {
   }
 }
 
-// Explicit logout — unlike just closing the browser, this revokes the
-// trusted-device cookie server-side too, so "remember this device" doesn't
-// silently let the next person on this machine in as this user.
-async function exitAccess() {
-  try {
-    await api('/api/access/logout', { method: 'POST' });
-  } catch (_) {
-    // best effort — still clear local state and leave even if this fails
-  }
+// Leaves the calendar and returns to the access gate. This only clears the
+// local "viewing as X" state — it deliberately leaves the trusted-device
+// cookie alone, so someone who opted in to "remember this device for 30
+// days" isn't asked for a fresh OTP just because they logged out; the
+// access gate will recognize the device and let them straight back in
+// until that 30-day window actually expires.
+function exitAccess() {
   localStorage.removeItem('sbUser');
   window.location.href = 'index.html';
 }
