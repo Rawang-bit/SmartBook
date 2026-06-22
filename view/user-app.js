@@ -109,7 +109,7 @@ function updateHeaderClock() {
   const now = new Date();
 
   document.getElementById('clock').innerText =
-    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   document.getElementById('date-label').innerText =
     now.toDateString().toUpperCase();
@@ -402,7 +402,7 @@ function closeModal() {
   overlay.classList.add('hidden');
   overlay.classList.remove('flex');
 
-  ['verifyStep', 'bookStep', 'detailsStep', 'cancelConfirmStep', 'messageStep', 'successStep', 'minutesListStep', 'minutesEditStep']
+  ['bookStep', 'detailsStep', 'cancelConfirmStep', 'messageStep', 'successStep', 'minutesListStep', 'minutesEditStep']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
@@ -416,7 +416,6 @@ function showStep(step) {
   openModal();
 
   const steps = {
-    verify: 'verifyStep',
     book: 'bookStep',
     details: 'detailsStep',
     cancelConfirm: 'cancelConfirmStep',
@@ -463,7 +462,6 @@ function showMessageModal(title, text, icon = 'info') {
 }
 
 function resetBookingFormFields() {
-  document.getElementById('verifyEmail').value = '';
   document.getElementById('meetingPurpose').value = '';
   document.getElementById('meetingAgenda').value = '';
   document.getElementById('meetingParticipants').value = '';
@@ -864,26 +862,15 @@ function showDetails(id) {
 
 function requestCancelVerify() {
   const booking = state.bookings.find(item => item.id === state.currentBookingId);
+  if (!booking) return;
 
-  // Already signed in as this booking's owner — the gate session already
-  // proved that email, so don't make them re-type it just to cancel their
-  // own meeting. Anyone viewing someone else's booking still has to verify.
-  if (booking && state.activeUser && state.activeUser.email &&
-      booking.email.toLowerCase() === state.activeUser.email.toLowerCase()) {
-    proceedToCancelConfirm(booking);
-    return;
-  }
+  // The gate session already proves who's signed in, so there's nothing
+  // left to "verify" — either this is their own meeting, or it isn't.
+  const isOwner = state.activeUser && state.activeUser.email &&
+    booking.email.toLowerCase() === state.activeUser.email.toLowerCase();
 
-  showStep('verify');
-  document.getElementById('verifySubmitBtn').onclick = handleCancelVerify;
-}
-
-function handleCancelVerify() {
-  const email = document.getElementById('verifyEmail').value.toLowerCase().trim();
-  const booking = state.bookings.find(item => item.id === state.currentBookingId);
-
-  if (!booking || booking.email.toLowerCase() !== email) {
-    showMessageModal('Access Denied', 'Only the original booking owner can cancel this meeting.', 'shield-alert');
+  if (!isOwner) {
+    showMessageModal('Access Denied', "You can't cancel a meeting booked by someone else.", 'shield-alert');
     return;
   }
 
@@ -1102,7 +1089,8 @@ window.onload = async function() {
     document.getElementById('clock').innerText =
       new Date().toLocaleTimeString([], {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        second: '2-digit'
       });
   }, 1000);
 };

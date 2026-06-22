@@ -149,31 +149,6 @@
   <!-- Modal Overlay -->
   <div id="modalOverlay" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/40 p-4 backdrop-blur-md">
 
-    <!-- Verify (cancellation only — booking no longer requires this step) -->
-    <div id="verifyStep" class="hidden w-full max-w-md rounded-[2.5rem] border border-white/60 bg-white/75 p-8 text-center shadow-2xl backdrop-blur-xl transition-all duration-200">
-      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-        <i data-lucide="shield-check"></i>
-      </div>
-
-      <h3 class="text-2xl font-black text-slate-800">Confirm Cancellation</h3>
-      <p class="mt-2 text-sm font-semibold text-slate-400">Enter the email used to book this meeting.</p>
-
-      <input
-        type="email"
-        id="verifyEmail"
-        placeholder="email@company.com"
-        class="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-6 py-4 text-center font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-      />
-
-      <button id="verifySubmitBtn" class="mt-4 w-full rounded-2xl bg-indigo-600 py-4 font-black text-white transition-all hover:bg-indigo-700">
-        Continue
-      </button>
-
-      <button onclick="closeModal()" class="mt-2 w-full py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-        Cancel
-      </button>
-    </div>
-
     <!-- Book -->
     <div id="bookStep" class="hidden w-full max-w-lg overflow-hidden rounded-[3rem] border border-white/60 shadow-2xl backdrop-blur-xl transition-all duration-200">
       <div class="bg-indigo-600/80 p-8 text-white backdrop-blur-xl">
