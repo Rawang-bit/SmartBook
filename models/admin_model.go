@@ -146,13 +146,16 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 
 	username := req.Email
 
+	// A super admin chose this password directly, not the new admin
+	// themselves — force a change on first login so it isn't a password
+	// someone else picked and now knows, mirroring CreateWithGeneratedPassword.
 	var admin Admin
 	err = m.DB.QueryRow(`
-		INSERT INTO admins(username, password, name, role, email)
-		VALUES($1, $2, $3, $4, $5)
-		RETURNING id, username, name, role
+		INSERT INTO admins(username, password, name, role, email, must_reset_password)
+		VALUES($1, $2, $3, $4, $5, TRUE)
+		RETURNING id, username, name, role, must_reset_password
 	`, username, string(hash), req.Name, req.Role, req.Email).Scan(
-		&admin.ID, &admin.Username, &admin.Name, &admin.Role,
+		&admin.ID, &admin.Username, &admin.Name, &admin.Role, &admin.MustResetPassword,
 	)
 	if err != nil {
 		if utils.IsUniqueViolation(err) {
