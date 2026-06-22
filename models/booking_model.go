@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"bookroom-management-system/utils"
@@ -282,11 +281,11 @@ const MinutesEditWindow = 24 * time.Hour
 // cancelled or the meeting is outside its edit window.
 func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Booking, error) {
 	var b Booking
-	var endTimeStr string
+	var startTimeStr, endTimeStr string
 	err := m.DB.QueryRow(`
-		SELECT email, status, TO_CHAR(booking_date,'YYYY-MM-DD'), end_time
+		SELECT email, status, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time
 		FROM bookings WHERE id = $1
-	`, id).Scan(&b.Email, &b.Status, &b.Date, &endTimeStr)
+	`, id).Scan(&b.Email, &b.Status, &b.Date, &startTimeStr, &endTimeStr)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, ErrNotFound
 	}
@@ -297,25 +296,18 @@ func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Boo
 	if utils.NormalizeEmail(b.Email) != utils.NormalizeEmail(email) {
 		return Booking{}, ErrOwnerMismatch
 	}
-	if strings.EqualFold(b.Status, "Cancelled") {
+
+	// Use the exact same status computation the public calendar's "eligible
+	// for minutes" list relies on (see FillBookingDisplayFields), so a save
+	// can never be rejected for a booking the list just showed as eligible.
+	computedStatus := utils.ComputeBookingStatus(b.Date, startTimeStr, endTimeStr, b.Status)
+	switch computedStatus {
+	case "Cancelled":
 		return Booking{}, fmt.Errorf("cancelled bookings cannot have meeting minutes")
-	}
-
-	bookingDate, err := time.ParseInLocation("2006-01-02", b.Date, time.Local)
-	if err != nil {
-		return Booking{}, err
-	}
-	endMinutes, err := utils.MinutesFromTime(endTimeStr)
-	if err != nil {
-		return Booking{}, err
-	}
-	meetingEnd := bookingDate.Add(time.Duration(endMinutes) * time.Minute)
-
-	now := time.Now()
-	if now.Before(meetingEnd) {
+	case "Booked", "In Progress":
 		return Booking{}, fmt.Errorf("minutes of meeting can only be added after the meeting has ended")
 	}
-	if now.After(meetingEnd.Add(MinutesEditWindow)) {
+	if !isWithinMinutesEditWindow(b.Date, endTimeStr, computedStatus) {
 		return Booking{}, fmt.Errorf("the 24-hour window to add meeting minutes has passed")
 	}
 

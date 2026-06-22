@@ -26,11 +26,6 @@ let state = {
   currentMinutesBookingId: null
 };
 
-// How long after a meeting ends its owner may still add or edit the
-// Minutes of Meeting — mirrors BookingModel.MinutesEditWindow on the server,
-// which is the actual enforcement; this just keeps the list shown here honest.
-const MINUTES_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
-
 const hours = [
   '09:00 AM', '09:30 AM',
   '10:00 AM', '10:30 AM',
@@ -918,8 +913,11 @@ async function confirmCancelBooking() {
 // Meeting Minutes lives outside the normal calendar flow because completed
 // meetings are filtered out of state.bookings entirely (shouldShowOnPublicCalendar
 // keeps the grid to upcoming/in-progress only) — so this fetches bookings
-// fresh and finds the signed-in user's own meetings that ended within the
-// last 24 hours, the same window the server enforces.
+// fresh and finds the signed-in user's own meetings still awaiting minutes.
+// Eligibility (ended, not cancelled, still within the 24-hour window) comes
+// straight from the server's minutesEditable flag rather than being
+// recomputed here, so this list can never disagree with what a save will
+// actually accept.
 async function openMinutesOfMeeting() {
   if (!state.activeUser || !state.activeUser.email) return;
 
@@ -932,22 +930,23 @@ async function openMinutesOfMeeting() {
   }
 
   const myEmail = state.activeUser.email.toLowerCase();
-  const now = new Date();
 
   state.minutesEligible = data
     .filter(b => (b.email || '').toLowerCase() === myEmail)
-    .filter(b => (b.status || '').toLowerCase() !== 'cancelled')
+    // Trust the server's own eligibility check rather than recomputing it
+    // here — it's the same check SetMinutesOfMeeting enforces when saving,
+    // so the list can never show something the server would then reject.
+    .filter(b => b.minutesEditable)
+    // Only meetings still needing minutes — once added, this list is no
+    // longer how you'd revisit them.
+    .filter(b => !b.minutesOfMeeting)
     .map(b => ({
       id: b.id,
       purpose: b.purpose,
       room: b.roomName || b.room,
       startTime: normalizeTimeDisplay(b.startTime || b.start),
-      endTime: normalizeTimeDisplay(b.endTime || b.end),
-      minutesOfMeeting: b.minutesOfMeeting || '',
-      endsAt: getMeetingEndDate(new Date(b.date + 'T00:00:00').toDateString(), normalizeTimeDisplay(b.endTime || b.end))
-    }))
-    .filter(b => now >= b.endsAt && (now - b.endsAt) <= MINUTES_EDIT_WINDOW_MS)
-    .sort((a, b) => b.endsAt - a.endsAt);
+      endTime: normalizeTimeDisplay(b.endTime || b.end)
+    }));
 
   renderMinutesList();
   showStep('minutesList');
@@ -968,9 +967,7 @@ function renderMinutesList() {
     <button onclick="openMinutesEditor(${b.id})" class="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left transition hover:bg-slate-100">
       <p class="text-sm font-bold text-slate-800">${escapeHtml(b.purpose)}</p>
       <p class="mt-1 text-xs font-bold text-slate-400">${escapeHtml(b.room)} &middot; ${b.startTime} - ${b.endTime}</p>
-      <p class="mt-2 text-[10px] font-black uppercase tracking-widest ${b.minutesOfMeeting ? 'text-emerald-500' : 'text-amber-500'}">
-        ${b.minutesOfMeeting ? 'Minutes added — tap to edit' : 'Add minutes'}
-      </p>
+      <p class="mt-2 text-[10px] font-black uppercase tracking-widest text-amber-500">Add minutes</p>
     </button>
   `).join('');
 
@@ -984,7 +981,7 @@ function openMinutesEditor(id) {
   state.currentMinutesBookingId = id;
   document.getElementById('minutesEditTitle').innerText = booking.purpose;
   document.getElementById('minutesEditMeta').innerText = `${booking.room} · ${booking.startTime} - ${booking.endTime}`;
-  document.getElementById('minutesText').value = booking.minutesOfMeeting;
+  document.getElementById('minutesText').value = '';
 
   showStep('minutesEdit');
 }

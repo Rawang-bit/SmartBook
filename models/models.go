@@ -164,6 +164,7 @@ type Booking struct {
 	Participants     string `json:"participants"`     // optional comma-separated participant emails
 	Status           string `json:"status"`           // "Booked", "In Progress", "Completed", or "Cancelled"
 	MinutesOfMeeting string `json:"minutesOfMeeting"` // set by the booking owner after the meeting ends — see BookingModel.SetMinutesOfMeeting
+	MinutesEditable  bool   `json:"minutesEditable"`  // true if SetMinutesOfMeeting would currently accept a save — see isWithinMinutesEditWindow
 }
 
 // BookingRequest is the JSON body sent when creating or updating a booking.

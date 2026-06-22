@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"bookroom-management-system/utils"
 )
@@ -58,9 +59,10 @@ func NormalizeParticipants(raw string) (string, error) {
 }
 
 // FillBookingDisplayFields populates the derived display fields on a Booking:
-//   - Room      = copy of RoomName (legacy alias expected by the frontend)
+//   - Room            = copy of RoomName (legacy alias expected by the frontend)
 //   - StartTime / EndTime converted to 12-hour AM/PM format
-//   - Status recomputed from the current wall clock
+//   - Status          recomputed from the current wall clock
+//   - MinutesEditable = whether SetMinutesOfMeeting would currently accept a save
 //
 // Kept in the models package because it references the Booking struct.
 func FillBookingDisplayFields(b *Booking) {
@@ -68,4 +70,28 @@ func FillBookingDisplayFields(b *Booking) {
 	b.StartTime = utils.ToDisplayTime(b.Start)
 	b.EndTime   = utils.ToDisplayTime(b.End)
 	b.Status    = utils.ComputeBookingStatus(b.Date, b.Start, b.End, b.Status)
+	b.MinutesEditable = isWithinMinutesEditWindow(b.Date, b.End, b.Status)
+}
+
+// isWithinMinutesEditWindow reports whether a booking is currently eligible
+// for SetMinutesOfMeeting: its computed status is "Completed" (so it's
+// neither upcoming/in-progress nor cancelled) and MinutesEditWindow hasn't
+// elapsed since it ended. This is the exact check SetMinutesOfMeeting itself
+// enforces — sharing it here means the list of "eligible for minutes"
+// bookings the public calendar shows can never disagree with what a save
+// will actually accept.
+func isWithinMinutesEditWindow(dateStr, endStr, computedStatus string) bool {
+	if computedStatus != "Completed" {
+		return false
+	}
+	bookingDate, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
+	if err != nil {
+		return false
+	}
+	endMinutes, err := utils.MinutesFromTime(endStr)
+	if err != nil {
+		return false
+	}
+	meetingEnd := bookingDate.Add(time.Duration(endMinutes) * time.Minute)
+	return time.Now().Before(meetingEnd.Add(MinutesEditWindow))
 }
