@@ -88,6 +88,11 @@ func (c *Controller) ResetAdminPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Force re-login with the new password immediately, rather than letting
+	// any session opened under the old password keep working until it
+	// naturally expires.
+	c.Sessions.DeleteByAdminID(id)
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password reset"})
 }
 
@@ -162,6 +167,13 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update admin status")
 		return
+	}
+
+	// Cut off access immediately — without this, a revoked admin's existing
+	// browser session keeps working until it naturally expires (up to
+	// SessionDuration later), since status is otherwise only checked at login.
+	if newStatus == "revoked" {
+		c.Sessions.DeleteByAdminID(id)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": newStatus})

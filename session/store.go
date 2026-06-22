@@ -114,6 +114,18 @@ func (s *Store) Delete(sessionID string) {
 	}
 }
 
+// DeleteByAdminID immediately invalidates every active session belonging to
+// adminID. Without this, revoking an admin or resetting their password from
+// the Admins page only takes effect the next time they log in — their
+// current browser session, established under the old status or password,
+// would otherwise keep working until it naturally expires (up to
+// SessionDuration later).
+func (s *Store) DeleteByAdminID(adminID int64) {
+	if _, err := s.db.Exec(`DELETE FROM sessions WHERE admin_id = $1`, adminID); err != nil {
+		log.Printf("[SESSION] failed to delete sessions for admin %d: %v", adminID, err)
+	}
+}
+
 // ClearMustResetPassword removes the forced-password-reset flag from an
 // active session. Called immediately after ChangeOwnPassword succeeds so the
 // admin doesn't have to log out and back in to get unblocked.

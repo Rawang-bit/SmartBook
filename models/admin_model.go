@@ -248,7 +248,10 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 	return admin, nil
 }
 
-// ResetPassword sets a new bcrypt-hashed password for any admin.
+// ResetPassword sets a new bcrypt-hashed password for any admin, chosen by
+// someone other than the account's owner — so, like CreateWithGeneratedPassword,
+// it forces a change on next login rather than letting a password someone
+// else now knows remain in use indefinitely.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	if len(newPassword) < MinPasswordLength {
@@ -258,7 +261,7 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	if err != nil {
 		return fmt.Errorf("failed to hash password")
 	}
-	result, err := m.DB.Exec(`UPDATE admins SET password = $1 WHERE id = $2`, string(hash), id)
+	result, err := m.DB.Exec(`UPDATE admins SET password = $1, must_reset_password = TRUE WHERE id = $2`, string(hash), id)
 	if err != nil {
 		return err
 	}
