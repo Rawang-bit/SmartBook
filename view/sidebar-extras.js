@@ -8,6 +8,7 @@
 //   5. Inject and wire up the shared Confirm modal — a generic replacement
 //      for native confirm() used by every admin page's destructive actions
 //      (delete room, cancel/delete booking, delete user, revoke/restore admin)
+//   6. Collapsible sidebar — persisted via localStorage (see bottom of file)
 
 (function () {
 
@@ -17,11 +18,13 @@
     const name = localStorage.getItem('adminName') || 'Admin';
 
     // Admins nav link is hidden by default in HTML; show it only for super_admin.
-    // Anchor elements default to inline when hidden is removed, so block is required.
+    // Anchor elements default to inline when hidden is removed, so an explicit
+    // display utility is required — flex, to match every other nav link's
+    // icon + label layout.
     const adminsLink = document.getElementById('adminsNavLink');
     if (adminsLink && role === 'super_admin') {
       adminsLink.classList.remove('hidden');
-      adminsLink.classList.add('block');
+      adminsLink.classList.add('flex');
     }
 
     // Header admin name badge (present on every admin page)
@@ -246,3 +249,71 @@ function showSharedCpMsg(text, type) {
   el.textContent = text;
   el.classList.remove('hidden');
 }
+
+// ── Collapsible Sidebar ──────────────────────────────────────────────────
+// Persisted in localStorage so the collapsed/expanded state survives
+// navigating between admin pages — each is a separate full page load, not
+// an SPA, so there's no in-memory state to carry over otherwise.
+//
+// Applied as a plain top-level call below (not inside DOMContentLoaded):
+// this script tag sits at the end of <body>, after the <aside> markup has
+// already been parsed, so the saved state can be applied immediately with
+// no flash of the opposite state on load.
+
+// Toggles every part of the sidebar that needs to shrink, hide its label, or
+// re-center when the sidebar is collapsed to an icon-only rail.
+function applySidebarState(collapsed) {
+  const sidebar = document.getElementById('adminSidebar');
+  if (!sidebar) return;
+
+  sidebar.classList.toggle('w-60', !collapsed);
+  sidebar.classList.toggle('w-20', collapsed);
+  sidebar.classList.toggle('p-5', !collapsed);
+  sidebar.classList.toggle('p-3', collapsed);
+
+  document.querySelectorAll('.sidebar-label').forEach(function (el) {
+    el.classList.toggle('hidden', collapsed);
+  });
+
+  document.querySelectorAll('.sidebar-link').forEach(function (el) {
+    el.classList.toggle('justify-center', collapsed);
+    el.classList.toggle('px-4', !collapsed);
+    el.classList.toggle('px-2', collapsed);
+  });
+
+  const logoCard = document.getElementById('sidebarLogoCard');
+  if (logoCard) {
+    logoCard.classList.toggle('justify-center', collapsed);
+    logoCard.classList.toggle('border', !collapsed);
+    logoCard.classList.toggle('border-white/10', !collapsed);
+    logoCard.classList.toggle('bg-white/10', !collapsed);
+    logoCard.classList.toggle('p-3', !collapsed);
+  }
+
+  const adminRow = document.getElementById('sidebarAdminRow');
+  if (adminRow) {
+    adminRow.classList.toggle('justify-center', collapsed);
+    adminRow.classList.toggle('px-3', !collapsed);
+    adminRow.classList.toggle('px-1', collapsed);
+  }
+
+  const toggleIcon = document.getElementById('sidebarToggleIcon');
+  if (toggleIcon) toggleIcon.classList.toggle('rotate-180', collapsed);
+
+  const toggleBtn = document.getElementById('sidebarToggleBtn');
+  if (toggleBtn) {
+    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggleBtn.title = label;
+    toggleBtn.setAttribute('aria-label', label);
+  }
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  if (!sidebar) return;
+  const collapsed = !sidebar.classList.contains('w-20');
+  applySidebarState(collapsed);
+  localStorage.setItem('sidebarCollapsed', collapsed ? 'true' : 'false');
+}
+
+applySidebarState(localStorage.getItem('sidebarCollapsed') === 'true');
