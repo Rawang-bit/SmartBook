@@ -71,12 +71,13 @@ function getGateUser() {
   }
 }
 
-// Leaves the calendar and returns to the access gate. This only clears the
-// local "viewing as X" state — it deliberately leaves the trusted-device
-// cookie alone, so someone who opted in to "remember this device for 30
-// days" isn't asked for a fresh OTP just because they logged out; the
-// access gate will recognize the device and let them straight back in
-// until that 30-day window actually expires.
+// Leaves the calendar and returns to the access gate, which always shows
+// the email form again — logging out is a real logout, not an instant
+// bounce back in. This only clears the local "viewing as X" state; it
+// deliberately leaves the trusted-device cookie alone, so someone who
+// opted in to "remember this device for 30 days" still skips the OTP step
+// (but does re-enter their email) the next time they come back, until that
+// 30-day window actually expires.
 function exitAccess() {
   localStorage.removeItem('sbUser');
   window.location.href = 'index.html';

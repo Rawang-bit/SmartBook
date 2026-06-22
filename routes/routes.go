@@ -34,11 +34,6 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("POST /api/access/send-otp",   c.SendAccessVerificationOTP)
 	mux.HandleFunc("POST /api/access/verify-otp", c.VerifyAccessOTP)
 
-	// Resume straight to the calendar from a recognized device's cookie
-	// alone (no email re-entry), and explicit logout to revoke that trust.
-	mux.HandleFunc("GET  /api/access/me",     c.AccessMe)
-	mux.HandleFunc("POST /api/access/logout", c.AccessLogout)
-
 	// ── Users ─────────────────────────────────────────────────────────────────
 	// Public: an admin-added user clicks this link from their email to confirm
 	// ownership and activate the account. The token itself is the credential.

@@ -81,49 +81,6 @@ func (c *Controller) rememberDeviceIfRequested(w http.ResponseWriter, userID int
 	return nil
 }
 
-// AccessMe resumes a session purely from the trusted-device cookie, with no
-// email re-entry needed — called by the access gate on page load before it
-// shows the email form. Returns 401 if there's no cookie, no matching user,
-// or the 30-day trust window has expired, so the caller falls back to the
-// normal email + OTP flow.
-func (c *Controller) AccessMe(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(deviceCookieName())
-	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "no recognized device")
-		return
-	}
-
-	user, err := c.Users.GetByDeviceToken(cookie.Value)
-	if errors.Is(err, models.ErrNotFound) {
-		writeError(w, http.StatusUnauthorized, "no recognized device")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"name": user.Name, "email": user.Email})
-}
-
-// AccessLogout revokes the current device's trust (if any) and clears the
-// cookie. Called only when a user explicitly logs out — simply closing the
-// browser without logging out leaves the cookie and its 30-day trust intact,
-// which is the whole point of "remember this device".
-func (c *Controller) AccessLogout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(deviceCookieName())
-	if err == nil && cookie.Value != "" {
-		if user, lookupErr := c.Users.GetByDeviceToken(cookie.Value); lookupErr == nil {
-			if clearErr := c.Users.ClearDeviceToken(user.ID); clearErr != nil {
-				log.Printf("[ACCESS LOGOUT] failed to clear device trust for %s: %v", user.Email, clearErr)
-			}
-		}
-	}
-
-	setDeviceCookie(w, "", -1)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
-}
-
 // SendRegistrationOTP emails a one-time code to verify a new user's email
 // address before they are added to the registered users table.
 func (c *Controller) SendRegistrationOTP(w http.ResponseWriter, r *http.Request) {

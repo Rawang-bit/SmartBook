@@ -267,31 +267,6 @@ func (m *UserModel) DeviceTokenMatches(email, rawToken string) (bool, error) {
 	return storedHash.String == utils.HashToken(rawToken), nil
 }
 
-// GetByDeviceToken looks up the active user whose stored trusted-device
-// token matches rawToken and hasn't expired — used by the public access
-// gate to resume straight to the calendar from just the cookie, with no
-// email re-entry needed. Returns ErrNotFound if there's no match (missing
-// cookie, no row has that hash, the trust window expired, or the user is no
-// longer active).
-func (m *UserModel) GetByDeviceToken(rawToken string) (User, error) {
-	if rawToken == "" {
-		return User{}, ErrNotFound
-	}
-
-	var u User
-	err := m.DB.QueryRow(`
-		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
-		FROM users
-		WHERE device_token_hash = $1
-		  AND device_token_expires_at > NOW()
-		  AND status = 'active'
-	`, utils.HashToken(rawToken)).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
-	if err == sql.ErrNoRows {
-		return User{}, ErrNotFound
-	}
-	return u, err
-}
-
 // SetDeviceToken stores the hash of a newly-issued device-trust token for a
 // user along with its expiry, overwriting any previously remembered device —
 // only one device is trusted at a time. Called only when the user explicitly
