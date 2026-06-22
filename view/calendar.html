@@ -63,6 +63,10 @@
           <p id="date-label" class="mt-1 text-[9px] font-bold uppercase tracking-widest text-indigo-500">LOADING...</p>
         </div>
 
+        <button onclick="openMinutesOfMeeting()" title="Meeting Minutes" class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-indigo-600">
+          <i data-lucide="clipboard-list" class="h-4 w-4"></i>
+        </button>
+
         <div class="hidden flex-col items-end border-l border-slate-200 pl-4 sm:flex">
           <p id="gateUserName" class="text-xs font-black text-slate-700"></p>
           <button onclick="exitAccess()" class="mt-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 transition hover:text-red-500">
@@ -333,6 +337,55 @@
         </button>
 
         <button onclick="showStep('details')" class="w-full rounded-2xl bg-slate-100 py-4 font-bold text-slate-700">
+          Go Back
+        </button>
+      </div>
+    </div>
+
+    <!-- Meeting Minutes: list of own meetings within the 24-hour edit window -->
+    <div id="minutesListStep" class="hidden w-full max-w-md rounded-[2.5rem] border border-white/60 bg-white/75 p-8 text-center shadow-2xl backdrop-blur-xl transition-all duration-200">
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+        <i data-lucide="clipboard-list"></i>
+      </div>
+
+      <h3 class="mb-2 text-2xl font-black text-slate-800">Meeting Minutes</h3>
+      <p class="mb-6 text-sm font-semibold text-slate-400">
+        Add minutes for your meetings within 24 hours of them ending.
+      </p>
+
+      <div id="minutesListItems" class="mb-2 max-h-80 space-y-3 overflow-y-auto text-left"></div>
+
+      <p id="minutesListEmpty" class="hidden mb-6 text-sm font-semibold text-slate-400">
+        No meetings are eligible for minutes right now.
+      </p>
+
+      <button onclick="closeModal()" class="mt-4 w-full rounded-2xl bg-slate-900 py-4 font-bold text-white">
+        Close
+      </button>
+    </div>
+
+    <!-- Meeting Minutes: add or edit a single meeting's minutes -->
+    <div id="minutesEditStep" class="hidden w-full max-w-lg rounded-[2.5rem] border border-white/60 bg-white/75 p-8 text-center shadow-2xl backdrop-blur-xl transition-all duration-200">
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+        <i data-lucide="file-text"></i>
+      </div>
+
+      <h3 id="minutesEditTitle" class="mb-1 text-xl font-black text-slate-800"></h3>
+      <p id="minutesEditMeta" class="mb-6 text-sm font-semibold text-slate-400"></p>
+
+      <textarea
+        id="minutesText"
+        rows="6"
+        placeholder="What was discussed, decided, and any action items..."
+        class="mb-6 w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
+      ></textarea>
+
+      <div class="flex flex-col gap-2">
+        <button id="saveMinutesBtn" onclick="saveMinutesOfMeeting()" class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white transition-all hover:bg-indigo-700">
+          Save Minutes
+        </button>
+
+        <button onclick="showStep('minutesList')" class="w-full rounded-2xl bg-slate-100 py-4 font-bold text-slate-700">
           Go Back
         </button>
       </div>

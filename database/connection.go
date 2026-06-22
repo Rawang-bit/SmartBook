@@ -88,6 +88,10 @@ func migrate(db *sql.DB) error {
 		// skip OTP next time (see UserModel.DeviceTokenMatches).
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token_hash TEXT`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token_expires_at TIMESTAMPTZ`,
+		// Minutes of Meeting: the booking's owner can record what was actually
+		// discussed once a meeting has ended, within a 24-hour edit window
+		// (see BookingModel.MinutesEditWindow).
+		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_of_meeting TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

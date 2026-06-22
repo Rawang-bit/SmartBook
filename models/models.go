@@ -20,8 +20,8 @@ type AdminDetail struct {
 	Username  string `json:"username"`
 	Name      string `json:"name"`
 	Role      string `json:"role"`
-	Email     string `json:"email"`     // empty string when not set
-	Status    string `json:"status"`    // "active" or "revoked"
+	Email     string `json:"email"`  // empty string when not set
+	Status    string `json:"status"` // "active" or "revoked"
 	CreatedAt string `json:"createdAt"`
 }
 
@@ -32,7 +32,7 @@ type AdminDetail struct {
 type AdminRequest struct {
 	Password string `json:"password"`
 	Name     string `json:"name"`
-	Role     string `json:"role"`  // "super_admin" or "general_admin"
+	Role     string `json:"role"` // "super_admin" or "general_admin"
 	Email    string `json:"email"`
 }
 
@@ -147,22 +147,23 @@ type RoomRequest struct {
 
 // Booking is a room reservation.
 type Booking struct {
-	ID           int64  `json:"id"`
-	User         string `json:"user"`
-	Email        string `json:"email"`
-	RoomID       int64  `json:"roomId"`
-	RoomName     string `json:"roomName"`
-	Room         string `json:"room,omitempty"`     // alias for RoomName (legacy frontend)
-	Location     string `json:"location,omitempty"` // room location
-	Date         string `json:"date"`               // YYYY-MM-DD
-	Start        string `json:"start"`              // HH:MM 24-hour (stored in DB)
-	End          string `json:"end"`                // HH:MM 24-hour (stored in DB)
-	StartTime    string `json:"startTime"`          // HH:MM AM/PM (for display)
-	EndTime      string `json:"endTime"`            // HH:MM AM/PM (for display)
-	Purpose      string `json:"purpose"`
-	Agenda       string `json:"agenda"`              // optional free-text meeting agenda
-	Participants string `json:"participants"`        // optional comma-separated participant emails
-	Status       string `json:"status"`              // "Booked", "In Progress", "Completed", or "Cancelled"
+	ID               int64  `json:"id"`
+	User             string `json:"user"`
+	Email            string `json:"email"`
+	RoomID           int64  `json:"roomId"`
+	RoomName         string `json:"roomName"`
+	Room             string `json:"room,omitempty"`     // alias for RoomName (legacy frontend)
+	Location         string `json:"location,omitempty"` // room location
+	Date             string `json:"date"`               // YYYY-MM-DD
+	Start            string `json:"start"`              // HH:MM 24-hour (stored in DB)
+	End              string `json:"end"`                // HH:MM 24-hour (stored in DB)
+	StartTime        string `json:"startTime"`          // HH:MM AM/PM (for display)
+	EndTime          string `json:"endTime"`            // HH:MM AM/PM (for display)
+	Purpose          string `json:"purpose"`
+	Agenda           string `json:"agenda"`           // optional free-text meeting agenda
+	Participants     string `json:"participants"`     // optional comma-separated participant emails
+	Status           string `json:"status"`           // "Booked", "In Progress", "Completed", or "Cancelled"
+	MinutesOfMeeting string `json:"minutesOfMeeting"` // set by the booking owner after the meeting ends — see BookingModel.SetMinutesOfMeeting
 }
 
 // BookingRequest is the JSON body sent when creating or updating a booking.
@@ -170,7 +171,7 @@ type BookingRequest struct {
 	User         string `json:"user"`
 	Email        string `json:"email"`
 	RoomID       int64  `json:"roomId"`
-	Room         string `json:"room"`      // room name — used if roomId is not provided
+	Room         string `json:"room"` // room name — used if roomId is not provided
 	Date         string `json:"date"`
 	Start        string `json:"start"`     // 24-hour time
 	End          string `json:"end"`       // 24-hour time
@@ -185,6 +186,13 @@ type BookingRequest struct {
 // CancelBookingRequest is the JSON body sent when a public user cancels their booking.
 type CancelBookingRequest struct {
 	Email string `json:"email"`
+}
+
+// MinutesOfMeetingRequest is the JSON body sent when a booking's owner adds
+// or edits the Minutes of Meeting for a completed meeting.
+type MinutesOfMeetingRequest struct {
+	Email   string `json:"email"`
+	Minutes string `json:"minutes"`
 }
 
 // ErrorResponse is the standard JSON format for all error messages.

@@ -21,8 +21,15 @@ let state = {
   currentBookingId: null,
   cancelVerified: false,
   baseDate: new Date(),
-  currentWeekDates: []
+  currentWeekDates: [],
+  minutesEligible: [],
+  currentMinutesBookingId: null
 };
+
+// How long after a meeting ends its owner may still add or edit the
+// Minutes of Meeting — mirrors BookingModel.MinutesEditWindow on the server,
+// which is the actual enforcement; this just keeps the list shown here honest.
+const MINUTES_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const hours = [
   '09:00 AM', '09:30 AM',
@@ -164,8 +171,7 @@ function getMinutesFromTime(timeStr) {
   return hour * 60 + minute;
 }
 
-function isMeetingCompleted(dateStr, endTimeStr) {
-  const now = new Date();
+function getMeetingEndDate(dateStr, endTimeStr) {
   const meetingDate = new Date(dateStr);
   const endMinutes = getMinutesFromTime(endTimeStr);
 
@@ -176,7 +182,11 @@ function isMeetingCompleted(dateStr, endTimeStr) {
     0
   );
 
-  return now >= meetingDate;
+  return meetingDate;
+}
+
+function isMeetingCompleted(dateStr, endTimeStr) {
+  return new Date() >= getMeetingEndDate(dateStr, endTimeStr);
 }
 
 // Public site should not show booking history.
@@ -392,7 +402,7 @@ function closeModal() {
   overlay.classList.add('hidden');
   overlay.classList.remove('flex');
 
-  ['verifyStep', 'bookStep', 'detailsStep', 'cancelConfirmStep', 'messageStep', 'successStep']
+  ['verifyStep', 'bookStep', 'detailsStep', 'cancelConfirmStep', 'messageStep', 'successStep', 'minutesListStep', 'minutesEditStep']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
@@ -411,7 +421,9 @@ function showStep(step) {
     details: 'detailsStep',
     cancelConfirm: 'cancelConfirmStep',
     message: 'messageStep',
-    success: 'successStep'
+    success: 'successStep',
+    minutesList: 'minutesListStep',
+    minutesEdit: 'minutesEditStep'
   };
 
   Object.values(steps).forEach(id => {
@@ -898,6 +910,105 @@ async function confirmCancelBooking() {
     renderCalendar();
   } catch (err) {
     showMessageModal('Cancel Failed', err.message, 'circle-alert');
+  }
+}
+
+// Meeting Minutes lives outside the normal calendar flow because completed
+// meetings are filtered out of state.bookings entirely (shouldShowOnPublicCalendar
+// keeps the grid to upcoming/in-progress only) — so this fetches bookings
+// fresh and finds the signed-in user's own meetings that ended within the
+// last 24 hours, the same window the server enforces.
+async function openMinutesOfMeeting() {
+  if (!state.activeUser || !state.activeUser.email) return;
+
+  let data;
+  try {
+    data = await api('/api/bookings');
+  } catch (err) {
+    showMessageModal('Loading Failed', err.message, 'circle-alert');
+    return;
+  }
+
+  const myEmail = state.activeUser.email.toLowerCase();
+  const now = new Date();
+
+  state.minutesEligible = data
+    .filter(b => (b.email || '').toLowerCase() === myEmail)
+    .filter(b => (b.status || '').toLowerCase() !== 'cancelled')
+    .map(b => ({
+      id: b.id,
+      purpose: b.purpose,
+      room: b.roomName || b.room,
+      startTime: normalizeTimeDisplay(b.startTime || b.start),
+      endTime: normalizeTimeDisplay(b.endTime || b.end),
+      minutesOfMeeting: b.minutesOfMeeting || '',
+      endsAt: getMeetingEndDate(new Date(b.date + 'T00:00:00').toDateString(), normalizeTimeDisplay(b.endTime || b.end))
+    }))
+    .filter(b => now >= b.endsAt && (now - b.endsAt) <= MINUTES_EDIT_WINDOW_MS)
+    .sort((a, b) => b.endsAt - a.endsAt);
+
+  renderMinutesList();
+  showStep('minutesList');
+}
+
+function renderMinutesList() {
+  const container = document.getElementById('minutesListItems');
+  const empty = document.getElementById('minutesListEmpty');
+
+  if (!state.minutesEligible.length) {
+    container.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  container.innerHTML = state.minutesEligible.map(b => `
+    <button onclick="openMinutesEditor(${b.id})" class="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left transition hover:bg-slate-100">
+      <p class="text-sm font-bold text-slate-800">${escapeHtml(b.purpose)}</p>
+      <p class="mt-1 text-xs font-bold text-slate-400">${escapeHtml(b.room)} &middot; ${b.startTime} - ${b.endTime}</p>
+      <p class="mt-2 text-[10px] font-black uppercase tracking-widest ${b.minutesOfMeeting ? 'text-emerald-500' : 'text-amber-500'}">
+        ${b.minutesOfMeeting ? 'Minutes added — tap to edit' : 'Add minutes'}
+      </p>
+    </button>
+  `).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function openMinutesEditor(id) {
+  const booking = state.minutesEligible.find(b => b.id === id);
+  if (!booking) return;
+
+  state.currentMinutesBookingId = id;
+  document.getElementById('minutesEditTitle').innerText = booking.purpose;
+  document.getElementById('minutesEditMeta').innerText = `${booking.room} · ${booking.startTime} - ${booking.endTime}`;
+  document.getElementById('minutesText').value = booking.minutesOfMeeting;
+
+  showStep('minutesEdit');
+}
+
+async function saveMinutesOfMeeting() {
+  if (!state.currentMinutesBookingId || !state.activeUser) return;
+
+  const minutes = document.getElementById('minutesText').value.trim();
+  const btn = document.getElementById('saveMinutesBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    await api(`/api/bookings/${state.currentMinutesBookingId}/minutes`, {
+      method: 'POST',
+      body: JSON.stringify({ email: state.activeUser.email, minutes })
+    });
+
+    document.getElementById('successTitle').innerText = 'Saved';
+    document.getElementById('successMessage').innerText = 'Meeting minutes have been saved successfully.';
+    showStep('success');
+  } catch (err) {
+    showMessageModal('Save Failed', err.message, 'circle-alert');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Minutes';
   }
 }
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"bookroom-management-system/utils"
@@ -31,6 +32,7 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 			b.purpose,
 			b.agenda,
 			b.participants,
+			b.minutes_of_meeting,
 			b.status
 		FROM bookings b
 		JOIN rooms r ON r.id = b.room_id
@@ -54,7 +56,7 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 		if err := rows.Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
 			&b.RoomName, &b.Location, &b.Date,
-			&b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.Status,
+			&b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -191,10 +193,10 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 		err = m.DB.QueryRow(`
 			INSERT INTO bookings(user_name, email, room_id, booking_date, start_time, end_time, purpose, agenda, participants, status)
 			VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, status
+			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
 		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status).Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
-			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.Status,
+			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
 		)
 	} else {
 		err = m.DB.QueryRow(`
@@ -211,10 +213,10 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 			    status       = $10,
 			    updated_at   = NOW()
 			WHERE id = $11
-			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, status
+			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
 		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status, id).Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
-			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.Status,
+			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
 		)
 	}
 
@@ -263,6 +265,73 @@ func (m *BookingModel) PublicCancel(id int64, email string) error {
 		return ErrOwnerMismatch
 	}
 	return nil
+}
+
+// MinutesEditWindow is how long after a meeting ends its owner may add or
+// edit the Minutes of Meeting before the record locks for editing.
+const MinutesEditWindow = 24 * time.Hour
+
+// SetMinutesOfMeeting records what was actually discussed in a completed
+// meeting. Only the original booking owner (proven by email, the same check
+// PublicCancel uses) may do this, and only within MinutesEditWindow after the
+// meeting's end time — too early and the meeting hasn't happened yet; once
+// the window closes the record locks, so it stays an honest account of what
+// was discussed rather than something edited long after the fact.
+// Returns ErrNotFound if the booking doesn't exist, ErrOwnerMismatch if the
+// email doesn't match its owner, and a plain error if the booking is
+// cancelled or the meeting is outside its edit window.
+func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Booking, error) {
+	var b Booking
+	var endTimeStr string
+	err := m.DB.QueryRow(`
+		SELECT email, status, TO_CHAR(booking_date,'YYYY-MM-DD'), end_time
+		FROM bookings WHERE id = $1
+	`, id).Scan(&b.Email, &b.Status, &b.Date, &endTimeStr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Booking{}, ErrNotFound
+	}
+	if err != nil {
+		return Booking{}, err
+	}
+
+	if utils.NormalizeEmail(b.Email) != utils.NormalizeEmail(email) {
+		return Booking{}, ErrOwnerMismatch
+	}
+	if strings.EqualFold(b.Status, "Cancelled") {
+		return Booking{}, fmt.Errorf("cancelled bookings cannot have meeting minutes")
+	}
+
+	bookingDate, err := time.ParseInLocation("2006-01-02", b.Date, time.Local)
+	if err != nil {
+		return Booking{}, err
+	}
+	endMinutes, err := utils.MinutesFromTime(endTimeStr)
+	if err != nil {
+		return Booking{}, err
+	}
+	meetingEnd := bookingDate.Add(time.Duration(endMinutes) * time.Minute)
+
+	now := time.Now()
+	if now.Before(meetingEnd) {
+		return Booking{}, fmt.Errorf("minutes of meeting can only be added after the meeting has ended")
+	}
+	if now.After(meetingEnd.Add(MinutesEditWindow)) {
+		return Booking{}, fmt.Errorf("the 24-hour window to add meeting minutes has passed")
+	}
+
+	err = m.DB.QueryRow(`
+		UPDATE bookings SET minutes_of_meeting = $1, updated_at = NOW()
+		WHERE id = $2
+		RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
+	`, minutes, id).Scan(
+		&b.ID, &b.User, &b.Email, &b.RoomID,
+		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+	)
+	if err != nil {
+		return Booking{}, err
+	}
+	FillBookingDisplayFields(&b)
+	return b, nil
 }
 
 // Delete permanently removes a booking.

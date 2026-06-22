@@ -64,8 +64,9 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("GET /api/bookings",  c.ListBookings)
 	mux.HandleFunc("POST /api/bookings", c.CreateBooking)
 
-	// Public: cancel own booking — POST /api/bookings/{id}/cancel
-	mux.HandleFunc("POST /api/bookings/", c.PublicCancelBooking)
+	// Public: cancel own booking (POST /api/bookings/{id}/cancel) or add
+	// Minutes of Meeting after it ends (POST /api/bookings/{id}/minutes)
+	mux.HandleFunc("POST /api/bookings/", c.PublicBookingAction)
 
 	// Super admin only: edit or delete any booking
 	mux.HandleFunc("PUT /api/bookings/",    c.RequireSuperAdmin(c.UpdateBooking))
