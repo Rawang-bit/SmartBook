@@ -71,7 +71,15 @@ function getGateUser() {
   }
 }
 
-function exitAccess() {
+// Explicit logout — unlike just closing the browser, this revokes the
+// trusted-device cookie server-side too, so "remember this device" doesn't
+// silently let the next person on this machine in as this user.
+async function exitAccess() {
+  try {
+    await api('/api/access/logout', { method: 'POST' });
+  } catch (_) {
+    // best effort — still clear local state and leave even if this fails
+  }
   localStorage.removeItem('sbUser');
   window.location.href = 'index.html';
 }
@@ -894,6 +902,36 @@ async function confirmCancelBooking() {
   }
 }
 
+// Confirms the gate-verified email is still a registered, active user.
+// Checked both at page load — in case a deleted/revoked/rejected user has
+// calendar.html bookmarked or cached from before — and every 10 seconds
+// while browsing, in case an admin removes their access mid-session.
+// Returns true if still valid; otherwise shows a notice and logs them out.
+async function verifyGateUserStillActive() {
+  const gateUser = getGateUser();
+  if (!gateUser || !gateUser.email) return false;
+
+  try {
+    const res = await api('/api/access/check-email', {
+      method: 'POST',
+      body: JSON.stringify({ email: gateUser.email })
+    });
+
+    if (res.exists && res.status === 'active') return true;
+  } catch (_) {
+    // Network hiccup — don't log the user out over a transient failure.
+    return true;
+  }
+
+  // The loading overlay sits above the message modal (z-[200] vs z-[100]) —
+  // hide it first so this notice is actually visible if it fires during the
+  // initial page-load check, not just during the periodic re-check.
+  hideLoadingOverlay();
+  showMessageModal('Access Revoked', "Your access has been removed by an administrator. You're being redirected.", 'shield-alert');
+  setTimeout(exitAccess, 2500);
+  return false;
+}
+
 window.onload = async function() {
   // The calendar is only for users who already verified their email on the
   // public access gate (index.html). Bounce anyone without a gate session.
@@ -902,6 +940,9 @@ window.onload = async function() {
     window.location.href = 'index.html';
     return;
   }
+
+  if (!(await verifyGateUserStillActive())) return;
+
   state.activeUser = gateUser;
   renderGateUserBadge(gateUser);
 
@@ -923,6 +964,8 @@ window.onload = async function() {
 
   setInterval(async function() {
     updateHeaderClock();
+
+    if (!(await verifyGateUserStillActive())) return;
 
     try {
       await loadBookings();

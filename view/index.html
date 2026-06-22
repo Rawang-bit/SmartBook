@@ -35,8 +35,14 @@
         <img src="images/logo.png" alt="SmartBook Logo" class="h-16 w-auto max-w-[180px] object-contain" />
       </div>
 
+      <!-- ─── STEP 0: Resuming a recognized device ───────────────────────────── -->
+      <div id="checkingStep" class="text-center py-8">
+        <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600"></div>
+        <p class="text-sm font-semibold text-slate-500">Checking your device…</p>
+      </div>
+
       <!-- ─── STEP 1: Email check ───────────────────────────────────────────── -->
-      <div id="emailStep">
+      <div id="emailStep" class="hidden">
         <h1 class="text-center text-3xl font-black text-slate-900">Welcome</h1>
         <p class="text-center text-sm font-semibold text-slate-500 mt-2 mb-6">
           Smart<span class="text-indigo-600">Book</span>
@@ -198,7 +204,7 @@
     }
 
     function showStep(id) {
-      ['emailStep', 'registerStep', 'otpStep', 'pendingStep', 'rejectedStep'].forEach(s => {
+      ['checkingStep', 'emailStep', 'registerStep', 'otpStep', 'pendingStep', 'rejectedStep'].forEach(s => {
         document.getElementById(s).classList.toggle('hidden', s !== id);
       });
       ['emailMsg', 'registerMsg', 'otpMsg'].forEach(clearMsg);
@@ -228,6 +234,28 @@
       localStorage.setItem('sbUser', JSON.stringify({ name, email }));
       window.location.href = 'calendar.html';
     }
+
+    // Runs once on page load, before the email form is shown. If this exact
+    // browser previously opted in to "remember this device" and that trust
+    // (30 days, enforced server-side) hasn't expired, skip straight to the
+    // calendar with no email re-entry. Just closing the browser without
+    // logging out leaves this intact — only an explicit Logout on the
+    // calendar page revokes it.
+    async function resumeDevice() {
+      try {
+        const res = await fetch('/api/access/me', { credentials: 'same-origin' });
+        if (res.ok) {
+          const data = await res.json();
+          grantAccess(data.name, data.email);
+          return;
+        }
+      } catch (_) {
+        // network hiccup — fall through to the normal email + OTP flow
+      }
+      showStep('emailStep');
+    }
+
+    resumeDevice();
 
     // "Back" from the OTP step returns to wherever that flow started:
     // the register step when verifying a brand-new email, or the email
