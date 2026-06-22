@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	_ "time/tzdata"
 
 	"bookroom-management-system/controllers"
 	"bookroom-management-system/database"
@@ -13,6 +14,8 @@ import (
 )
 
 func main() {
+	configureTimezone()
+
 	db, err := database.Connect()
 	if err != nil {
 		log.Fatal("Could not connect to the database:", err)
@@ -38,6 +41,24 @@ func main() {
 
 	log.Printf("SmartBook is running at http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, handler))
+}
+
+// configureTimezone pins time.Local to Bhutan time (UTC+6, no DST) regardless
+// of the host machine's own clock. Every booking date/time comparison in this
+// app — computed status, the past-booking check, the Minutes of Meeting
+// 24-hour edit window — uses time.Local; left unset, a deployment host
+// running in UTC (the default on most container platforms, including Render)
+// would misjudge "has this meeting ended yet" by a fixed 6-hour offset
+// against meeting times entered by Bhutan-based users. The tzdata import
+// makes LoadLocation work even on minimal images without a system zoneinfo
+// database.
+func configureTimezone() {
+	loc, err := time.LoadLocation("Asia/Thimphu")
+	if err != nil {
+		log.Printf("[STARTUP] could not load Asia/Thimphu timezone, falling back to host default: %v", err)
+		return
+	}
+	time.Local = loc
 }
 
 // runBookingRetentionJob permanently purges booking records older than
