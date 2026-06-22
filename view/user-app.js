@@ -863,6 +863,17 @@ function showDetails(id) {
 }
 
 function requestCancelVerify() {
+  const booking = state.bookings.find(item => item.id === state.currentBookingId);
+
+  // Already signed in as this booking's owner — the gate session already
+  // proved that email, so don't make them re-type it just to cancel their
+  // own meeting. Anyone viewing someone else's booking still has to verify.
+  if (booking && state.activeUser && state.activeUser.email &&
+      booking.email.toLowerCase() === state.activeUser.email.toLowerCase()) {
+    proceedToCancelConfirm(booking);
+    return;
+  }
+
   showStep('verify');
   document.getElementById('verifySubmitBtn').onclick = handleCancelVerify;
 }
@@ -876,6 +887,10 @@ function handleCancelVerify() {
     return;
   }
 
+  proceedToCancelConfirm(booking);
+}
+
+function proceedToCancelConfirm(booking) {
   state.cancelVerified = true;
 
   document.getElementById('cancelConfirmText').innerText =
