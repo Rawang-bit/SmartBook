@@ -59,7 +59,7 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
 		     ON admins (LOWER(TRIM(email)))
 		     WHERE email IS NOT NULL`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved'`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS agenda TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants TEXT NOT NULL DEFAULT ''`,
@@ -78,6 +78,10 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token TEXT UNIQUE`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token_expires_at TIMESTAMPTZ`,
 		`CREATE INDEX IF NOT EXISTS idx_users_confirm_token ON users(confirm_token) WHERE confirm_token IS NOT NULL`,
+		// One-time rename: "approved" became "active" as the status value for
+		// a user cleared to book rooms. Harmless to re-run — once no row has
+		// status 'approved' this is a no-op on every subsequent boot.
+		`UPDATE users SET status = 'active' WHERE status = 'approved'`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

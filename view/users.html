@@ -117,7 +117,7 @@
           <div id="statPending" class="mt-1 text-4xl font-black text-amber-700">—</div>
         </div>
         <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-center shadow-sm">
-          <div class="text-sm font-bold uppercase tracking-wider text-emerald-600">Approved</div>
+          <div class="text-sm font-bold uppercase tracking-wider text-emerald-600">Active</div>
           <div id="statApproved" class="mt-1 text-4xl font-black text-emerald-700">—</div>
         </div>
         <div class="rounded-2xl border border-red-100 bg-red-50 p-5 text-center shadow-sm">
@@ -322,7 +322,7 @@
     function updateStats() {
       document.getElementById('statTotal').textContent    = users.length;
       document.getElementById('statPending').textContent  = users.filter(u => u.status === 'pending').length;
-      document.getElementById('statApproved').textContent = users.filter(u => u.status === 'approved').length;
+      document.getElementById('statApproved').textContent = users.filter(u => u.status === 'active').length;
       document.getElementById('statRejected').textContent = users.filter(u => u.status === 'rejected').length;
     }
 
@@ -336,7 +336,7 @@
       if (status === 'revoked') {
         return '<span class="inline-flex items-center rounded-full bg-slate-200 px-3 py-1 text-xs font-extrabold text-slate-600">Revoked</span>';
       }
-      return '<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Approved</span>';
+      return '<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>';
     }
 
     function renderUsers() {
@@ -360,10 +360,10 @@
             iconButton('x', `rejectUser(${u.id})`, 'Reject user', 'amber')
           : '';
 
-        // Revoke/restore toggles booking access for an already-approved user
+        // Revoke/restore toggles booking access for an already-active user
         // without deleting their record — distinct from Approve/Reject, which
         // only applies to a pending registration request.
-        const accessToggle = u.status === 'approved'
+        const accessToggle = u.status === 'active'
           ? iconButton('ban', `toggleUserAccess(${u.id}, 'revoke', '${escapeHtml(u.name)}')`, 'Revoke access', 'orange')
           : u.status === 'revoked'
           ? iconButton('refresh', `toggleUserAccess(${u.id}, 'restore', '${escapeHtml(u.name)}')`, 'Restore access', 'emerald')

@@ -233,7 +233,7 @@
         const res = await api('/api/access/check-email', { method: 'POST', body: JSON.stringify({ email }) });
 
         if (res.exists) {
-          if (res.status === 'approved') {
+          if (res.status === 'active') {
             grantAccess(res.name, res.email);
           } else if (res.status === 'pending') {
             document.getElementById('pendingEmail').textContent = res.email;

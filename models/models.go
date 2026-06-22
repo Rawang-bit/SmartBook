@@ -67,14 +67,14 @@ type ResetPasswordRequest struct {
 // never reviewed by an admin in the UI — AwaitingConfirmation is true until
 // the new person clicks the confirmation link emailed to them, at which
 // point the account (or admin promotion, per IntendedRole) activates itself.
-// An already-approved user can later be set to "revoked", pulling their
+// An already-active user can later be set to "revoked", pulling their
 // booking access without deleting their record; restoring sets it back to
-// "approved".
+// "active".
 type User struct {
 	ID                   int64  `json:"id"`
 	Name                 string `json:"name"`
 	Email                string `json:"email"`
-	Status               string `json:"status"`               // "pending", "approved", "rejected", or "revoked"
+	Status               string `json:"status"`               // "pending", "active", "rejected", or "revoked"
 	IntendedRole         string `json:"intendedRole"`         // "normal_user", "general_admin", or "super_admin"
 	AwaitingConfirmation bool   `json:"awaitingConfirmation"` // true only for admin-added rows still awaiting the recipient's email click
 }

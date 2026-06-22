@@ -98,7 +98,7 @@ func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request)
 	}
 
 	if user.IntendedRole == "" || user.IntendedRole == "normal_user" {
-		if _, err := c.Users.SetStatus(user.ID, "approved"); err != nil {
+		if _, err := c.Users.SetStatus(user.ID, "active"); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to activate your account, please contact an admin")
 			return
 		}
@@ -187,7 +187,7 @@ func (c *Controller) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 // approveUser handles POST /api/users/{id}/approve.
 //
 // Approving with role "normal_user" (the default when the role is omitted)
-// keeps the original behaviour: the pending row is marked "approved" and the
+// keeps the original behaviour: the pending row is marked "active" and the
 // applicant can book/cancel rooms from the public calendar.
 //
 // Approving with "general_admin" or "super_admin" instead promotes the
@@ -209,7 +209,7 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 	}
 
 	if role == "normal_user" {
-		user, err := c.Users.SetStatus(id, "approved")
+		user, err := c.Users.SetStatus(id, "active")
 		if errors.Is(err, models.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")
 			return
@@ -223,7 +223,7 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 			log.Printf("[USER APPROVED] failed to notify %s: %v", user.Email, sendErr)
 		}
 
-		writeJSON(w, http.StatusOK, map[string]string{"status": "approved", "role": "normal_user"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": "normal_user"})
 		return
 	}
 
@@ -264,7 +264,7 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 		log.Printf("[ADMIN PROMOTED] failed to remove promoted user row %d: %v", id, delErr)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "approved", "role": role, "username": admin.Username})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": role, "username": admin.Username})
 }
 
 // createAdminFromApproval creates the admin account using the applicant's
@@ -302,8 +302,8 @@ func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64
 }
 
 // revokeUser handles POST /api/users/{id}/revoke. Pulls booking access from
-// an already-approved user without deleting their record — BookingModel.Save
-// only allows status "approved", so a revoked user is blocked from booking
+// an already-active user without deleting their record — BookingModel.Save
+// only allows status "active", so a revoked user is blocked from booking
 // the moment this is set, with no other code changes needed. Any admin may
 // revoke, mirroring the reject gate above.
 func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64) {
@@ -320,10 +320,10 @@ func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
-// restoreUser handles POST /api/users/{id}/restore. Re-approves a
+// restoreUser handles POST /api/users/{id}/restore. Reactivates a
 // previously revoked user, restoring their booking access.
 func (c *Controller) restoreUser(w http.ResponseWriter, r *http.Request, id int64) {
-	_, err := c.Users.SetStatus(id, "approved")
+	_, err := c.Users.SetStatus(id, "active")
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
@@ -333,7 +333,7 @@ func (c *Controller) restoreUser(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "approved"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "active"})
 }
 
 // DeleteUser removes a pre-registered user. Admin only.

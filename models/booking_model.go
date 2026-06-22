@@ -124,10 +124,10 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 		return Booking{}, fmt.Errorf("past dates and past time slots cannot be booked")
 	}
 
-	// ── Step 7: Confirm the email is registered and approved ──────────────────
+	// ── Step 7: Confirm the email is registered and active ────────────────────
 	// Self-registered users start as "pending" and cannot book until an admin
-	// approves them — this check enforces that even if a request bypasses the
-	// frontend gate and calls the API directly.
+	// approves them (setting status to "active") — this check enforces that
+	// even if a request bypasses the frontend gate and calls the API directly.
 	var registeredName, userStatus string
 	err = m.DB.QueryRow(`
 		SELECT name, status FROM users WHERE LOWER(TRIM(email)) = $1
@@ -138,7 +138,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	if err != nil {
 		return Booking{}, err
 	}
-	if userStatus != "approved" {
+	if userStatus != "active" {
 		return Booking{}, fmt.Errorf("your account is not yet approved for booking — please wait for admin approval")
 	}
 	req.User = registeredName // use the canonical name from the database

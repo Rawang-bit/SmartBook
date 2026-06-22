@@ -194,7 +194,7 @@ func (m *UserModel) Register(req UserRequest) (User, error) {
 	return u, nil
 }
 
-// SetStatus updates a user's approval status ("approved" or "rejected").
+// SetStatus updates a user's approval status ("active", "rejected", or "revoked").
 // Returns the updated user so the caller can notify them by email.
 // Returns ErrNotFound if the user does not exist.
 func (m *UserModel) SetStatus(id int64, status string) (User, error) {
