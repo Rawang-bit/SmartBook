@@ -1,9 +1,7 @@
 package models
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -109,7 +107,7 @@ func (m *UserModel) Create(req UserRequest) (User, string, error) {
 		role = "normal_user"
 	}
 
-	token, err := generateConfirmToken()
+	token, err := utils.GenerateSecureToken()
 	if err != nil {
 		return User{}, "", fmt.Errorf("failed to generate confirmation token")
 	}
@@ -157,15 +155,6 @@ func (m *UserModel) ConsumeConfirmToken(token string) (User, error) {
 		return User{}, fmt.Errorf("this confirmation link has expired — please ask an admin to add you again")
 	}
 	return u, nil
-}
-
-// generateConfirmToken returns a cryptographically random 64-char hex token.
-func generateConfirmToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 // Register self-registers a new user through the public access gate.
@@ -245,4 +234,56 @@ func (m *UserModel) Delete(id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// DeviceTokenMatches reports whether rawToken matches the stored
+// trusted-device token for email, and that it has not expired. Used by the
+// public access gate to decide whether a returning visitor can skip OTP
+// verification. A user who never opted in to "remember this device" simply
+// has no stored hash, so this always returns false for them.
+func (m *UserModel) DeviceTokenMatches(email, rawToken string) (bool, error) {
+	if rawToken == "" {
+		return false, nil
+	}
+
+	var storedHash sql.NullString
+	var expiresAt sql.NullTime
+	err := m.DB.QueryRow(`
+		SELECT device_token_hash, device_token_expires_at
+		FROM users WHERE LOWER(TRIM(email)) = $1
+	`, email).Scan(&storedHash, &expiresAt)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !storedHash.Valid || storedHash.String == "" || !expiresAt.Valid {
+		return false, nil
+	}
+	if time.Now().After(expiresAt.Time) {
+		return false, nil
+	}
+	return storedHash.String == utils.HashToken(rawToken), nil
+}
+
+// SetDeviceToken stores the hash of a newly-issued device-trust token for a
+// user along with its expiry, overwriting any previously remembered device —
+// only one device is trusted at a time. Called only when the user explicitly
+// opts in to "remember this device" after a successful OTP verification.
+func (m *UserModel) SetDeviceToken(id int64, rawToken string, expiresAt time.Time) error {
+	_, err := m.DB.Exec(`
+		UPDATE users SET device_token_hash = $1, device_token_expires_at = $2 WHERE id = $3
+	`, utils.HashToken(rawToken), expiresAt, id)
+	return err
+}
+
+// ClearDeviceToken revokes any previously remembered device for a user.
+// Called when a user verifies via OTP but declines to be remembered this
+// time, so an old opt-in doesn't linger as a silent bypass.
+func (m *UserModel) ClearDeviceToken(id int64) error {
+	_, err := m.DB.Exec(`
+		UPDATE users SET device_token_hash = NULL, device_token_expires_at = NULL WHERE id = $1
+	`, id)
+	return err
 }

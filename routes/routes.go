@@ -29,6 +29,11 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("POST /api/register/send-otp",   c.SendRegistrationOTP)
 	mux.HandleFunc("POST /api/register/verify-otp", c.VerifyRegistrationOTP)
 
+	// Re-verification for an already-registered, active user on a device
+	// whose trusted-device cookie is missing, mismatched, or expired.
+	mux.HandleFunc("POST /api/access/send-otp",   c.SendAccessVerificationOTP)
+	mux.HandleFunc("POST /api/access/verify-otp", c.VerifyAccessOTP)
+
 	// ── Users ─────────────────────────────────────────────────────────────────
 	// Public: an admin-added user clicks this link from their email to confirm
 	// ownership and activate the account. The token itself is the credential.

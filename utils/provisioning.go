@@ -2,6 +2,8 @@ package utils
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 )
 
@@ -29,4 +31,25 @@ func GenerateRandomPassword(length int) (string, error) {
 		result[i] = passwordCharset[b%charsetLen]
 	}
 	return string(result), nil
+}
+
+// GenerateSecureToken returns a cryptographically random 64-character hex
+// string. Used for single-use links (registration confirmation) and for the
+// trusted-device cookie issued when a user opts in to "remember this device".
+func GenerateSecureToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("crypto/rand: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// HashToken returns the SHA-256 hex digest of a token, for storing a
+// verifier in the database without persisting the raw secret. Tokens here
+// are high-entropy random values, not human-chosen secrets, so a fast
+// deterministic hash is appropriate — unlike passwords, which use bcrypt
+// specifically to resist brute-forcing low-entropy input.
+func HashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

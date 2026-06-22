@@ -82,6 +82,12 @@ func migrate(db *sql.DB) error {
 		// a user cleared to book rooms. Harmless to re-run — once no row has
 		// status 'approved' this is a no-op on every subsequent boot.
 		`UPDATE users SET status = 'active' WHERE status = 'approved'`,
+		// Trusted-device cookie support for the public access gate: a user who
+		// opts in to "remember this device" after OTP verification gets a
+		// hashed token stored here with an expiry, so a recognized browser can
+		// skip OTP next time (see UserModel.DeviceTokenMatches).
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token_hash TEXT`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token_expires_at TIMESTAMPTZ`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

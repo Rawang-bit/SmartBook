@@ -115,12 +115,17 @@ type SendOTPRequest struct {
 	Email string `json:"email"`
 }
 
-// VerifyOTPRequest is the JSON body sent to verify a registration code and
-// create the user record on success.
+// VerifyOTPRequest is the JSON body sent to verify a one-time code — either
+// to complete self-registration (Name is required) or to re-verify an
+// already-active user's identity on an unrecognized device (Name is
+// ignored). RememberDevice, if true, issues a trusted-device cookie on
+// success so this browser can skip OTP next time, for up to 30 days —
+// the user opts in explicitly; it is never assumed.
 type VerifyOTPRequest struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	OTP   string `json:"otp"`
+	Name           string `json:"name"`
+	Email          string `json:"email"`
+	OTP            string `json:"otp"`
+	RememberDevice bool   `json:"rememberDevice"`
 }
 
 // Room is a meeting room that can be booked.

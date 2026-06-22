@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // isProduction reports whether the application is running in production mode.
@@ -29,13 +30,28 @@ func sessionCookieName() string {
 	return "smartbook_session"
 }
 
-// setSessionCookie writes the session cookie with the security attributes
-// described on sessionCookieName, sharing them between login (value =
-// session ID, maxAge = session lifetime) and logout (value = "", maxAge =
-// -1, which tells the browser to delete it immediately).
-func setSessionCookie(w http.ResponseWriter, value string, maxAge int) {
+// deviceCookieName returns the trusted-device cookie name for the current
+// environment, mirroring sessionCookieName's __Host- hardening in production.
+// This cookie is public-facing (set from the access gate, not an admin
+// session) but warrants the same protections, since it lets a recognized
+// browser skip OTP verification.
+func deviceCookieName() string {
+	if isProduction() {
+		return "__Host-smartbook_device"
+	}
+	return "smartbook_device"
+}
+
+// DeviceTrustDuration is how long a "remembered" device skips OTP
+// verification on the public access gate before needing to re-verify.
+const DeviceTrustDuration = 30 * 24 * time.Hour
+
+// setCookie writes a cookie with the security attributes shared by both the
+// admin session cookie and the public device-trust cookie: HttpOnly (no
+// client-JS access), Secure in production, and SameSite=Strict.
+func setCookie(w http.ResponseWriter, name, value string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(),
+		Name:     name,
 		Value:    value,
 		Path:     "/",
 		MaxAge:   maxAge,
@@ -43,6 +59,21 @@ func setSessionCookie(w http.ResponseWriter, value string, maxAge int) {
 		SameSite: http.SameSiteStrictMode,
 		Secure:   isProduction(),
 	})
+}
+
+// setSessionCookie writes the admin session cookie, sharing the same
+// attributes between login (value = session ID, maxAge = session lifetime)
+// and logout (value = "", maxAge = -1, which tells the browser to delete it
+// immediately).
+func setSessionCookie(w http.ResponseWriter, value string, maxAge int) {
+	setCookie(w, sessionCookieName(), value, maxAge)
+}
+
+// setDeviceCookie writes the public device-trust cookie. value = "" with
+// maxAge = -1 clears it (used when a user declines to be remembered after
+// previously opting in).
+func setDeviceCookie(w http.ResponseWriter, value string, maxAge int) {
+	setCookie(w, deviceCookieName(), value, maxAge)
 }
 
 // SecureHeaders wraps every HTTP response with a hardened set of security headers.
