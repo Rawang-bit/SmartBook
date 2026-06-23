@@ -118,10 +118,15 @@ async function createRoom(room) { return api('/rooms', { method: 'POST', body: J
 async function updateRoom(id, room) { return api('/rooms/' + id, { method: 'PUT', body: JSON.stringify(room) }); }
 async function deleteRoomApi(id) { return api('/rooms/' + id, { method: 'DELETE' }); }
 
-// Normalize every booking returned from the backend so all admin pages use one reliable shape.
+// Normalize every booking returned from the backend so all admin pages use
+// one reliable shape. status is left exactly as the server computed it
+// (Booked/In Progress/Completed/Cancelled) — the server's clock is pinned to
+// Bhutan time (see main.go), so recomputing "has this ended" again here from
+// the viewer's own device clock could only ever introduce a disagreement,
+// never improve on it.
 async function getBookings() {
   const rows = await api('/bookings');
-  return (rows || []).map(normalizeBookingRecord).map(normalizeBookingWithDynamicStatus);
+  return (rows || []).map(normalizeBookingRecord);
 }
 
 async function createBooking(booking) { return api('/bookings', { method: 'POST', body: JSON.stringify(booking) }); }
@@ -294,29 +299,6 @@ function formatDateDisplay(value) {
   const d = new Date(String(value).split('T')[0] + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' });
-}
-
-function bookingDateTime(dateValue, timeValue) {
-  const d = new Date(String(dateValue).split('T')[0] + 'T00:00:00');
-  const time = toTime24(timeValue);
-  const parts = time.split(':').map(Number);
-  d.setHours(parts[0] || 0, parts[1] || 0, 0, 0);
-  return d;
-}
-
-// Returns the live status used in admin lists and history.
-function getDynamicBookingStatus(booking) {
-  if ((booking.status || '').toLowerCase() === 'cancelled') return 'Cancelled';
-  const now = new Date();
-  const startAt = bookingDateTime(booking.date, booking.start || booking.startTime);
-  const endAt = bookingDateTime(booking.date, booking.end || booking.endTime);
-  if (now >= startAt && now < endAt) return 'In Progress';
-  if (now >= endAt) return 'Completed';
-  return 'Booked';
-}
-
-function normalizeBookingWithDynamicStatus(booking) {
-  return { ...booking, status: getDynamicBookingStatus(booking) };
 }
 
 function bookingStartMinutes(booking) {

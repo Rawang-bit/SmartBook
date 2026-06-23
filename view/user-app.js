@@ -166,29 +166,14 @@ function getMinutesFromTime(timeStr) {
   return hour * 60 + minute;
 }
 
-function getMeetingEndDate(dateStr, endTimeStr) {
-  const meetingDate = new Date(dateStr);
-  const endMinutes = getMinutesFromTime(endTimeStr);
-
-  meetingDate.setHours(
-    Math.floor(endMinutes / 60),
-    endMinutes % 60,
-    0,
-    0
-  );
-
-  return meetingDate;
-}
-
-function isMeetingCompleted(dateStr, endTimeStr) {
-  return new Date() >= getMeetingEndDate(dateStr, endTimeStr);
-}
-
 // Public site should not show booking history.
-// It keeps only future bookings and currently running meetings.
+// It keeps only future bookings and currently running meetings. Trusts the
+// server's own computed status (pinned to Bhutan time, see main.go) rather
+// than recomputing "has this ended" from the viewer's own device clock,
+// which could disagree with the server.
 function shouldShowOnPublicCalendar(booking) {
-  if ((booking.status || '').toLowerCase() === 'cancelled') return false;
-  return !isMeetingCompleted(booking.date, booking.endTime);
+  const status = (booking.status || '').toLowerCase();
+  return status !== 'cancelled' && status !== 'completed';
 }
 
 async function loadBookings() {

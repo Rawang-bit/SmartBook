@@ -385,50 +385,20 @@
   <script>
     requireAuth();
 
-    function minutesFromBookingTime(value) {
-      if (!value) return 0;
-
-      if (value.includes('AM') || value.includes('PM')) {
-        const parts = value.split(' ');
-        const hm = parts[0].split(':').map(Number);
-        let hour = hm[0];
-        const minute = hm[1];
-
-        if (parts[1] === 'PM' && hour !== 12) hour += 12;
-        if (parts[1] === 'AM' && hour === 12) hour = 0;
-
-        return hour * 60 + minute;
-      }
-
-      const hm = value.split(':').map(Number);
-      return hm[0] * 60 + hm[1];
-    }
-
     function getBookingSortDateTime(booking) {
       const startValue = booking.startTime || formatTime12(booking.start);
       return new Date(booking.date + 'T' + toTime24(startValue));
     }
 
+    // Trusts the server's own computed status (pinned to Bhutan time, see
+    // main.go) rather than recomputing "is this happening now" from the
+    // viewer's own device clock, which could disagree with the server.
     function isBookingInProgress(booking) {
-      if (booking.status === 'Cancelled' || booking.date !== todayISO()) return false;
-
-      const now = new Date();
-      const current = now.getHours() * 60 + now.getMinutes();
-
-      return current >= minutesFromBookingTime(booking.start) &&
-             current < minutesFromBookingTime(booking.end);
+      return booking.status === 'In Progress';
     }
 
     function isUpcomingBooking(booking) {
-      if (booking.status === 'Cancelled') return false;
-
-      const today = todayISO();
-
-      if (booking.date > today) return true;
-      if (booking.date < today) return false;
-
-      const now = new Date();
-      return minutesFromBookingTime(booking.start) > now.getHours() * 60 + now.getMinutes();
+      return booking.status === 'Booked';
     }
 
     // Renders a centered icon + message empty-state row spanning the full

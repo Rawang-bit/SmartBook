@@ -395,7 +395,6 @@
         document.getElementById('historyStatusFilter')?.value || '';
 
       let rows = historyBookingsCache
-        .map(normalizeBookingWithDynamicStatus)
         .filter(function(booking) {
           return isHistoryStatus(booking.status);
         });
