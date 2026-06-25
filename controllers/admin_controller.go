@@ -70,6 +70,15 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 
 	if before.Role != admin.Role {
 		syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
+
+		// Sessions are a snapshot of role taken at login (see session/store.go),
+		// so without this their current browser would keep working under the
+		// old role for up to SessionDuration — same reasoning as resetting a
+		// password or revoking access. AdminModel.Update blocks a self-role-
+		// change, so this can only ever sign out someone other than the
+		// caller.
+		c.Sessions.DeleteByAdminID(id)
+
 		c.audit(r, "admin_role_changed", "admin", admin.Username, admin.ID, "role: "+before.Role+" -> "+admin.Role)
 	} else {
 		c.audit(r, "admin_updated", "admin", admin.Username, admin.ID, "")
