@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
 	"bookroom-management-system/models"
+	"bookroom-management-system/utils"
 )
 
 // ListAdmins returns all admin accounts. Super admin only.
@@ -35,6 +37,9 @@ func (c *Controller) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
+	c.audit(r, "admin_created", "admin", admin.Username, admin.ID, "role: "+admin.Role)
+
 	writeJSON(w, http.StatusCreated, admin)
 }
 
@@ -50,6 +55,8 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before, _, _ := c.Admins.GetByID(id)
+
 	sess, _ := c.getSession(r)
 	admin, err := c.Admins.Update(id, req, sess.AdminID, sess.Role)
 	if errors.Is(err, models.ErrNotFound) {
@@ -61,7 +68,35 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if before.Role != admin.Role {
+		syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
+		c.audit(r, "admin_role_changed", "admin", admin.Username, admin.ID, "role: "+before.Role+" -> "+admin.Role)
+	} else {
+		c.audit(r, "admin_updated", "admin", admin.Username, admin.ID, "")
+	}
+
 	writeJSON(w, http.StatusOK, admin)
+}
+
+// syncNormalUserAccess keeps an admin's linked Normal User row consistent
+// with the multi-role rule: General Admin retains Normal User booking
+// capability (the one allowed combination), Super Admin is exclusive and
+// retains none. username doubles as email for every admin created through
+// this app; a legacy non-email username (e.g. the original seed account) is
+// left alone rather than risking a bad row in the users table.
+func syncNormalUserAccess(c *Controller, username, name, role string) {
+	if !utils.IsValidEmail(username) {
+		return
+	}
+	var err error
+	if role == "super_admin" {
+		err = c.Users.RemoveNormalUserAccess(username)
+	} else {
+		err = c.Users.EnsureActiveForEmail(name, username)
+	}
+	if err != nil {
+		log.Printf("[ADMIN SYNC] failed to sync Normal User access for %s (role=%s): %v", username, role, err)
+	}
 }
 
 // ResetAdminPassword sets a new password for any admin account. Super admin only.
@@ -78,6 +113,8 @@ func (c *Controller) ResetAdminPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	target, _, _ := c.Admins.GetByID(id)
+
 	err := c.Admins.ResetPassword(id, req.NewPassword)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "admin not found")
@@ -92,6 +129,8 @@ func (c *Controller) ResetAdminPassword(w http.ResponseWriter, r *http.Request) 
 	// any session opened under the old password keep working until it
 	// naturally expires.
 	c.Sessions.DeleteByAdminID(id)
+
+	c.audit(r, "admin_password_reset", "admin", target.Username, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password reset"})
 }
@@ -129,6 +168,8 @@ func (c *Controller) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		c.Sessions.ClearMustResetPassword(cookie.Value)
 	}
 
+	c.audit(r, "admin_password_self_changed", "admin", sess.Username, sess.AdminID, "")
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password changed"})
 }
 
@@ -159,6 +200,8 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, _, _ := c.Admins.GetByID(id)
+
 	err := c.Admins.SetStatus(id, newStatus)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "admin not found")
@@ -175,6 +218,8 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	if newStatus == "revoked" {
 		c.Sessions.DeleteByAdminID(id)
 	}
+
+	c.audit(r, "admin_"+newStatus, "admin", target.Username, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": newStatus})
 }
@@ -193,6 +238,8 @@ func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, _, _ := c.Admins.GetByID(id)
+
 	err := c.Admins.Delete(id)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "admin not found")
@@ -202,6 +249,8 @@ func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete admin")
 		return
 	}
+
+	c.audit(r, "admin_deleted", "admin", target.Username, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

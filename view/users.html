@@ -86,6 +86,10 @@
           <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0v4M5 11h14v9H5v-9z" /></svg>
           <span class="sidebar-label">Admins</span>
         </a>
+        <a id="auditLogsNavLink" class="sidebar-link hidden items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="audit-logs.html" title="Audit Logs">
+          <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          <span class="sidebar-label">Audit Logs</span>
+        </a>
       </nav>
 
       <div class="mt-auto">
@@ -197,6 +201,16 @@
               />
             </label>
 
+            <label class="block text-sm font-bold text-slate-700">
+              Phone <span class="font-semibold text-slate-400">(optional)</span>
+              <input
+                type="tel"
+                id="userPhone"
+                placeholder="Enter contact number"
+                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
+
             <label id="userRoleWrap" class="hidden text-sm font-bold text-slate-700">
               Role
               <select
@@ -290,6 +304,14 @@
         </p>
       </div>
 
+      <div id="confirmActionReasonWrap" class="hidden mb-4 text-left">
+        <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">
+          Reason <span class="normal-case font-semibold text-slate-400">(optional)</span>
+        </label>
+        <textarea id="confirmActionReason" rows="2" placeholder="Why is this request being rejected?"
+          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"></textarea>
+      </div>
+
       <div class="flex gap-3">
         <button onclick="closeConfirmActionModal()" class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
           Cancel
@@ -322,6 +344,7 @@
       document.getElementById('userId').value = '';
       document.getElementById('userName').value = '';
       document.getElementById('userEmail').value = '';
+      document.getElementById('userPhone').value = '';
       const roleSelect = document.getElementById('userRole');
       if (roleSelect) roleSelect.value = 'normal_user';
       document.getElementById('formTitle').textContent = 'Add User';
@@ -404,6 +427,8 @@
 
         const statusCell = (isPending && u.awaitingConfirmation)
           ? `${statusBadge(u.status)}<div class="mt-1 text-[10px] font-semibold text-slate-400">Awaiting their email confirmation</div>`
+          : u.status === 'rejected' && u.rejectionReason
+          ? `${statusBadge(u.status)}<div class="mt-1 text-[10px] font-semibold text-slate-400">Reason: ${escapeHtml(u.rejectionReason)}</div>`
           : statusBadge(u.status);
 
         return `
@@ -414,6 +439,8 @@
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
               ${escapeHtml(u.email)}
+              ${u.phone ? `<div class="text-[10px] font-semibold text-slate-400">${escapeHtml(u.phone)}</div>` : ''}
+              ${u.createdAt ? `<div class="text-[10px] font-semibold text-slate-400">Registered ${escapeHtml(u.createdAt)}</div>` : ''}
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
@@ -457,6 +484,9 @@
 
       roleSelect.value = 'normal_user';
       roleWrap.classList.toggle('hidden', !canAssignRole);
+
+      document.getElementById('confirmActionReason').value = '';
+      document.getElementById('confirmActionReasonWrap').classList.toggle('hidden', isApprove);
 
       document.getElementById('confirmActionTitle').textContent = isApprove ? 'Approve User?' : 'Reject User?';
       updateApprovalText();
@@ -515,7 +545,8 @@
             : `User approved as ${res.role.replace('_', ' ')}. Login username: ${res.username}`;
           showMessage('userMessage', message);
         } else {
-          await rejectUserApi(id);
+          const reason = document.getElementById('confirmActionReason').value.trim();
+          await rejectUserApi(id, reason);
           showMessage('userMessage', 'User rejected.');
         }
         await loadUsers();
@@ -566,6 +597,7 @@
       document.getElementById('userId').value = u.id;
       document.getElementById('userName').value = u.name;
       document.getElementById('userEmail').value = u.email;
+      document.getElementById('userPhone').value = u.phone || '';
       document.getElementById('formTitle').textContent = 'Edit User';
       document.getElementById('saveBtn').textContent = 'Update User';
 
@@ -595,6 +627,7 @@
       const payload = {
         name: document.getElementById('userName').value.trim(),
         email: document.getElementById('userEmail').value.trim().toLowerCase(),
+        phone: document.getElementById('userPhone').value.trim(),
         role: roleSelect ? roleSelect.value : 'normal_user'
       };
 

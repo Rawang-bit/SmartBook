@@ -63,6 +63,8 @@ func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[USER INVITE] failed to email confirmation link to %s: %v", u.Email, sendErr)
 	}
 
+	c.audit(r, "user_created", "user", u.Email, u.ID, "intended role: "+role)
+
 	writeJSON(w, http.StatusCreated, u)
 }
 
@@ -102,6 +104,7 @@ func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusInternalServerError, "failed to activate your account, please contact an admin")
 			return
 		}
+		c.auditPublic(r, user.Email, "user_confirmed_registration", "user", user.Email, user.ID, "")
 		writeJSON(w, http.StatusOK, map[string]string{
 			"message": "Your account is now active. You can book rooms from the access page.",
 			"role":    "normal_user",
@@ -119,9 +122,18 @@ func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request)
 		log.Printf("[ADMIN PROMOTED] failed to email temp password to %s: %v", user.Email, sendErr)
 	}
 
-	if delErr := c.Users.Delete(user.ID); delErr != nil {
-		log.Printf("[ADMIN PROMOTED] failed to remove confirmed user row %d: %v", user.ID, delErr)
+	// Normal User + General Admin is the one allowed multi-role combination,
+	// so a general_admin keeps their booking access. Super Admin must be
+	// exclusive, so it gets no Normal User row at all.
+	if user.IntendedRole == "super_admin" {
+		if delErr := c.Users.Delete(user.ID); delErr != nil {
+			log.Printf("[ADMIN PROMOTED] failed to remove confirmed user row %d: %v", user.ID, delErr)
+		}
+	} else if _, statusErr := c.Users.SetStatus(user.ID, "active"); statusErr != nil {
+		log.Printf("[ADMIN PROMOTED] failed to activate Normal User access for row %d: %v", user.ID, statusErr)
 	}
+
+	c.auditPublic(r, user.Email, "user_confirmed_admin_promotion", "user", user.Email, user.ID, "role: "+user.IntendedRole)
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Your admin account is ready. Check your email for login credentials.",
@@ -154,6 +166,8 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	c.audit(r, "user_updated", "user", u.Email, u.ID, "")
 
 	writeJSON(w, http.StatusOK, u)
 }
@@ -223,6 +237,8 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 			log.Printf("[USER APPROVED] failed to notify %s: %v", user.Email, sendErr)
 		}
 
+		c.audit(r, "user_approved", "user", user.Email, user.ID, "role: normal_user")
+
 		writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": "normal_user"})
 		return
 	}
@@ -259,10 +275,19 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 		log.Printf("[ADMIN PROMOTED] failed to email temp password to %s: %v", pendingUser.Email, sendErr)
 	}
 
-	// The registration request is now an admin account, not a booking user.
-	if delErr := c.Users.Delete(id); delErr != nil {
-		log.Printf("[ADMIN PROMOTED] failed to remove promoted user row %d: %v", id, delErr)
+	// Normal User + General Admin is the one allowed multi-role combination,
+	// so a general_admin keeps their booking access — activate the pending
+	// row rather than deleting it. Super Admin must be exclusive, so it gets
+	// no Normal User row at all.
+	if role == "super_admin" {
+		if delErr := c.Users.Delete(id); delErr != nil {
+			log.Printf("[ADMIN PROMOTED] failed to remove promoted user row %d: %v", id, delErr)
+		}
+	} else if _, statusErr := c.Users.SetStatus(id, "active"); statusErr != nil {
+		log.Printf("[ADMIN PROMOTED] failed to activate Normal User access for row %d: %v", id, statusErr)
 	}
+
+	c.audit(r, "user_promoted_to_admin", "user", pendingUser.Email, id, "role: "+pendingUser.IntendedRole+" -> "+role)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": role, "username": admin.Username})
 }
@@ -283,8 +308,14 @@ func (c *Controller) createAdminFromApproval(name, email, role string) (models.A
 
 // rejectUser handles POST /api/users/{id}/reject. Any admin may reject —
 // rejection never grants privileges, so it doesn't need the super_admin gate.
+// An optional {"reason": "..."} body is stored on the user record.
 func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64) {
-	user, err := c.Users.SetStatus(id, "rejected")
+	var req models.RejectUserRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req) // empty body is fine — reason is optional
+	}
+
+	user, err := c.Users.Reject(id, req.Reason)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
@@ -298,6 +329,8 @@ func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64
 		log.Printf("[USER REJECTED] failed to notify %s: %v", user.Email, sendErr)
 	}
 
+	c.audit(r, "user_rejected", "user", user.Email, user.ID, req.Reason)
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
 }
 
@@ -307,7 +340,7 @@ func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64
 // the moment this is set, with no other code changes needed. Any admin may
 // revoke, mirroring the reject gate above.
 func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64) {
-	_, err := c.Users.SetStatus(id, "revoked")
+	user, err := c.Users.SetStatus(id, "revoked")
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
@@ -317,13 +350,15 @@ func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 
+	c.audit(r, "user_revoked", "user", user.Email, user.ID, "")
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
 // restoreUser handles POST /api/users/{id}/restore. Reactivates a
 // previously revoked user, restoring their booking access.
 func (c *Controller) restoreUser(w http.ResponseWriter, r *http.Request, id int64) {
-	_, err := c.Users.SetStatus(id, "active")
+	user, err := c.Users.SetStatus(id, "active")
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
@@ -332,6 +367,8 @@ func (c *Controller) restoreUser(w http.ResponseWriter, r *http.Request, id int6
 		writeError(w, http.StatusInternalServerError, "failed to restore access")
 		return
 	}
+
+	c.audit(r, "user_restored", "user", user.Email, user.ID, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "active"})
 }
@@ -343,6 +380,8 @@ func (c *Controller) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, _ := c.Users.GetByID(id)
+
 	err := c.Users.Delete(id)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "user not found")
@@ -352,6 +391,8 @@ func (c *Controller) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	c.audit(r, "user_deleted", "user", target.Email, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

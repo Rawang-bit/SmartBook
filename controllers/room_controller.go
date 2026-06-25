@@ -17,7 +17,8 @@ func (c *Controller) ListRooms(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rooms)
 }
 
-// CreateRoom adds a new room. Super admin only.
+// CreateRoom adds a new room. General admin only — room management is an
+// operational task, so super_admin is deliberately excluded.
 func (c *Controller) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	var req models.RoomRequest
 	if !decodeJSON(w, r, &req) {
@@ -34,10 +35,12 @@ func (c *Controller) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c.audit(r, "room_created", "room", room.Name, room.ID, "")
+
 	writeJSON(w, http.StatusCreated, room)
 }
 
-// UpdateRoom edits an existing room. Super admin only.
+// UpdateRoom edits an existing room. General admin only — see CreateRoom.
 func (c *Controller) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/rooms/")
 	if !ok {
@@ -63,16 +66,20 @@ func (c *Controller) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c.audit(r, "room_updated", "room", room.Name, room.ID, "")
+
 	writeJSON(w, http.StatusOK, room)
 }
 
-// DeleteRoom permanently removes a room. Super admin only.
+// DeleteRoom permanently removes a room. General admin only — see CreateRoom.
 // The database blocks this if the room has any bookings attached to it.
 func (c *Controller) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/rooms/")
 	if !ok {
 		return
 	}
+
+	room, _ := c.Rooms.GetByID(id)
 
 	err := c.Rooms.Delete(id)
 	if errors.Is(err, models.ErrForeignKey) {
@@ -87,6 +94,8 @@ func (c *Controller) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	c.audit(r, "room_deleted", "room", room.Name, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

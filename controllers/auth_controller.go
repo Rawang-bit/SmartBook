@@ -24,7 +24,15 @@ func (c *Controller) HealthCheck(w http.ResponseWriter, r *http.Request) {
 // the unknown-username and wrong-password branches of Login, which must
 // respond identically so an attacker can't distinguish "no such user" from
 // "wrong password".
-func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, username string) {
+func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string) {
+	c.Audit.Record(models.AuditEntry{
+		ActorType:  "system",
+		ActorLabel: username,
+		Action:     "login_failed",
+		IPAddress:  clientIP(r),
+		UserAgent:  r.UserAgent(),
+	})
+
 	if c.LoginAttempts.RecordFailure(username) {
 		writeError(w, http.StatusTooManyRequests,
 			fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
@@ -44,7 +52,7 @@ func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, username st
 //   - Secure:     HTTPS-only delivery in production (set via APP_ENV=production)
 //   - SameSite:   Strict — cookie is never sent on cross-site requests (CSRF defence)
 //   - __Host-:    prefix applied in production — binds the cookie to the exact host,
-//                 no Domain attribute allowed, path must be "/" (prevents subdomain injection)
+//     no Domain attribute allowed, path must be "/" (prevents subdomain injection)
 func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if !decodeJSON(w, r, &req) {
@@ -74,12 +82,12 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, models.ErrNotFound) || err != nil {
 		// Count the failure even for unknown usernames to prevent brute-forcing
 		// the username space; the error message is identical either way.
-		c.recordFailedLoginAttempt(w, username)
+		c.recordFailedLoginAttempt(w, r, username)
 		return
 	}
 
 	if err := c.Admins.VerifyPassword(hash, password); err != nil {
-		c.recordFailedLoginAttempt(w, username)
+		c.recordFailedLoginAttempt(w, r, username)
 		return
 	}
 
@@ -102,6 +110,15 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 
 	setSessionCookie(w, sessionID, int(session.SessionDuration.Seconds()))
 
+	c.Audit.Record(models.AuditEntry{
+		ActorType:  "admin",
+		ActorID:    admin.ID,
+		ActorLabel: admin.Username,
+		Action:     "login_success",
+		IPAddress:  clientIP(r),
+		UserAgent:  r.UserAgent(),
+	})
+
 	writeJSON(w, http.StatusOK, models.LoginResponse{Admin: admin})
 }
 
@@ -109,6 +126,16 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 func (c *Controller) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName())
 	if err == nil {
+		if sess, found, sessErr := c.Sessions.Get(cookie.Value); sessErr == nil && found {
+			c.Audit.Record(models.AuditEntry{
+				ActorType:  "admin",
+				ActorID:    sess.AdminID,
+				ActorLabel: sess.Username,
+				Action:     "logout",
+				IPAddress:  clientIP(r),
+				UserAgent:  r.UserAgent(),
+			})
+		}
 		c.Sessions.Delete(cookie.Value)
 	}
 
@@ -159,7 +186,7 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	username := strings.TrimSpace(req.Username)
-	email    := utils.NormalizeEmail(req.Email)
+	email := utils.NormalizeEmail(req.Email)
 
 	if username == "" || email == "" {
 		writeError(w, http.StatusBadRequest, "username and email are required")
@@ -179,7 +206,7 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token  := c.ResetTokens.Create(adminID)
+	token := c.ResetTokens.Create(adminID)
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
 		if p := os.Getenv("PORT"); p != "" {
@@ -225,7 +252,7 @@ func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token    := strings.TrimSpace(req.Token)
+	token := strings.TrimSpace(req.Token)
 	password := strings.TrimSpace(req.Password)
 
 	if token == "" {

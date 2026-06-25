@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bookings - SmartBook</title>
+  <title>Audit Logs - SmartBook</title>
 
   <!-- Browser Tab Logo -->
   <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
@@ -74,7 +74,7 @@
           <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
           <span class="sidebar-label">Users</span>
         </a>
-        <a class="sidebar-link flex items-center gap-3 rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg" href="bookings.html" title="Bookings">
+        <a class="sidebar-link flex items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="bookings.html" title="Bookings">
           <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           <span class="sidebar-label">Bookings</span>
         </a>
@@ -86,7 +86,7 @@
           <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0v4M5 11h14v9H5v-9z" /></svg>
           <span class="sidebar-label">Admins</span>
         </a>
-        <a id="auditLogsNavLink" class="sidebar-link hidden items-center gap-3 rounded-xl px-4 py-3 font-bold text-slate-300 transition hover:translate-x-1 hover:bg-indigo-600 hover:text-white" href="audit-logs.html" title="Audit Logs">
+        <a id="auditLogsNavLink" class="sidebar-link hidden items-center gap-3 rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white shadow-lg" href="audit-logs.html" title="Audit Logs">
           <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           <span class="sidebar-label">Audit Logs</span>
         </a>
@@ -125,103 +125,83 @@
       <!-- Header -->
       <div class="mb-6 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-lg backdrop-blur md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-3xl font-black text-slate-900">Booking Management</h1>
+          <h1 class="text-3xl font-black text-slate-900">Audit Trail</h1>
+          <p class="mt-1 text-sm font-semibold text-slate-500">
+            Read-only — every admin-initiated action, who did it, and when. Visible to Super Admin only.
+          </p>
         </div>
       </div>
 
-      <div id="bookingMessage" style="display:none;"></div>
+      <div id="auditMessage" style="display:none;"></div>
 
       <!-- Filters -->
       <section class="mb-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
-        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div class="grid grid-cols-1 gap-5 md:grid-cols-4">
+
           <div>
-            <label class="mb-2 block text-sm font-bold text-slate-600">
-              Filter by Room
-            </label>
+            <label class="mb-2 block text-sm font-bold text-slate-600">User</label>
+            <input
+              type="text"
+              id="auditActorFilter"
+              placeholder="Name or email…"
+              oninput="debouncedLoadAuditLogs()"
+              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-600">Action</label>
             <select
-              id="bookingRoomFilter"
-              onchange="renderBookings()"
+              id="auditActionFilter"
+              onchange="loadAuditLogs()"
               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">All rooms</option>
+              <option value="">All activity types</option>
             </select>
           </div>
 
           <div>
-            <label class="mb-2 block text-sm font-bold text-slate-600">
-              Filter by Date
-            </label>
+            <label class="mb-2 block text-sm font-bold text-slate-600">From</label>
             <input
               type="date"
-              id="bookingDateFilter"
-              onchange="renderBookings()"
+              id="auditFromFilter"
+              onchange="loadAuditLogs()"
               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-600">To</label>
+            <input
+              type="date"
+              id="auditToFilter"
+              onchange="loadAuditLogs()"
+              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
         </div>
       </section>
 
-      <!-- Bookings Table -->
+      <!-- Audit Table -->
       <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg">
         <div class="overflow-x-auto rounded-2xl border border-slate-200">
           <table class="w-full border-collapse bg-white">
             <thead>
               <tr>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Booked By</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Email</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Date</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Time</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">When</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">User</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Target</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Details</th>
-                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Status</th>
-                <th class="bg-slate-50 px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">IP Address</th>
               </tr>
             </thead>
-            <tbody id="bookingRows"></tbody>
+            <tbody id="auditRows"></tbody>
           </table>
         </div>
+        <p class="mt-3 text-xs font-semibold text-slate-400">Showing the most recent 500 matching entries. Narrow the date range to look further back.</p>
       </section>
-
-      <!-- ── Booking Details Modal ──────────────────────────────────────────────── -->
-      <div id="bookingDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/30 backdrop-blur-md p-4">
-        <div class="w-full max-w-md rounded-3xl border border-white/60 bg-white/75 p-6 shadow-2xl backdrop-blur-xl">
-          <h2 class="mb-4 text-xl font-black text-slate-900">Booking Details</h2>
-
-          <div class="space-y-4">
-            <div>
-              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Room</label>
-              <p id="detailsRoom" class="font-bold text-slate-800"></p>
-            </div>
-
-            <div>
-              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Purpose</label>
-              <p id="detailsPurpose" class="font-bold text-slate-800"></p>
-            </div>
-
-            <div>
-              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Agenda</label>
-              <p id="detailsAgenda" class="whitespace-pre-wrap text-sm font-semibold text-slate-600"></p>
-            </div>
-
-            <div>
-              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Participants</label>
-              <p id="detailsParticipants" class="text-sm font-semibold text-slate-600"></p>
-            </div>
-
-            <div id="detailsMinutesRow" class="hidden">
-              <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Minutes of Meeting</label>
-              <p id="detailsMinutes" class="whitespace-pre-wrap text-sm font-semibold text-slate-600"></p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onclick="closeBookingDetailsModal()"
-            class="mt-6 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
-          >
-            Close
-          </button>
-        </div>
-      </div>
 
     </main>
   </div>
@@ -231,167 +211,123 @@
   <script>
     requireAuth();
 
-    let allRoomsCache = [];
-    let bookingsCache = [];
+    // This page is super_admin only — anyone else is bounced to the
+    // dashboard immediately, the same way force-password-change.html guards
+    // its own page. The server enforces this independently on the API.
+    if (!isSuperAdmin()) {
+      window.location.replace('dashboard.html');
+    }
 
-    function fillBookingRoomFilter(rooms) {
-      const select = document.getElementById('bookingRoomFilter');
+    const ACTION_LABELS = {
+      login_success: 'Login succeeded',
+      login_failed: 'Login failed',
+      logout: 'Logout',
+      user_created: 'User created',
+      user_updated: 'User updated',
+      user_deleted: 'User deleted',
+      user_approved: 'User approved',
+      user_rejected: 'User rejected',
+      user_revoked: 'User access revoked',
+      user_restored: 'User access restored',
+      user_self_registered: 'User self-registered',
+      user_confirmed_registration: 'User confirmed registration',
+      user_promoted_to_admin: 'User promoted to admin',
+      user_confirmed_admin_promotion: 'User confirmed admin promotion',
+      admin_created: 'Admin created',
+      admin_updated: 'Admin updated',
+      admin_role_changed: 'Admin role changed',
+      admin_password_reset: 'Admin password reset',
+      admin_password_self_changed: 'Admin changed own password',
+      admin_revoked: 'Admin access revoked',
+      admin_active: 'Admin access restored',
+      admin_deleted: 'Admin deleted',
+      room_created: 'Room created',
+      room_updated: 'Room updated',
+      room_deleted: 'Room deleted',
+      booking_created: 'Booking created',
+      booking_updated: 'Booking updated',
+      booking_cancelled: 'Booking cancelled (by admin)',
+      booking_cancelled_by_owner: 'Booking cancelled (by owner)',
+      booking_minutes_updated: 'Minutes of Meeting updated',
+      booking_deleted: 'Booking deleted'
+    };
+
+    function actionLabel(action) {
+      return ACTION_LABELS[action] || action;
+    }
+
+    function populateActionFilter() {
+      const select = document.getElementById('auditActionFilter');
       const selected = select.value;
-
-      let html = '<option value="">All rooms</option>';
-
-      rooms.forEach(function(room) {
-        html += '<option value="' + room.id + '">' +
-          escapeHtml(room.name) + ' - ' + escapeHtml(room.location) +
-        '</option>';
+      let html = '<option value="">All activity types</option>';
+      Object.keys(ACTION_LABELS).forEach(function (key) {
+        html += `<option value="${key}">${actionLabel(key)}</option>`;
       });
-
       select.innerHTML = html;
       select.value = selected;
     }
 
-    function getBookingSortDateTime(booking) {
-      const startValue = booking.startTime || formatTime12(booking.start);
-      return new Date(booking.date + 'T' + toTime24(startValue));
+    let debounceTimer = null;
+    function debouncedLoadAuditLogs() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(loadAuditLogs, 300);
     }
 
-    async function renderBookings() {
-      const results = await Promise.all([getRooms(), getBookings()]);
-      allRoomsCache = results[0];
-
-      const allBookings = results[1];
-      fillBookingRoomFilter(allRoomsCache);
-
-      const roomFilter = document.getElementById('bookingRoomFilter').value;
-      const dateFilter = document.getElementById('bookingDateFilter').value;
-
-      const bookings = allBookings
-        .filter(function(booking) {
-          const roomOk   = !roomFilter || Number(booking.roomId) === Number(roomFilter);
-          const dateOk   = !dateFilter || booking.date === dateFilter;
-          // Exclude completed and cancelled — those belong in History
-          const statusOk = booking.status !== 'Completed' && booking.status !== 'Cancelled';
-
-          return roomOk && dateOk && statusOk;
-        })
-        .sort(function(a, b) {
-          return getBookingSortDateTime(b) - getBookingSortDateTime(a);
+    async function loadAuditLogs() {
+      try {
+        const logs = await getAuditLogs({
+          actor: document.getElementById('auditActorFilter').value.trim(),
+          action: document.getElementById('auditActionFilter').value,
+          from: document.getElementById('auditFromFilter').value,
+          to: document.getElementById('auditToFilter').value
         });
+        renderAuditLogs(logs);
+      } catch (err) {
+        showMessage('auditMessage', err.message, 'error');
+      }
+    }
 
-      bookingsCache = bookings;
-
-      document.getElementById('bookingRows').innerHTML = bookings.map(function(booking) {
-        const canCancel = booking.status !== 'Cancelled' && booking.status !== 'Completed';
+    function renderAuditLogs(logs) {
+      document.getElementById('auditRows').innerHTML = (logs || []).map(function (log) {
+        const target = log.targetLabel
+          ? `${escapeHtml(log.targetType || 'item')}: ${escapeHtml(log.targetLabel)}`
+          : '<span class="text-slate-400">—</span>';
 
         return `
-          <tr class="transition hover:bg-slate-50">
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              ${escapeHtml(booking.user)}
+          <tr>
+            <td class="border-b border-slate-100 px-4 py-3 align-middle whitespace-nowrap text-slate-700">
+              ${escapeHtml(log.createdAt)}
             </td>
-
             <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              ${escapeHtml(booking.email)}
+              ${escapeHtml(log.actorLabel)}
             </td>
-
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              ${escapeHtml(formatDateDisplay(booking.date))}
-            </td>
-
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
-              ${escapeHtml(booking.startTime || formatTime12(booking.start))}
-              -
-              ${escapeHtml(booking.endTime || formatTime12(booking.end))}
-            </td>
-
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              ${iconButton('eye', `viewBookingDetails(${booking.id})`, 'View room, purpose, agenda, and participants', 'indigo')}
+              <span class="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-extrabold text-indigo-700">
+                ${escapeHtml(actionLabel(log.action))}
+              </span>
             </td>
-
-            <td class="border-b border-slate-100 px-4 py-3 align-middle">
-              ${formatStatus(booking.status)}
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-slate-700">
+              ${target}
             </td>
-
-            <td class="border-b border-slate-100 px-4 py-3 align-middle text-right">
-              <div class="flex flex-wrap items-center justify-end gap-1">
-                ${isGeneralAdmin() && canCancel ? iconButton('x', `cancelBooking(${booking.id})`, 'Cancel booking', 'red') : ''}
-                ${isGeneralAdmin()
-                    ? iconButton('trash', `hardDelete(${booking.id})`, 'Delete booking permanently', 'slate')
-                    : (!canCancel ? '' : '<span class="text-xs font-semibold text-slate-400">View only</span>')
-                }
-              </div>
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-sm text-slate-500">
+              ${escapeHtml(log.details) || '<span class="text-slate-400">—</span>'}
+            </td>
+            <td class="border-b border-slate-100 px-4 py-3 align-middle text-sm text-slate-500">
+              ${escapeHtml(log.ipAddress) || '<span class="text-slate-400">—</span>'}
             </td>
           </tr>
         `;
       }).join('') || `
         <tr>
-          <td colspan="7" class="px-4 py-6 text-center font-semibold text-slate-500">
-            No bookings found.
+          <td colspan="6" class="px-4 py-6 text-center font-semibold text-slate-500">
+            No matching audit entries.
           </td>
         </tr>
       `;
     }
 
-    function viewBookingDetails(id) {
-      const booking = bookingsCache.find(function(b) {
-        return Number(b.id) === Number(id);
-      });
-
-      if (!booking) return;
-
-      document.getElementById('detailsRoom').textContent = booking.roomName +
-        (booking.location ? ' — ' + booking.location : '');
-      document.getElementById('detailsPurpose').textContent = booking.purpose || '—';
-      document.getElementById('detailsAgenda').textContent = booking.agenda || 'No agenda provided.';
-      document.getElementById('detailsParticipants').textContent = booking.participants || 'No participants listed.';
-
-      const minutesRow = document.getElementById('detailsMinutesRow');
-      if (booking.minutesOfMeeting) {
-        document.getElementById('detailsMinutes').textContent = booking.minutesOfMeeting;
-        minutesRow.classList.remove('hidden');
-      } else {
-        minutesRow.classList.add('hidden');
-      }
-
-      showModal('bookingDetailsModal');
-    }
-
-    function closeBookingDetailsModal() {
-      hideModal('bookingDetailsModal');
-    }
-
-    document.getElementById('bookingDetailsModal').addEventListener('click', function(e) {
-      if (e.target === this) closeBookingDetailsModal();
-    });
-
-    function cancelBooking(id) {
-      confirmAction('The room will be freed up and the booking owner will no longer see this meeting as active.', async function () {
-        try {
-          await cancelBookingApi(id);
-          showMessage('bookingMessage', 'Booking cancelled successfully.');
-          await renderBookings();
-        } catch (err) {
-          showMessage('bookingMessage', err.message, 'error');
-        }
-      }, { title: 'Cancel This Booking?', confirmLabel: 'Cancel Booking' });
-    }
-
-    function hardDelete(id) {
-      confirmAction('This booking will be permanently removed from the database. This cannot be undone.', async function () {
-        try {
-          await deleteBookingApi(id);
-          showMessage('bookingMessage', 'Booking deleted successfully.');
-          await renderBookings();
-        } catch (err) {
-          showMessage('bookingMessage', err.message, 'error');
-        }
-      }, { title: 'Delete Booking Permanently?', confirmLabel: 'Delete' });
-    }
-
-    renderBookings().catch(function(err) {
-      showMessage('bookingMessage', err.message, 'error');
-    });
-
-    setInterval(renderBookings, 10000);
+    populateActionFilter();
+    loadAuditLogs();
   </script>
 </body>
 </html>

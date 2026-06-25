@@ -74,9 +74,12 @@ type User struct {
 	ID                   int64  `json:"id"`
 	Name                 string `json:"name"`
 	Email                string `json:"email"`
+	Phone                string `json:"phone,omitempty"`      // optional contact number, shown to a reviewing admin
 	Status               string `json:"status"`               // "pending", "active", "rejected", or "revoked"
 	IntendedRole         string `json:"intendedRole"`         // "normal_user", "general_admin", or "super_admin"
 	AwaitingConfirmation bool   `json:"awaitingConfirmation"` // true only for admin-added rows still awaiting the recipient's email click
+	RejectionReason      string `json:"rejectionReason,omitempty"`
+	CreatedAt            string `json:"createdAt,omitempty"` // registration date/time, YYYY-MM-DD HH:MM
 }
 
 // UserRequest is the JSON body sent when creating or updating a user.
@@ -85,7 +88,14 @@ type User struct {
 type UserRequest struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
+	Phone string `json:"phone"`
 	Role  string `json:"role"`
+}
+
+// RejectUserRequest is the JSON body sent when an admin rejects a pending
+// registration — Reason is stored on the user record for later reference.
+type RejectUserRequest struct {
+	Reason string `json:"reason"`
 }
 
 // ConfirmRegistrationRequest is the JSON body sent when a newly admin-added
@@ -124,6 +134,7 @@ type SendOTPRequest struct {
 type VerifyOTPRequest struct {
 	Name           string `json:"name"`
 	Email          string `json:"email"`
+	Phone          string `json:"phone"` // optional contact number, only meaningful for self-registration
 	OTP            string `json:"otp"`
 	RememberDevice bool   `json:"rememberDevice"`
 }
@@ -199,4 +210,44 @@ type MinutesOfMeetingRequest struct {
 // ErrorResponse is the standard JSON format for all error messages.
 type ErrorResponse struct {
 	Error string `json:"error"`
+}
+
+// AuditEntry is what a controller records for one audit-trail event.
+// ActorLabel/TargetLabel are denormalized snapshots (username/email/name at
+// the time of the action) so the log entry stays meaningful even if the
+// underlying actor or target account is later renamed or deleted.
+type AuditEntry struct {
+	ActorType   string // "admin" or "system" (e.g. an anonymous failed login attempt)
+	ActorID     int64  // 0 when there is no authenticated actor
+	ActorLabel  string
+	Action      string // e.g. "login_success", "user_approved", "room_deleted"
+	TargetType  string // "user", "admin", "room", "booking", or "" for actions with no single target
+	TargetID    int64
+	TargetLabel string
+	Details     string // free-text description, e.g. "role: normal_user -> general_admin"
+	IPAddress   string
+	UserAgent   string
+}
+
+// AuditLog is one row returned from the audit trail for display.
+type AuditLog struct {
+	ID          int64  `json:"id"`
+	ActorType   string `json:"actorType"`
+	ActorLabel  string `json:"actorLabel"`
+	Action      string `json:"action"`
+	TargetType  string `json:"targetType"`
+	TargetLabel string `json:"targetLabel"`
+	Details     string `json:"details"`
+	IPAddress   string `json:"ipAddress"`
+	UserAgent   string `json:"userAgent"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+// AuditFilter narrows ListAuditLogs. Every field is optional; an empty
+// filter returns the most recent entries across the whole audit trail.
+type AuditFilter struct {
+	ActorLabel string // matches actor or target label, case-insensitive substring
+	Action     string // exact match
+	From       string // YYYY-MM-DD, inclusive
+	To         string // YYYY-MM-DD, inclusive
 }

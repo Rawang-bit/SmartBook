@@ -17,14 +17,19 @@
     const role = localStorage.getItem('adminRole') || 'general_admin';
     const name = localStorage.getItem('adminName') || 'Admin';
 
-    // Admins nav link is hidden by default in HTML; show it only for super_admin.
-    // Anchor elements default to inline when hidden is removed, so an explicit
-    // display utility is required — flex, to match every other nav link's
-    // icon + label layout.
-    const adminsLink = document.getElementById('adminsNavLink');
-    if (adminsLink && role === 'super_admin') {
-      adminsLink.classList.remove('hidden');
-      adminsLink.classList.add('flex');
+    // Admins and Audit Logs nav links are hidden by default in HTML; show
+    // them only for super_admin — both are exclusively that role's
+    // responsibility. Anchor elements default to inline when hidden is
+    // removed, so an explicit display utility is required — flex, to match
+    // every other nav link's icon + label layout.
+    if (role === 'super_admin') {
+      ['adminsNavLink', 'auditLogsNavLink'].forEach(function (id) {
+        const link = document.getElementById(id);
+        if (link) {
+          link.classList.remove('hidden');
+          link.classList.add('flex');
+        }
+      });
     }
 
     // Header admin name badge (present on every admin page)

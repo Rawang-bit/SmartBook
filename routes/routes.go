@@ -54,10 +54,11 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	// Public: read room list (needed by the public calendar)
 	mux.HandleFunc("GET /api/rooms", c.ListRooms)
 
-	// Super admin only: create, update, delete rooms
-	mux.HandleFunc("POST /api/rooms",    c.RequireSuperAdmin(c.CreateRoom))
-	mux.HandleFunc("PUT /api/rooms/",    c.RequireSuperAdmin(c.UpdateRoom))
-	mux.HandleFunc("DELETE /api/rooms/", c.RequireSuperAdmin(c.DeleteRoom))
+	// General admin only: create, update, delete rooms — operational, so
+	// super_admin is deliberately excluded (see RequireGeneralAdmin).
+	mux.HandleFunc("POST /api/rooms",    c.RequireGeneralAdmin(c.CreateRoom))
+	mux.HandleFunc("PUT /api/rooms/",    c.RequireGeneralAdmin(c.UpdateRoom))
+	mux.HandleFunc("DELETE /api/rooms/", c.RequireGeneralAdmin(c.DeleteRoom))
 
 	// ── Bookings ──────────────────────────────────────────────────────────────
 	// Public: view all bookings, create a new booking
@@ -68,9 +69,10 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	// Minutes of Meeting after it ends (POST /api/bookings/{id}/minutes)
 	mux.HandleFunc("POST /api/bookings/", c.PublicBookingAction)
 
-	// Super admin only: edit or delete any booking
-	mux.HandleFunc("PUT /api/bookings/",    c.RequireSuperAdmin(c.UpdateBooking))
-	mux.HandleFunc("DELETE /api/bookings/", c.RequireSuperAdmin(c.DeleteBooking))
+	// General admin only: edit or delete any booking — operational, so
+	// super_admin is deliberately excluded (see RequireGeneralAdmin).
+	mux.HandleFunc("PUT /api/bookings/",    c.RequireGeneralAdmin(c.UpdateBooking))
+	mux.HandleFunc("DELETE /api/bookings/", c.RequireGeneralAdmin(c.DeleteBooking))
 
 	// ── Admin management (super_admin only) ───────────────────────────────────
 	mux.HandleFunc("GET /api/admins",     c.RequireSuperAdmin(c.ListAdmins))
@@ -84,4 +86,8 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 
 	// Any logged-in admin can change their own password
 	mux.HandleFunc("POST /api/admin/change-password", c.RequireAdmin(c.ChangeOwnPassword))
+
+	// ── Audit trail (super_admin only) ────────────────────────────────────────
+	// Read-only by design — no endpoint exists to edit or delete an entry.
+	mux.HandleFunc("GET /api/audit-logs", c.RequireSuperAdmin(c.ListAuditLogs))
 }

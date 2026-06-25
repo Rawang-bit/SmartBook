@@ -85,6 +85,13 @@
             <input type="email" id="registerEmail" disabled
               class="w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-4 font-bold text-slate-500 outline-none" />
           </div>
+          <div>
+            <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
+              Contact Number <span class="text-slate-300">(optional)</span>
+            </label>
+            <input type="tel" id="registerPhone" placeholder="Your phone number"
+              class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
           <button type="submit" id="registerSubmitBtn"
             class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white shadow-xl transition hover:bg-indigo-700">
             Send Verification Code
@@ -274,6 +281,7 @@
           pendingRegistration = { email };
           document.getElementById('registerEmail').value = email;
           document.getElementById('registerName').value = '';
+          document.getElementById('registerPhone').value = '';
           showStep('registerStep');
         }
       } catch (err) {
@@ -289,13 +297,14 @@
       const btn = document.getElementById('registerSubmitBtn');
       const name = document.getElementById('registerName').value.trim();
       const email = document.getElementById('registerEmail').value.trim();
+      const phone = document.getElementById('registerPhone').value.trim();
 
       btn.disabled = true;
       btn.textContent = 'Sending…';
 
       try {
         await api('/api/register/send-otp', { method: 'POST', body: JSON.stringify({ name, email }) });
-        pendingRegistration = { mode: 'register', name, email };
+        pendingRegistration = { mode: 'register', name, email, phone };
         document.getElementById('otpSubtext').textContent = `Enter the 6-digit code sent to ${email}.`;
         document.getElementById('otpCode').value = '';
         document.getElementById('rememberDevice').checked = false;
@@ -337,6 +346,7 @@
           body: JSON.stringify({
             name: pendingRegistration.name,
             email: pendingRegistration.email,
+            phone: pendingRegistration.phone || '',
             otp,
             rememberDevice,
           }),

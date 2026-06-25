@@ -74,6 +74,20 @@ func (m *AdminModel) GetByUsername(username string) (Admin, string, string, erro
 	return admin, hash, status, err
 }
 
+// GetByID fetches an admin's username, name, role, and email by primary key.
+// Returns ErrNotFound if the admin does not exist.
+func (m *AdminModel) GetByID(id int64) (Admin, string, error) {
+	var admin Admin
+	var email sql.NullString
+	err := m.DB.QueryRow(`
+		SELECT id, username, name, role, email FROM admins WHERE id = $1
+	`, id).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &email)
+	if err == sql.ErrNoRows {
+		return Admin{}, "", ErrNotFound
+	}
+	return admin, email.String, err
+}
+
 // GetByUsernameAndEmail looks up an active admin whose username AND email both match.
 // Both comparisons are case-insensitive.
 // Returns the admin's ID, display name, and stored email, or ErrNotFound if no row matches.

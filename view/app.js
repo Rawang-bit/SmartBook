@@ -56,10 +56,18 @@ function isSuperAdmin() {
   return adminRole() === 'super_admin';
 }
 
+// Returns true if the current admin is a general admin. Room and booking
+// management are general-admin-only operations — super_admin is deliberately
+// excluded, since its responsibilities are security, users, roles, and
+// audit monitoring, not day-to-day operations (see RequireGeneralAdmin).
+function isGeneralAdmin() {
+  return adminRole() === 'general_admin';
+}
+
 // Redirects to login.html if the admin is not logged in.
 function requireAuth() {
   const page = window.location.pathname.split('/').pop() || 'index.html';
-  const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html', 'admins.html', 'force-password-change.html'];
+  const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html', 'admins.html', 'audit-logs.html', 'force-password-change.html'];
 
   if (adminPages.includes(page) && !adminLoggedIn()) {
     window.location.replace('login.html');
@@ -140,7 +148,7 @@ async function deleteUserApi(id) { return api('/users/' + id, { method: 'DELETE'
 async function approveUserApi(id, role) {
   return api('/users/' + id + '/approve', { method: 'POST', body: JSON.stringify({ role: role || 'normal_user' }) });
 }
-async function rejectUserApi(id) { return api('/users/' + id + '/reject', { method: 'POST' }); }
+async function rejectUserApi(id, reason) { return api('/users/' + id + '/reject', { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }); }
 async function revokeUserApi(id) { return api('/users/' + id + '/revoke', { method: 'POST' }); }
 async function restoreUserApi(id) { return api('/users/' + id + '/restore', { method: 'POST' }); }
 
@@ -328,6 +336,17 @@ async function resetAdminPasswordApi(id, newPassword) { return api('/admins/' + 
 async function revokeAdminApi(id) { return api('/admins/' + id + '/revoke', { method: 'POST' }); }
 async function restoreAdminApi(id) { return api('/admins/' + id + '/restore', { method: 'POST' }); }
 async function deleteAdminApi(id) { return api('/admins/' + id, { method: 'DELETE' }); }
+
+// Audit trail (super_admin only). filter is a plain object — any key with a
+// non-empty value becomes a query param (actor, action, from, to).
+async function getAuditLogs(filter) {
+  const params = new URLSearchParams();
+  Object.keys(filter || {}).forEach(function (key) {
+    if (filter[key]) params.set(key, filter[key]);
+  });
+  const qs = params.toString();
+  return api('/audit-logs' + (qs ? '?' + qs : ''));
+}
 async function changeOwnPasswordApi(currentPassword, newPassword) {
   const result = await api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
   localStorage.setItem('adminMustResetPassword', 'false');

@@ -18,8 +18,9 @@ type UserModel struct {
 // normalizeAndValidateUserInput trims/normalizes Name and Email in place and
 // returns an error if either is invalid. Shared by Create, Register, and Update.
 func normalizeAndValidateUserInput(req *UserRequest) error {
-	req.Name  = strings.TrimSpace(req.Name)
+	req.Name = strings.TrimSpace(req.Name)
 	req.Email = utils.NormalizeEmail(req.Email)
+	req.Phone = strings.TrimSpace(req.Phone)
 
 	if req.Name == "" {
 		return fmt.Errorf("user name is required")
@@ -33,7 +34,8 @@ func normalizeAndValidateUserInput(req *UserRequest) error {
 // List returns all users ordered alphabetically by name.
 func (m *UserModel) List() ([]User, error) {
 	rows, err := m.DB.Query(`
-		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
+		SELECT id, name, email, phone, status, intended_role, confirm_token IS NOT NULL,
+		       rejection_reason, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
 		FROM users ORDER BY name ASC
 	`)
 	if err != nil {
@@ -44,7 +46,7 @@ func (m *UserModel) List() ([]User, error) {
 	users := []User{}
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation, &u.RejectionReason, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -57,9 +59,10 @@ func (m *UserModel) List() ([]User, error) {
 func (m *UserModel) GetByID(id int64) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
-		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
+		SELECT id, name, email, phone, status, intended_role, confirm_token IS NOT NULL,
+		       rejection_reason, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
 		FROM users WHERE id = $1
-	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
+	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation, &u.RejectionReason, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -114,10 +117,10 @@ func (m *UserModel) Create(req UserRequest) (User, string, error) {
 
 	var u User
 	err = m.DB.QueryRow(`
-		INSERT INTO users(name, email, status, intended_role, confirm_token, confirm_token_expires_at)
-		VALUES($1, $2, 'pending', $3, $4, NOW() + INTERVAL '7 days')
-		RETURNING id, name, email, status, intended_role
-	`, req.Name, req.Email, role, token).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole)
+		INSERT INTO users(name, email, phone, status, intended_role, confirm_token, confirm_token_expires_at)
+		VALUES($1, $2, $3, 'pending', $4, $5, NOW() + INTERVAL '7 days')
+		RETURNING id, name, email, phone, status, intended_role
+	`, req.Name, req.Email, req.Phone, role, token).Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole)
 	if err != nil {
 		if utils.IsUniqueViolation(err) {
 			return User{}, "", ErrDuplicate
@@ -170,9 +173,9 @@ func (m *UserModel) Register(req UserRequest) (User, error) {
 
 	var u User
 	err := m.DB.QueryRow(`
-		INSERT INTO users(name, email, status) VALUES($1, $2, 'pending')
-		RETURNING id, name, email, status, intended_role
-	`, req.Name, req.Email).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole)
+		INSERT INTO users(name, email, phone, status) VALUES($1, $2, $3, 'pending')
+		RETURNING id, name, email, phone, status, intended_role
+	`, req.Name, req.Email, req.Phone).Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole)
 	if err != nil {
 		if utils.IsUniqueViolation(err) {
 			return User{}, ErrDuplicate
@@ -198,7 +201,22 @@ func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 	return u, err
 }
 
-// Update changes a user's name or email.
+// Reject marks a pending registration as rejected and records why, so the
+// reason is available later without needing a separate audit-log lookup.
+// Returns ErrNotFound if the user does not exist.
+func (m *UserModel) Reject(id int64, reason string) (User, error) {
+	var u User
+	err := m.DB.QueryRow(`
+		UPDATE users SET status = 'rejected', rejection_reason = $1 WHERE id = $2
+		RETURNING id, name, email, status, intended_role, confirm_token IS NOT NULL
+	`, strings.TrimSpace(reason), id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
+	if err == sql.ErrNoRows {
+		return User{}, ErrNotFound
+	}
+	return u, err
+}
+
+// Update changes a user's name, email, or phone.
 // Returns ErrNotFound if the user does not exist, ErrDuplicate if the new email is taken.
 func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 	if err := normalizeAndValidateUserInput(&req); err != nil {
@@ -207,9 +225,9 @@ func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 
 	var u User
 	err := m.DB.QueryRow(`
-		UPDATE users SET name = $1, email = $2 WHERE id = $3
-		RETURNING id, name, email, status, intended_role, confirm_token IS NOT NULL
-	`, req.Name, req.Email, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
+		UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4
+		RETURNING id, name, email, phone, status, intended_role, confirm_token IS NOT NULL
+	`, req.Name, req.Email, req.Phone, id).Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
 	}
@@ -234,6 +252,32 @@ func (m *UserModel) Delete(id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// EnsureActiveForEmail makes sure an active, booking-capable row exists for
+// email — creating one if none exists yet, or reactivating it if it was
+// previously pending/rejected/revoked. "Normal User + General Admin" is the
+// one allowed multi-role combination, so every path that grants someone the
+// General Admin role calls this to keep their Normal User capability in sync.
+func (m *UserModel) EnsureActiveForEmail(name, email string) error {
+	name = strings.TrimSpace(name)
+	email = utils.NormalizeEmail(email)
+	_, err := m.DB.Exec(`
+		INSERT INTO users(name, email, status)
+		VALUES($1, $2, 'active')
+		ON CONFLICT (email) DO UPDATE SET status = 'active'
+	`, name, email)
+	return err
+}
+
+// RemoveNormalUserAccess deletes any users-table row for email. Super Admin
+// must be an exclusive role — promoting someone to it (or creating them
+// directly as one) means they retain no separate Normal User capability.
+// A no-op if no such row exists.
+func (m *UserModel) RemoveNormalUserAccess(email string) error {
+	email = utils.NormalizeEmail(email)
+	_, err := m.DB.Exec(`DELETE FROM users WHERE LOWER(TRIM(email)) = $1`, email)
+	return err
 }
 
 // DeviceTokenMatches reports whether rawToken matches the stored

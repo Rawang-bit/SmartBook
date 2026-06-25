@@ -38,6 +38,8 @@ func (c *Controller) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 	c.sendBookingConfirmations(booking)
 
+	c.auditPublic(r, booking.Email, "booking_created", "booking", booking.Purpose, booking.ID, "")
+
 	writeJSON(w, http.StatusCreated, booking)
 }
 
@@ -88,6 +90,8 @@ func (c *Controller) UpdateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c.audit(r, "booking_updated", "booking", booking.Purpose, booking.ID, "")
+
 	writeJSON(w, http.StatusOK, booking)
 }
 
@@ -107,6 +111,8 @@ func (c *Controller) CancelBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	c.audit(r, "booking_cancelled", "booking", "", id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
@@ -133,6 +139,8 @@ func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	c.audit(r, "booking_deleted", "booking", "", id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -187,6 +195,8 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	c.auditPublic(r, email, "booking_cancelled_by_owner", "booking", "", id, "")
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
@@ -224,6 +234,8 @@ func (c *Controller) UpdateMinutesOfMeeting(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	c.auditPublic(r, email, "booking_minutes_updated", "booking", b.Purpose, b.ID, "")
 
 	writeJSON(w, http.StatusOK, b)
 }

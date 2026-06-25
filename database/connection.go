@@ -92,6 +92,30 @@ func migrate(db *sql.DB) error {
 		// discussed once a meeting has ended, within a 24-hour edit window
 		// (see BookingModel.MinutesEditWindow).
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_of_meeting TEXT NOT NULL DEFAULT ''`,
+		// Optional contact number shown to an admin reviewing a pending
+		// registration, and the reason recorded when a registration is rejected.
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT NOT NULL DEFAULT ''`,
+		// Audit trail: every admin-initiated action (login/logout, user/admin/
+		// room/booking management) is recorded here. Append-only — no UPDATE or
+		// DELETE endpoint is ever exposed for this table (see AuditModel).
+		`CREATE TABLE IF NOT EXISTS audit_logs (
+		    id           BIGSERIAL PRIMARY KEY,
+		    actor_type   TEXT NOT NULL,
+		    actor_id     BIGINT,
+		    actor_label  TEXT NOT NULL,
+		    action       TEXT NOT NULL,
+		    target_type  TEXT NOT NULL DEFAULT '',
+		    target_id    BIGINT,
+		    target_label TEXT NOT NULL DEFAULT '',
+		    details      TEXT NOT NULL DEFAULT '',
+		    ip_address   TEXT NOT NULL DEFAULT '',
+		    user_agent   TEXT NOT NULL DEFAULT '',
+		    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

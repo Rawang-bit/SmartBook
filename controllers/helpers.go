@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ type Controller struct {
 	Users         *models.UserModel
 	Rooms         *models.RoomModel
 	Bookings      *models.BookingModel
+	Audit         *models.AuditModel
 }
 
 // New wires the database connection into each domain model and returns a Controller.
@@ -36,6 +38,7 @@ func New(db *sql.DB, sessions *session.Store) *Controller {
 		Users:         &models.UserModel{DB: db},
 		Rooms:         &models.RoomModel{DB: db},
 		Bookings:      &models.BookingModel{DB: db},
+		Audit:         &models.AuditModel{DB: db},
 	}
 }
 
@@ -126,6 +129,25 @@ func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// RequireGeneralAdmin is middleware for day-to-day operational endpoints
+// (rooms, bookings) that deliberately exclude super_admin. Per the role
+// design, Super Admin's responsibilities are security, users, roles,
+// permissions, and audit monitoring — not daily operations — so this is the
+// inverse of RequireSuperAdmin rather than a relaxation of RequireAdmin.
+func (c *Controller) RequireGeneralAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, ok := c.requireAdminSession(w, r)
+		if !ok {
+			return
+		}
+		if data.Role != "general_admin" {
+			writeError(w, http.StatusForbidden, "this is a general admin operation — super admin is limited to security, users, roles, and audit monitoring")
+			return
+		}
+		next(w, r)
+	}
+}
+
 // getSession returns the session data attached to the current request.
 // A database error during lookup is treated the same as "no session" here —
 // this helper is only ever called from inside a handler that RequireAdmin/
@@ -159,4 +181,69 @@ func idFromPath(w http.ResponseWriter, r *http.Request, prefix string) (int64, b
 		return 0, false
 	}
 	return id, true
+}
+
+// clientIP extracts the caller's address for the audit trail, preferring
+// X-Forwarded-For (set by the reverse proxy in front of the app in
+// production — see HTTPSRedirect's identical reasoning for X-Forwarded-Proto)
+// over r.RemoteAddr, which behind a proxy would otherwise just be the
+// proxy's own address for every request.
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		// May be a comma-separated chain ("client, proxy1, proxy2") — the
+		// original client is always first.
+		parts := strings.Split(fwd, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// audit records one audit-trail entry attributed to the currently
+// logged-in admin (or "system" if, unusually, there isn't one — e.g. a
+// handler reachable before RequireAdmin's gate). See controllers/auth_controller.go
+// for login/logout, which have no session yet and call c.Audit.Record directly.
+func (c *Controller) audit(r *http.Request, action, targetType, targetLabel string, targetID int64, details string) {
+	sess, ok := c.getSession(r)
+
+	actorLabel := "system"
+	var actorID int64
+	if ok {
+		actorLabel = sess.Username
+		actorID = sess.AdminID
+	}
+
+	c.Audit.Record(models.AuditEntry{
+		ActorType:   "admin",
+		ActorID:     actorID,
+		ActorLabel:  actorLabel,
+		Action:      action,
+		TargetType:  targetType,
+		TargetID:    targetID,
+		TargetLabel: targetLabel,
+		Details:     details,
+		IPAddress:   clientIP(r),
+		UserAgent:   r.UserAgent(),
+	})
+}
+
+// auditPublic records an audit-trail entry for an action with no admin
+// session at all — a public, unauthenticated caller proving ownership of
+// actorEmail (self-registration, booking create/cancel, Minutes of Meeting)
+// rather than an authenticated admin.
+func (c *Controller) auditPublic(r *http.Request, actorEmail, action, targetType, targetLabel string, targetID int64, details string) {
+	c.Audit.Record(models.AuditEntry{
+		ActorType:   "system",
+		ActorLabel:  actorEmail,
+		Action:      action,
+		TargetType:  targetType,
+		TargetID:    targetID,
+		TargetLabel: targetLabel,
+		Details:     details,
+		IPAddress:   clientIP(r),
+		UserAgent:   r.UserAgent(),
+	})
 }

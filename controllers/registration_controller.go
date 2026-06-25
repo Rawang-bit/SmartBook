@@ -141,7 +141,7 @@ func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	user, err := c.Users.Register(models.UserRequest{Name: name, Email: email})
+	user, err := c.Users.Register(models.UserRequest{Name: name, Email: email, Phone: strings.TrimSpace(req.Phone)})
 	if errors.Is(err, models.ErrDuplicate) {
 		// Someone else registered this exact email between send-otp and verify-otp.
 		existing, getErr := c.Users.GetByEmail(email)
@@ -161,6 +161,8 @@ func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Reques
 		log.Printf("[REGISTRATION] failed to update device trust for %s: %v", email, err)
 		// Don't fail the request over this — registration itself succeeded.
 	}
+
+	c.auditPublic(r, email, "user_self_registered", "user", email, user.ID, "")
 
 	writeJSON(w, http.StatusOK, map[string]any{"name": user.Name, "email": user.Email, "status": user.Status})
 }
