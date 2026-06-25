@@ -113,6 +113,12 @@ func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// forbiddenModuleMsg is the standard 403 body for every role-mismatch
+// rejection in the admin panel — RequireSuperAdmin, RequireGeneralAdmin, and
+// BlockSuperAdmin all use this same text, regardless of which role or module
+// is doing the rejecting, so the behavior is consistent across the board.
+const forbiddenModuleMsg = "You do not have permission to access this module."
+
 // RequireSuperAdmin is middleware that allows only the super_admin role through.
 // Like RequireAdmin, it also enforces the temporary-password-change block.
 func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
@@ -122,7 +128,7 @@ func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if data.Role != "super_admin" {
-			writeError(w, http.StatusForbidden, "super admin access required")
+			writeError(w, http.StatusForbidden, forbiddenModuleMsg)
 			return
 		}
 		next(w, r)
@@ -141,7 +147,25 @@ func (c *Controller) RequireGeneralAdmin(next http.HandlerFunc) http.HandlerFunc
 			return
 		}
 		if data.Role != "general_admin" {
-			writeError(w, http.StatusForbidden, "this is a general admin operation — super admin is limited to security, users, roles, and audit monitoring")
+			writeError(w, http.StatusForbidden, forbiddenModuleMsg)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// BlockSuperAdmin wraps endpoints that must stay reachable by the public —
+// GET /api/rooms and GET /api/bookings also serve the anonymous public
+// calendar — and by general_admin, but never by an authenticated super_admin.
+// Unlike RequireGeneralAdmin, it does not require a session to begin with:
+// an anonymous caller with no session cookie at all passes through
+// untouched, since the public calendar's trust model is email/OTP, not
+// admin roles. Only a session that positively identifies the caller as
+// super_admin is rejected.
+func (c *Controller) BlockSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if sess, ok := c.getSession(r); ok && sess.Role == "super_admin" {
+			writeError(w, http.StatusForbidden, forbiddenModuleMsg)
 			return
 		}
 		next(w, r)

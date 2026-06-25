@@ -298,6 +298,13 @@
   <script>
     requireAuth();
 
+    // Book Room is a general-admin module — super_admin doesn't get even
+    // view-only access here, matching the backend's BlockSuperAdmin gate on
+    // every endpoint this page calls.
+    if (isSuperAdmin()) {
+      window.location.replace('dashboard.html');
+    }
+
     let rooms = [];
     let bookings = [];
     let users = [];

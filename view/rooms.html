@@ -128,7 +128,6 @@
           <h1 class="text-3xl font-black text-slate-900">Room Management</h1>
         </div>
         <div class="flex flex-wrap items-center gap-3">
-          <span id="roomsViewOnlyBadge" class="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">View Only</span>
           <button
             id="addRoomBtn"
             onclick="openRoomModal()"
@@ -238,12 +237,11 @@
   <script>
     requireAuth();
 
-    // Room management is a general-admin operation — super_admin has
-    // view-only access here (see RequireGeneralAdmin); Edit/Delete are
-    // gated the same way in renderRooms().
-    if (!isGeneralAdmin()) {
-      document.getElementById('addRoomBtn').classList.add('hidden');
-      document.getElementById('roomsViewOnlyBadge').classList.remove('hidden');
+    // Rooms is a general-admin module — super_admin doesn't get even
+    // view-only access here, matching the backend's BlockSuperAdmin gate on
+    // every endpoint this page calls.
+    if (isSuperAdmin()) {
+      window.location.replace('dashboard.html');
     }
 
     let roomCache = [];
@@ -273,15 +271,13 @@
       roomCache = await getRooms();
 
       document.getElementById('roomCards').innerHTML = roomCache.map(function(room) {
-        const isActive = room.status === 'Active';
-
-        const actionRail = isGeneralAdmin() ? `
+        // Only general_admin ever reaches this page (super_admin is
+        // redirected away above), so the edit/delete rail is unconditional.
+        const actionRail = `
           <div class="flex w-14 shrink-0 flex-col items-center justify-center gap-1.5 border-r border-slate-100 bg-slate-50/70 py-4">
             ${iconButton('edit', `editRoom(${room.id})`, 'Edit room', 'indigo')}
             ${iconButton('trash', `removeRoom(${room.id})`, 'Delete room', 'red')}
           </div>
-        ` : `
-          <div class="w-1.5 shrink-0 ${isActive ? 'bg-emerald-400' : 'bg-slate-300'}"></div>
         `;
 
         return `
