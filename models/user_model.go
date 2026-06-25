@@ -41,11 +41,12 @@ func normalizeAndValidateUserInput(req *UserRequest) error {
 func (m *UserModel) List() ([]User, error) {
 	rows, err := m.DB.Query(`
 		SELECT u.id, u.name, u.email, u.phone, u.status, u.intended_role, u.confirm_token IS NOT NULL,
-		       u.rejection_reason, TO_CHAR(u.created_at, 'YYYY-MM-DD HH24:MI')
+		       u.rejection_reason, TO_CHAR(u.created_at, 'YYYY-MM-DD HH24:MI'), COALESCE(a.role, '')
 		FROM users u
+		LEFT JOIN admins a ON LOWER(TRIM(a.username)) = LOWER(TRIM(u.email))
 		WHERE NOT EXISTS (
-			SELECT 1 FROM admins a
-			WHERE LOWER(TRIM(a.username)) = LOWER(TRIM(u.email)) AND a.role = 'super_admin'
+			SELECT 1 FROM admins a2
+			WHERE LOWER(TRIM(a2.username)) = LOWER(TRIM(u.email)) AND a2.role = 'super_admin'
 		)
 		ORDER BY u.name ASC
 	`)
@@ -57,7 +58,7 @@ func (m *UserModel) List() ([]User, error) {
 	users := []User{}
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation, &u.RejectionReason, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation, &u.RejectionReason, &u.CreatedAt, &u.AdminRole); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

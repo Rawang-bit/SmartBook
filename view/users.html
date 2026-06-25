@@ -268,6 +268,7 @@
               <tr>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Name</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Email</th>
+                <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Role</th>
                 <th class="bg-slate-50 px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">Status</th>
                 <th class="bg-slate-50 px-4 py-3 text-right text-xs font-black uppercase tracking-wider text-slate-500">Action</th>
               </tr>
@@ -329,13 +330,18 @@
   <script>
     requireAuth();
 
+    // Both roles manage Users end to end now — only which admin role can be
+    // assigned differs: general_admin may grant Normal User or General
+    // Admin (the one allowed multi-role combination), never Super Admin.
+    // The backend enforces the same rule independently (canAssignRole), so
+    // this is just keeping the option out of reach, not the only guard.
+    document.getElementById('userRoleWrap').classList.remove('hidden');
+    document.getElementById('userRoleWrap').classList.add('block');
     if (!isSuperAdmin()) {
-      document.getElementById('usersSubtitle').textContent = 'Add new users. Contact a Super Admin to edit or delete.';
-    } else {
-      // Only a super admin may grant an admin role directly from this form.
-      const roleWrap = document.getElementById('userRoleWrap');
-      roleWrap.classList.remove('hidden');
-      roleWrap.classList.add('block');
+      ['#userRole', '#confirmActionRole'].forEach(function (selector) {
+        const superOption = document.querySelector(selector + ' option[value="super_admin"]');
+        if (superOption) superOption.remove();
+      });
     }
 
     let users = [];
@@ -395,6 +401,15 @@
       return '<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>';
     }
 
+    // adminRole is only ever '' or 'general_admin' here — Super Admin never
+    // appears on this page at all (see UserModel.List).
+    function roleBadge(adminRole) {
+      if (adminRole === 'general_admin') {
+        return '<span class="inline-flex items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-extrabold text-violet-700">General Admin</span>';
+      }
+      return '<span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-extrabold text-slate-600">Normal User</span>';
+    }
+
     function renderUsers() {
       const q = (document.getElementById('searchUser')?.value || '').toLowerCase();
 
@@ -443,6 +458,10 @@
             </td>
 
             <td class="border-b border-slate-100 px-4 py-3 align-middle">
+              ${roleBadge(u.adminRole)}
+            </td>
+
+            <td class="border-b border-slate-100 px-4 py-3 align-middle">
               ${statusCell}
             </td>
 
@@ -450,17 +469,15 @@
               <div class="flex flex-wrap items-center justify-end gap-1">
                 ${approvalActions}
                 ${accessToggle}
-                ${isSuperAdmin()
-                  ? iconButton('edit', `editUser(${u.id})`, 'Edit user', 'indigo') +
-                    iconButton('trash', `removeUser(${u.id})`, 'Delete user', 'red')
-                  : (approvalActions || accessToggle ? '' : '<span class="text-xs font-semibold text-slate-400">—</span>')}
+                ${iconButton('edit', `editUser(${u.id})`, 'Edit user', 'indigo')}
+                ${iconButton('trash', `removeUser(${u.id})`, 'Delete user', 'red')}
               </div>
             </td>
           </tr>
         `;
       }).join('') || `
         <tr>
-          <td colspan="4" class="px-4 py-6 text-center font-semibold text-slate-500">
+          <td colspan="5" class="px-4 py-6 text-center font-semibold text-slate-500">
             No users registered.
           </td>
         </tr>
@@ -479,10 +496,9 @@
 
       const roleWrap = document.getElementById('confirmActionRoleWrap');
       const roleSelect = document.getElementById('confirmActionRole');
-      const canAssignRole = isApprove && isSuperAdmin();
 
       roleSelect.value = 'normal_user';
-      roleWrap.classList.toggle('hidden', !canAssignRole);
+      roleWrap.classList.toggle('hidden', !isApprove);
 
       document.getElementById('confirmActionReason').value = '';
       document.getElementById('confirmActionReasonWrap').classList.toggle('hidden', isApprove);
@@ -597,6 +613,8 @@
       document.getElementById('userName').value = u.name;
       document.getElementById('userEmail').value = u.email;
       document.getElementById('userPhone').value = u.phone || '';
+      const roleSelect = document.getElementById('userRole');
+      if (roleSelect) roleSelect.value = u.adminRole || 'normal_user';
       document.getElementById('formTitle').textContent = 'Edit User';
       document.getElementById('saveBtn').textContent = 'Update User';
 
@@ -632,9 +650,11 @@
 
       try {
         if (id) {
-          await updateUser(id, payload);
+          const res = await updateUser(id, payload);
           closeUserModal();
-          showMessage('userMessage', 'User updated successfully.');
+          showMessage('userMessage', res && res.username
+            ? `User updated and promoted to ${res.role.replace('_', ' ')}. Login username: ${res.username}`
+            : 'User updated successfully.');
         } else {
           await createUser(payload);
           closeUserModal();

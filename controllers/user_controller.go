@@ -22,6 +22,23 @@ func (c *Controller) ListUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, users)
 }
 
+// canAssignRole reports whether an admin with sessionRole may assign target
+// to a user — whether by creating, editing, or approving them. Both
+// general_admin and super_admin may grant normal_user or general_admin
+// (Normal User + General Admin is the one allowed multi-role combination);
+// only super_admin may grant super_admin itself, since that's the one
+// privilege escalation general_admin must never be able to perform.
+func canAssignRole(sessionRole, target string) bool {
+	switch target {
+	case "", "normal_user":
+		return true
+	case "general_admin":
+		return sessionRole == "general_admin" || sessionRole == "super_admin"
+	default: // super_admin
+		return sessionRole == "super_admin"
+	}
+}
+
 // CreateUser pre-registers a new user. Admin only.
 //
 // The new entry is never approved instantly — the admin typing in someone
@@ -29,7 +46,7 @@ func (c *Controller) ListUsers(w http.ResponseWriter, r *http.Request) {
 // "pending" and a confirmation link is emailed to that address. Only once
 // the recipient clicks it does the account (or admin promotion, if role
 // is not "normal_user") actually activate. Choosing a role other than
-// normal_user is a privilege grant, so it requires a super_admin.
+// normal_user is a privilege grant, gated by canAssignRole.
 func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req models.UserRequest
 	if !decodeJSON(w, r, &req) {
@@ -40,12 +57,10 @@ func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if role == "" {
 		role = "normal_user"
 	}
-	if role != "normal_user" {
-		sess, ok := c.getSession(r)
-		if !ok || sess.Role != "super_admin" {
-			writeError(w, http.StatusForbidden, "only a super admin can add a user with this role")
-			return
-		}
+	sess, _ := c.getSession(r)
+	if !canAssignRole(sess.Role, role) {
+		writeError(w, http.StatusForbidden, "you are not allowed to assign this role")
+		return
 	}
 	req.Role = role
 
@@ -153,6 +168,8 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	requestedRole := strings.TrimSpace(req.Role)
+
 	u, err := c.Users.Update(id, req)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "user not found")
@@ -165,6 +182,26 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// Editing can also promote this person to admin — skip if they already
+	// hold that role (re-running the promotion would just fail trying to
+	// create a second admin account for the same email).
+	if requestedRole == "general_admin" || requestedRole == "super_admin" {
+		if _, _, _, existsErr := c.Admins.GetByUsername(u.Email); existsErr != nil {
+			sess, ok := c.getSession(r)
+			if !ok || !canAssignRole(sess.Role, requestedRole) {
+				writeError(w, http.StatusForbidden, "you are not allowed to assign this role")
+				return
+			}
+			admin, promoted := c.promoteUserToAdmin(w, id, u.Name, u.Email, requestedRole)
+			if !promoted {
+				return
+			}
+			c.audit(r, "user_promoted_to_admin", "user", u.Email, id, "role: normal_user -> "+requestedRole)
+			writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": requestedRole, "username": admin.Username})
+			return
+		}
 	}
 
 	c.audit(r, "user_updated", "user", u.Email, u.ID, "")
@@ -208,9 +245,9 @@ func (c *Controller) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 // applicant straight into a new admin account: a random temporary password
 // is generated and emailed to them, must_reset_password is set so they are
 // forced to replace it on first login, and the pending users-table row is
-// removed since they are no longer a normal booking user. Because this
-// grants admin privileges, only a super_admin may choose a role other than
-// normal_user.
+// removed if the role is super_admin (exclusive) or kept active otherwise
+// (Normal User + General Admin). Which roles the caller may choose is
+// gated by canAssignRole.
 func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int64) {
 	var req models.ApproveUserRequest
 	if r.Body != nil {
@@ -248,10 +285,9 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
-	// Granting an admin role is a privilege escalation — only a super admin may do it.
 	sess, ok := c.getSession(r)
-	if !ok || sess.Role != "super_admin" {
-		writeError(w, http.StatusForbidden, "only a super admin can approve this role")
+	if !ok || !canAssignRole(sess.Role, role) {
+		writeError(w, http.StatusForbidden, "you are not allowed to approve this role")
 		return
 	}
 
@@ -265,26 +301,9 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
-	admin, tempPassword, err := c.createAdminFromApproval(pendingUser.Name, pendingUser.Email, role)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	admin, promoted := c.promoteUserToAdmin(w, id, pendingUser.Name, pendingUser.Email, role)
+	if !promoted {
 		return
-	}
-
-	if sendErr := utils.SendTemporaryAdminPasswordEmail(pendingUser.Email, pendingUser.Name, admin.Username, tempPassword); sendErr != nil {
-		log.Printf("[ADMIN PROMOTED] failed to email temp password to %s: %v", pendingUser.Email, sendErr)
-	}
-
-	// Normal User + General Admin is the one allowed multi-role combination,
-	// so a general_admin keeps their booking access — activate the pending
-	// row rather than deleting it. Super Admin must be exclusive, so it gets
-	// no Normal User row at all.
-	if role == "super_admin" {
-		if delErr := c.Users.Delete(id); delErr != nil {
-			log.Printf("[ADMIN PROMOTED] failed to remove promoted user row %d: %v", id, delErr)
-		}
-	} else if _, statusErr := c.Users.SetStatus(id, "active"); statusErr != nil {
-		log.Printf("[ADMIN PROMOTED] failed to activate Normal User access for row %d: %v", id, statusErr)
 	}
 
 	c.audit(r, "user_promoted_to_admin", "user", pendingUser.Email, id, "role: "+pendingUser.IntendedRole+" -> "+role)
@@ -304,6 +323,36 @@ func (c *Controller) createAdminFromApproval(name, email, role string) (models.A
 		return models.Admin{}, "", err
 	}
 	return admin, password, nil
+}
+
+// promoteUserToAdmin creates a new admin account for an existing user row
+// with the given role, e-mails them a temporary password, and applies the
+// same multi-role sync used everywhere else a promotion happens: a new
+// general_admin keeps their Normal User row active (the one allowed
+// combination); a new super_admin loses it (exclusive role). Shared by
+// approveUser (a pending registration) and UpdateUser (an already-active
+// user promoted via an edit). Writes its own error response and returns
+// ok=false on failure — callers should return immediately when ok is false.
+func (c *Controller) promoteUserToAdmin(w http.ResponseWriter, userID int64, name, email, role string) (admin models.Admin, ok bool) {
+	admin, tempPassword, err := c.createAdminFromApproval(name, email, role)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return models.Admin{}, false
+	}
+
+	if sendErr := utils.SendTemporaryAdminPasswordEmail(email, name, admin.Username, tempPassword); sendErr != nil {
+		log.Printf("[ADMIN PROMOTED] failed to email temp password to %s: %v", email, sendErr)
+	}
+
+	if role == "super_admin" {
+		if delErr := c.Users.Delete(userID); delErr != nil {
+			log.Printf("[ADMIN PROMOTED] failed to remove promoted user row %d: %v", userID, delErr)
+		}
+	} else if _, statusErr := c.Users.SetStatus(userID, "active"); statusErr != nil {
+		log.Printf("[ADMIN PROMOTED] failed to activate Normal User access for row %d: %v", userID, statusErr)
+	}
+
+	return admin, true
 }
 
 // rejectUser handles POST /api/users/{id}/reject. Any admin may reject —

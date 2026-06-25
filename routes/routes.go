@@ -39,13 +39,13 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	// ownership and activate the account. The token itself is the credential.
 	mux.HandleFunc("POST /api/users/confirm", c.ConfirmRegistration)
 
-	// Admin: list and create — general_admin can add users
-	mux.HandleFunc("GET /api/users",  c.RequireAdmin(c.ListUsers))
-	mux.HandleFunc("POST /api/users", c.RequireAdmin(c.CreateUser))
-
-	// Super admin only: edit and delete users
-	mux.HandleFunc("PUT /api/users/",    c.RequireSuperAdmin(c.UpdateUser))
-	mux.HandleFunc("DELETE /api/users/", c.RequireSuperAdmin(c.DeleteUser))
+	// Admin: list, create, edit, and delete — general_admin manages Users
+	// end to end; assigning an admin role within these still requires the
+	// matching privilege (see canAssignRole).
+	mux.HandleFunc("GET /api/users",     c.RequireAdmin(c.ListUsers))
+	mux.HandleFunc("POST /api/users",    c.RequireAdmin(c.CreateUser))
+	mux.HandleFunc("PUT /api/users/",    c.RequireAdmin(c.UpdateUser))
+	mux.HandleFunc("DELETE /api/users/", c.RequireAdmin(c.DeleteUser))
 
 	// Approve or reject a pending self-registration — POST /api/users/{id}/approve|reject
 	mux.HandleFunc("POST /api/users/", c.RequireAdmin(c.ToggleUserStatus))

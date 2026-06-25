@@ -80,6 +80,7 @@ type User struct {
 	AwaitingConfirmation bool   `json:"awaitingConfirmation"` // true only for admin-added rows still awaiting the recipient's email click
 	RejectionReason      string `json:"rejectionReason,omitempty"`
 	CreatedAt            string `json:"createdAt,omitempty"` // registration date/time, YYYY-MM-DD HH:MM
+	AdminRole            string `json:"adminRole,omitempty"` // "general_admin" if this person is also an admin (the Normal User + General Admin combination), else empty — computed by UserModel.List, not stored
 }
 
 // UserRequest is the JSON body sent when creating or updating a user.
