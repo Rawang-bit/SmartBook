@@ -244,10 +244,24 @@ type AuditLog struct {
 }
 
 // AuditFilter narrows ListAuditLogs. Every field is optional; an empty
-// filter returns the most recent entries across the whole audit trail.
+// filter matches the whole audit trail.
+// Page is 1-based. Page <= 0 means "no pagination" — return every matching
+// row in one go, used only for exporting the full filtered result rather
+// than for the paginated on-screen list.
 type AuditFilter struct {
 	ActorLabel string // matches actor or target label, case-insensitive substring
 	Action     string // exact match
 	From       string // YYYY-MM-DD, inclusive
 	To         string // YYYY-MM-DD, inclusive
+	Page       int
+}
+
+// AuditPage is one page of audit-trail results, plus enough metadata for
+// the caller to render pagination controls.
+type AuditPage struct {
+	Logs       []AuditLog `json:"logs"`
+	Total      int        `json:"total"`
+	Page       int        `json:"page"`
+	PageSize   int        `json:"pageSize"`
+	TotalPages int        `json:"totalPages"`
 }

@@ -14,6 +14,11 @@ type AuditModel struct {
 	DB *sql.DB
 }
 
+// AuditPageSize is how many rows the paginated audit-trail view shows per
+// page. There is no cap on how many total rows are reachable across pages —
+// unlike a hard row limit, pagination keeps every entry in the table viewable.
+const AuditPageSize = 50
+
 // Record writes one audit entry. Failures are logged but never returned to
 // the caller — exactly like email delivery elsewhere in this app, a logging
 // problem must never block or roll back the action it's describing.
@@ -39,41 +44,63 @@ func nullableInt64(id int64) interface{} {
 	return id
 }
 
-// List returns audit entries newest-first, narrowed by filter, capped at 500
-// rows — the UI's date-range filter is the intended way to look further back
-// than that without overwhelming a single response.
-func (m *AuditModel) List(filter AuditFilter) ([]AuditLog, error) {
-	query := `
-		SELECT id, actor_type, actor_label, action, target_type, target_label, details, ip_address, user_agent,
-		       TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS')
-		FROM audit_logs
-		WHERE 1=1
-	`
+// auditWhereClause builds the WHERE clause and args shared by both the count
+// and the row-fetch queries in List, so the two can never drift apart.
+func auditWhereClause(filter AuditFilter) (string, []any) {
+	clause := "WHERE 1=1"
 	args := []any{}
 
 	if filter.ActorLabel != "" {
 		args = append(args, "%"+strings.ToLower(filter.ActorLabel)+"%")
 		p := fmt.Sprintf("$%d", len(args))
-		query += " AND (LOWER(actor_label) LIKE " + p + " OR LOWER(target_label) LIKE " + p + ")"
+		clause += " AND (LOWER(actor_label) LIKE " + p + " OR LOWER(target_label) LIKE " + p + ")"
 	}
 	if filter.Action != "" {
 		args = append(args, filter.Action)
-		query += fmt.Sprintf(" AND action = $%d", len(args))
+		clause += fmt.Sprintf(" AND action = $%d", len(args))
 	}
 	if filter.From != "" {
 		args = append(args, filter.From)
-		query += fmt.Sprintf(" AND created_at >= $%d::date", len(args))
+		clause += fmt.Sprintf(" AND created_at >= $%d::date", len(args))
 	}
 	if filter.To != "" {
 		args = append(args, filter.To)
-		query += fmt.Sprintf(" AND created_at < ($%d::date + INTERVAL '1 day')", len(args))
+		clause += fmt.Sprintf(" AND created_at < ($%d::date + INTERVAL '1 day')", len(args))
 	}
 
-	query += " ORDER BY created_at DESC LIMIT 500"
+	return clause, args
+}
+
+// List returns audit entries newest-first, narrowed by filter.
+// filter.Page >= 1 returns that page, AuditPageSize rows at a time, with
+// Total/TotalPages filled in so the caller can render pagination controls.
+// filter.Page <= 0 returns every matching row in one result, with no LIMIT —
+// used only for exporting the full filtered trail (see ListAuditLogs), never
+// for the on-screen paginated list.
+func (m *AuditModel) List(filter AuditFilter) (AuditPage, error) {
+	whereClause, args := auditWhereClause(filter)
+
+	var total int
+	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM audit_logs `+whereClause, args...).Scan(&total); err != nil {
+		return AuditPage{}, err
+	}
+
+	query := `
+		SELECT id, actor_type, actor_label, action, target_type, target_label, details, ip_address, user_agent,
+		       TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS')
+		FROM audit_logs ` + whereClause + ` ORDER BY created_at DESC`
+
+	page := filter.Page
+	if page >= 1 {
+		offset := (page - 1) * AuditPageSize
+		query += fmt.Sprintf(" LIMIT %d OFFSET %d", AuditPageSize, offset)
+	} else {
+		page = 1 // reported back as page 1 of 1 when returning everything unpaginated
+	}
 
 	rows, err := m.DB.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return AuditPage{}, err
 	}
 	defer rows.Close()
 
@@ -81,9 +108,27 @@ func (m *AuditModel) List(filter AuditFilter) ([]AuditLog, error) {
 	for rows.Next() {
 		var l AuditLog
 		if err := rows.Scan(&l.ID, &l.ActorType, &l.ActorLabel, &l.Action, &l.TargetType, &l.TargetLabel, &l.Details, &l.IPAddress, &l.UserAgent, &l.CreatedAt); err != nil {
-			return nil, err
+			return AuditPage{}, err
 		}
 		logs = append(logs, l)
 	}
-	return logs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return AuditPage{}, err
+	}
+
+	totalPages := (total + AuditPageSize - 1) / AuditPageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	if filter.Page < 1 {
+		totalPages = 1
+	}
+
+	return AuditPage{
+		Logs:       logs,
+		Total:      total,
+		Page:       page,
+		PageSize:   AuditPageSize,
+		TotalPages: totalPages,
+	}, nil
 }
