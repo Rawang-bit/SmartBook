@@ -250,6 +250,15 @@ func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The admin account is gone entirely now, not just revoked — clean up
+	// any Normal User row that existed only as a side effect of them being a
+	// general_admin (see syncNormalUserAccess), so it doesn't linger as an
+	// orphaned, no-longer-meaningful booking-access grant. A no-op if there
+	// was never one (e.g. they were already a super_admin).
+	if err := c.Users.RemoveNormalUserAccess(target.Username); err != nil {
+		log.Printf("[ADMIN DELETED] failed to clean up Normal User access for %s: %v", target.Username, err)
+	}
+
 	c.audit(r, "admin_deleted", "admin", target.Username, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})

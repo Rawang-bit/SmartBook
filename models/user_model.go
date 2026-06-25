@@ -31,12 +31,23 @@ func normalizeAndValidateUserInput(req *UserRequest) error {
 	return nil
 }
 
-// List returns all users ordered alphabetically by name.
+// List returns all users ordered alphabetically by name — excluding anyone
+// who is currently a super_admin. Super Admin is an exclusive role with no
+// Normal User capability of its own (see syncNormalUserAccess), so a row
+// here for one would only ever be stale leftover data, never something the
+// Users page should show. Matched by username since that's what the sync
+// logic itself keys on — an admin's username doubles as their email for
+// every account created through this app.
 func (m *UserModel) List() ([]User, error) {
 	rows, err := m.DB.Query(`
-		SELECT id, name, email, phone, status, intended_role, confirm_token IS NOT NULL,
-		       rejection_reason, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
-		FROM users ORDER BY name ASC
+		SELECT u.id, u.name, u.email, u.phone, u.status, u.intended_role, u.confirm_token IS NOT NULL,
+		       u.rejection_reason, TO_CHAR(u.created_at, 'YYYY-MM-DD HH24:MI')
+		FROM users u
+		WHERE NOT EXISTS (
+			SELECT 1 FROM admins a
+			WHERE LOWER(TRIM(a.username)) = LOWER(TRIM(u.email)) AND a.role = 'super_admin'
+		)
+		ORDER BY u.name ASC
 	`)
 	if err != nil {
 		return nil, err
