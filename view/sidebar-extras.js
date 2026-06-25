@@ -39,6 +39,11 @@
         const link = document.querySelector('a.sidebar-link[href="' + href + '"]');
         if (link) link.classList.add('hidden');
       });
+    } else {
+      // History is the mirror image — a super-admin-only module, hidden from
+      // general_admin. Same href-based targeting, same reasoning.
+      const historyLink = document.querySelector('a.sidebar-link[href="history.html"]');
+      if (historyLink) historyLink.classList.add('hidden');
     }
 
     // Header admin name badge (present on every admin page)

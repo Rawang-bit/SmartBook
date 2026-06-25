@@ -51,10 +51,11 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("POST /api/users/", c.RequireAdmin(c.ToggleUserStatus))
 
 	// ── Rooms ─────────────────────────────────────────────────────────────────
-	// Public: read room list (needed by the public calendar). Stays reachable
-	// by anonymous callers and general_admin, but never by an authenticated
-	// super_admin — Rooms is not their module (see BlockSuperAdmin).
-	mux.HandleFunc("GET /api/rooms", c.BlockSuperAdmin(c.ListRooms))
+	// Public: read room list — needed by the public calendar, by Dashboard's
+	// stats (both roles), and by History (super_admin). Reading room data
+	// isn't "managing" it, so this stays open to everyone; only the writes
+	// below are role-gated.
+	mux.HandleFunc("GET /api/rooms", c.ListRooms)
 
 	// General admin only: create, update, delete rooms — operational, so
 	// super_admin is deliberately excluded (see RequireGeneralAdmin).
@@ -63,10 +64,10 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("DELETE /api/rooms/", c.RequireGeneralAdmin(c.DeleteRoom))
 
 	// ── Bookings ──────────────────────────────────────────────────────────────
-	// Public: view all bookings, create a new booking. Same BlockSuperAdmin
-	// treatment as Rooms above — Book Room and Bookings are not super_admin's
-	// module either.
-	mux.HandleFunc("GET /api/bookings",  c.BlockSuperAdmin(c.ListBookings))
+	// Public: view all bookings — same reasoning as Rooms above, needed by
+	// Dashboard and History too. Creating a booking is a write, though, so
+	// that one still excludes an authenticated super_admin.
+	mux.HandleFunc("GET /api/bookings",  c.ListBookings)
 	mux.HandleFunc("POST /api/bookings", c.BlockSuperAdmin(c.CreateBooking))
 
 	// Public: cancel own booking (POST /api/bookings/{id}/cancel) or add
