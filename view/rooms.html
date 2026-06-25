@@ -343,7 +343,7 @@
     }
 
     function removeRoom(id) {
-      confirmAction('This room will be permanently deleted. This cannot be undone.', async function () {
+      confirmAction('This room will be removed. This cannot be undone.', async function () {
         try {
           await deleteRoomApi(id);
           showMessage('roomMessage', 'Room deleted successfully.');

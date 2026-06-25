@@ -602,7 +602,7 @@
 
     // ── Delete Admin ─────────────────────────────────────────────────────────
     function openDeleteModal(id, username) {
-      confirmAction(`Admin "@${username}" will be permanently removed. This cannot be undone.`, async function () {
+      confirmAction(`Admin "@${username}" will be removed. This cannot be undone.`, async function () {
         try {
           await deleteAdminApi(id);
           showFlash('Admin deleted.');
