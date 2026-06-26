@@ -211,17 +211,32 @@
               />
             </label>
 
-            <label id="userRoleWrap" class="hidden text-sm font-bold text-slate-700">
+            <div id="userRoleWrap" class="hidden relative text-sm font-bold text-slate-700">
               Role
-              <select
-                id="userRole"
-                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              <button
+                type="button"
+                id="userRoleDropdownBtn"
+                onclick="toggleRoleDropdown('user')"
+                class="mt-1 flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
               >
-                <option value="normal_user">Normal User</option>
-                <option value="general_admin">General Admin</option>
-                <option id="userRoleSuperAdminOption" value="super_admin">Super Admin</option>
-              </select>
-            </label>
+                <span id="userRoleSummary">Normal User</span>
+                <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              <div id="userRoleDropdownPanel" class="hidden absolute z-10 mt-1 w-full space-y-2 rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-lg">
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" id="userRoleNormalUser" onchange="onRoleCheckboxChange('user')" />
+                  Normal User
+                </label>
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" id="userRoleGeneralAdmin" onchange="onRoleCheckboxChange('user')" />
+                  General Admin
+                </label>
+                <label id="userRoleSuperAdminWrap" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" id="userRoleSuperAdmin" onchange="onRoleCheckboxChange('user')" />
+                  Super Admin
+                </label>
+              </div>
+            </div>
 
             <div class="flex gap-3 pt-2">
               <button
@@ -288,14 +303,31 @@
       <h3 id="confirmActionTitle" class="mb-2 text-lg font-black text-slate-900">Approve User?</h3>
       <p id="confirmActionText" class="mb-4 text-sm font-semibold text-slate-500"></p>
 
-      <div id="confirmActionRoleWrap" class="hidden mb-4 text-left">
+      <div id="confirmActionRoleWrap" class="hidden relative mb-4 text-left">
         <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Assign Role</label>
-        <select id="confirmActionRole"
-          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
-          <option value="normal_user">Normal User</option>
-          <option value="general_admin">General Admin</option>
-          <option id="confirmActionRoleSuperAdminOption" value="super_admin">Super Admin</option>
-        </select>
+        <button
+          type="button"
+          id="confirmActionRoleDropdownBtn"
+          onclick="toggleRoleDropdown('confirmAction')"
+          class="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+        >
+          <span id="confirmActionRoleSummary">Normal User</span>
+          <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+        <div id="confirmActionRoleDropdownPanel" class="hidden absolute z-10 mt-1 w-full space-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input type="checkbox" id="confirmActionRoleNormalUser" onchange="onRoleCheckboxChange('confirmAction')" />
+            Normal User
+          </label>
+          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input type="checkbox" id="confirmActionRoleGeneralAdmin" onchange="onRoleCheckboxChange('confirmAction')" />
+            General Admin
+          </label>
+          <label id="confirmActionRoleSuperAdminWrap" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input type="checkbox" id="confirmActionRoleSuperAdmin" onchange="onRoleCheckboxChange('confirmAction')" />
+            Super Admin
+          </label>
+        </div>
         <p class="mt-2 text-xs font-semibold text-amber-600">
           Admin roles get a temporary password emailed to them and must change it on first login.
         </p>
@@ -328,29 +360,93 @@
 
     // Both roles manage Users end to end now — only which admin role can be
     // assigned differs: general_admin may grant Normal User or General
-    // Admin (selecting General Admin still grants Normal User access too —
-    // the one allowed multi-role combination — it's just one dropdown
-    // value, not a separate choice), never Super Admin. The backend
-    // enforces the same rule independently (canAssignRole), so this is
-    // just keeping the option out of reach, not the only guard.
+    // Admin (the one allowed multi-role combination), never Super Admin.
+    // The backend enforces the same rule independently (canAssignRole), so
+    // this is just keeping the checkbox out of reach, not the only guard.
     document.getElementById('userRoleWrap').classList.remove('hidden');
     document.getElementById('userRoleWrap').classList.add('block');
     if (!isSuperAdmin()) {
-      document.getElementById('userRoleSuperAdminOption').remove();
-      document.getElementById('confirmActionRoleSuperAdminOption').remove();
+      document.getElementById('userRoleSuperAdminWrap').remove();
+      document.getElementById('confirmActionRoleSuperAdminWrap').remove();
     }
 
-    // Shared by the Add/Edit form ("user" prefix) and the Approve
-    // confirmation modal ("confirmAction" prefix).
+    // A compact dropdown trigger that opens a checkbox panel — lets General
+    // Admin be checked alongside Normal User (the one allowed multi-role
+    // combination) without the panel staying permanently expanded inline.
+    // Normal User is never independently toggleable, it's just a visual
+    // confirmation of that combination. Super Admin is mutually exclusive
+    // with both. Shared by the Add/Edit form ("user" prefix) and the
+    // Approve confirmation modal ("confirmAction" prefix).
+    function roleCheckboxes(prefix) {
+      return {
+        normal: document.getElementById(prefix + 'RoleNormalUser'),
+        general: document.getElementById(prefix + 'RoleGeneralAdmin'),
+        superAdmin: document.getElementById(prefix + 'RoleSuperAdmin')
+      };
+    }
+
+    function applyRoleExclusivity(prefix) {
+      const cb = roleCheckboxes(prefix);
+      const superChecked = !!(cb.superAdmin && cb.superAdmin.checked);
+      cb.general.disabled = superChecked;
+      if (superChecked) cb.general.checked = false;
+      cb.normal.checked = !superChecked;
+      cb.normal.disabled = true;
+    }
+
+    function roleSummaryText(prefix) {
+      const cb = roleCheckboxes(prefix);
+      const labels = [];
+      if (cb.normal.checked) labels.push('Normal User');
+      if (cb.general.checked) labels.push('General Admin');
+      if (cb.superAdmin && cb.superAdmin.checked) labels.push('Super Admin');
+      return labels.join(', ') || 'Normal User';
+    }
+
+    function updateRoleSummary(prefix) {
+      const summary = document.getElementById(prefix + 'RoleSummary');
+      if (summary) summary.textContent = roleSummaryText(prefix);
+    }
+
+    function onRoleCheckboxChange(prefix) {
+      applyRoleExclusivity(prefix);
+      updateRoleSummary(prefix);
+    }
+
     function selectedRole(prefix) {
-      const select = document.getElementById(prefix + 'Role');
-      return select ? select.value : 'normal_user';
+      const cb = roleCheckboxes(prefix);
+      if (cb.superAdmin && cb.superAdmin.checked) return 'super_admin';
+      if (cb.general.checked) return 'general_admin';
+      return 'normal_user';
     }
 
     function setSelectedRole(prefix, role) {
-      const select = document.getElementById(prefix + 'Role');
-      if (select) select.value = role;
+      const cb = roleCheckboxes(prefix);
+      cb.general.checked = role === 'general_admin';
+      if (cb.superAdmin) cb.superAdmin.checked = role === 'super_admin';
+      applyRoleExclusivity(prefix);
+      updateRoleSummary(prefix);
+      document.getElementById(prefix + 'RoleDropdownPanel').classList.add('hidden');
     }
+
+    function toggleRoleDropdown(prefix) {
+      const panel = document.getElementById(prefix + 'RoleDropdownPanel');
+      const isOpen = !panel.classList.contains('hidden');
+      ['user', 'confirmAction'].forEach(function (p) {
+        document.getElementById(p + 'RoleDropdownPanel').classList.add('hidden');
+      });
+      if (!isOpen) panel.classList.remove('hidden');
+    }
+
+    document.addEventListener('click', function (e) {
+      ['user', 'confirmAction'].forEach(function (prefix) {
+        const panel = document.getElementById(prefix + 'RoleDropdownPanel');
+        const btn = document.getElementById(prefix + 'RoleDropdownBtn');
+        if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) {
+          panel.classList.add('hidden');
+        }
+      });
+    });
 
     let users = [];
 
@@ -545,7 +641,10 @@
         : `They will be promoted to ${role.replace('_', ' ')} with a temporary password emailed to them. They must change it on first login.`;
     }
 
-    document.getElementById('confirmActionRole').addEventListener('change', updateApprovalText);
+    document.getElementById('confirmActionRoleGeneralAdmin').addEventListener('change', updateApprovalText);
+    if (document.getElementById('confirmActionRoleSuperAdmin')) {
+      document.getElementById('confirmActionRoleSuperAdmin').addEventListener('change', updateApprovalText);
+    }
 
     function closeConfirmActionModal() {
       pendingAction = null;
