@@ -1,9 +1,41 @@
 package models
 
+import (
+	"fmt"
+	"unicode"
+)
+
 // MinPasswordLength is the minimum number of characters required for any
 // admin password — set at login, reset, self-service change, or creation.
 // Centralized so a future policy change only needs to happen in one place.
 const MinPasswordLength = 12
+
+// ValidatePasswordComplexity enforces the minimum length plus a mix of
+// character classes, so a long password made of digits only (or letters
+// only) is still rejected. Applied everywhere an admin password is set —
+// creation, reset, and self-service change.
+func ValidatePasswordComplexity(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	}
+	var hasUpper, hasLower, hasDigit, hasSymbol bool
+	for _, r := range password {
+		switch {
+		case unicode.IsUpper(r):
+			hasUpper = true
+		case unicode.IsLower(r):
+			hasLower = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		case !unicode.IsSpace(r):
+			hasSymbol = true
+		}
+	}
+	if !hasUpper || !hasLower || !hasDigit || !hasSymbol {
+		return fmt.Errorf("password must mix uppercase, lowercase, a number, and a special character")
+	}
+	return nil
+}
 
 // Admin is an authenticated administrator account used in session data and login responses.
 type Admin struct {

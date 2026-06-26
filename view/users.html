@@ -211,17 +211,23 @@
               />
             </label>
 
-            <label id="userRoleWrap" class="hidden text-sm font-bold text-slate-700">
-              Role
-              <select
-                id="userRole"
-                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="normal_user">Normal User — book &amp; cancel rooms only</option>
-                <option value="general_admin">General Admin</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
-            </label>
+            <div id="userRoleWrap" class="hidden text-sm font-bold text-slate-700">
+              Roles
+              <div class="mt-1 space-y-2 rounded-xl border border-slate-300 bg-white px-4 py-3">
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" id="userRoleNormalUser" />
+                  Normal User — book &amp; cancel rooms only
+                </label>
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" id="userRoleGeneralAdmin" />
+                  General Admin — manage rooms, bookings &amp; approve normal users
+                </label>
+                <label id="userRoleSuperAdminWrap" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" id="userRoleSuperAdmin" />
+                  Super Admin — exclusive, cannot be combined with the roles above
+                </label>
+              </div>
+            </div>
 
             <div class="flex gap-3 pt-2">
               <button
@@ -249,11 +255,8 @@
         <div class="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 class="text-xl font-black text-slate-900">Registered Users</h2>
-            <p id="usersSubtitle" class="mt-1 font-semibold text-slate-500">
-              Search, edit, or delete registered users
-            </p>
           </div>
-
+w
           <input
             id="searchUser"
             placeholder="Search user..."
@@ -293,13 +296,21 @@
       <p id="confirmActionText" class="mb-4 text-sm font-semibold text-slate-500"></p>
 
       <div id="confirmActionRoleWrap" class="hidden mb-4 text-left">
-        <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Assign Role</label>
-        <select id="confirmActionRole"
-          class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
-          <option value="normal_user">Normal User — book &amp; cancel rooms only</option>
-          <option value="general_admin">General Admin</option>
-          <option value="super_admin">Super Admin</option>
-        </select>
+        <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Assign Roles</label>
+        <div class="space-y-2 rounded-xl border border-slate-200 px-4 py-3">
+          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input type="checkbox" id="confirmActionRoleNormalUser" />
+            Normal User — book &amp; cancel rooms only
+          </label>
+          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input type="checkbox" id="confirmActionRoleGeneralAdmin" />
+            General Admin — manage rooms, bookings &amp; approve normal users
+          </label>
+          <label id="confirmActionRoleSuperAdminWrap" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input type="checkbox" id="confirmActionRoleSuperAdmin" />
+            Super Admin — exclusive, cannot be combined with the roles above
+          </label>
+        </div>
         <p class="mt-2 text-xs font-semibold text-amber-600">
           Admin roles get a temporary password emailed to them and must change it on first login.
         </p>
@@ -334,15 +345,56 @@
     // assigned differs: general_admin may grant Normal User or General
     // Admin (the one allowed multi-role combination), never Super Admin.
     // The backend enforces the same rule independently (canAssignRole), so
-    // this is just keeping the option out of reach, not the only guard.
+    // this is just keeping the checkbox out of reach, not the only guard.
     document.getElementById('userRoleWrap').classList.remove('hidden');
     document.getElementById('userRoleWrap').classList.add('block');
     if (!isSuperAdmin()) {
-      ['#userRole', '#confirmActionRole'].forEach(function (selector) {
-        const superOption = document.querySelector(selector + ' option[value="super_admin"]');
-        if (superOption) superOption.remove();
-      });
+      document.getElementById('userRoleSuperAdminWrap').remove();
+      document.getElementById('confirmActionRoleSuperAdminWrap').remove();
     }
+
+    // Normal User + General Admin is the one allowed multi-role combination
+    // — checking General Admin always shows Normal User checked alongside
+    // it (it's never independently toggleable, just a visual confirmation
+    // of that combination). Super Admin is mutually exclusive with both.
+    // Shared by the Add/Edit form ("user" prefix) and the Approve
+    // confirmation modal ("confirmAction" prefix).
+    function roleCheckboxes(prefix) {
+      return {
+        normal: document.getElementById(prefix + 'RoleNormalUser'),
+        general: document.getElementById(prefix + 'RoleGeneralAdmin'),
+        superAdmin: document.getElementById(prefix + 'RoleSuperAdmin')
+      };
+    }
+
+    function applyRoleExclusivity(prefix) {
+      const cb = roleCheckboxes(prefix);
+      const superChecked = !!(cb.superAdmin && cb.superAdmin.checked);
+      cb.general.disabled = superChecked;
+      if (superChecked) cb.general.checked = false;
+      cb.normal.checked = !superChecked;
+      cb.normal.disabled = true;
+    }
+
+    function selectedRole(prefix) {
+      const cb = roleCheckboxes(prefix);
+      if (cb.superAdmin && cb.superAdmin.checked) return 'super_admin';
+      if (cb.general.checked) return 'general_admin';
+      return 'normal_user';
+    }
+
+    function setRoleCheckboxes(prefix, role) {
+      const cb = roleCheckboxes(prefix);
+      cb.general.checked = role === 'general_admin';
+      if (cb.superAdmin) cb.superAdmin.checked = role === 'super_admin';
+      applyRoleExclusivity(prefix);
+    }
+
+    ['user', 'confirmAction'].forEach(function (prefix) {
+      const cb = roleCheckboxes(prefix);
+      cb.general.addEventListener('change', function () { applyRoleExclusivity(prefix); });
+      if (cb.superAdmin) cb.superAdmin.addEventListener('change', function () { applyRoleExclusivity(prefix); });
+    });
 
     let users = [];
 
@@ -351,8 +403,7 @@
       document.getElementById('userName').value = '';
       document.getElementById('userEmail').value = '';
       document.getElementById('userPhone').value = '';
-      const roleSelect = document.getElementById('userRole');
-      if (roleSelect) roleSelect.value = 'normal_user';
+      setRoleCheckboxes('user', 'normal_user');
       document.getElementById('formTitle').textContent = 'Add User';
       document.getElementById('saveBtn').textContent = 'Save User';
     }
@@ -495,9 +546,8 @@
       const isApprove = type === 'approve';
 
       const roleWrap = document.getElementById('confirmActionRoleWrap');
-      const roleSelect = document.getElementById('confirmActionRole');
 
-      roleSelect.value = 'normal_user';
+      setRoleCheckboxes('confirmAction', 'normal_user');
       roleWrap.classList.toggle('hidden', !isApprove);
 
       document.getElementById('confirmActionReason').value = '';
@@ -533,13 +583,16 @@
         return;
       }
 
-      const role = document.getElementById('confirmActionRole').value;
+      const role = selectedRole('confirmAction');
       document.getElementById('confirmActionText').textContent = role === 'normal_user'
         ? 'They will be notified by email and can start booking rooms.'
         : `They will be promoted to ${role.replace('_', ' ')} with a temporary password emailed to them. They must change it on first login.`;
     }
 
-    document.getElementById('confirmActionRole').addEventListener('change', updateApprovalText);
+    document.getElementById('confirmActionRoleGeneralAdmin').addEventListener('change', updateApprovalText);
+    if (document.getElementById('confirmActionRoleSuperAdmin')) {
+      document.getElementById('confirmActionRoleSuperAdmin').addEventListener('change', updateApprovalText);
+    }
 
     function closeConfirmActionModal() {
       pendingAction = null;
@@ -549,7 +602,7 @@
     async function runConfirmedAction() {
       if (!pendingAction) return;
       const { id, type } = pendingAction;
-      const role = document.getElementById('confirmActionRole').value;
+      const role = selectedRole('confirmAction');
       closeConfirmActionModal();
 
       try {
@@ -613,8 +666,7 @@
       document.getElementById('userName').value = u.name;
       document.getElementById('userEmail').value = u.email;
       document.getElementById('userPhone').value = u.phone || '';
-      const roleSelect = document.getElementById('userRole');
-      if (roleSelect) roleSelect.value = u.adminRole || 'normal_user';
+      setRoleCheckboxes('user', u.adminRole || 'normal_user');
       document.getElementById('formTitle').textContent = 'Edit User';
       document.getElementById('saveBtn').textContent = 'Update User';
 
@@ -639,13 +691,12 @@
       clearModalMsg('userModalMsg');
 
       const id = document.getElementById('userId').value;
-      const roleSelect = document.getElementById('userRole');
 
       const payload = {
         name: document.getElementById('userName').value.trim(),
         email: document.getElementById('userEmail').value.trim().toLowerCase(),
         phone: document.getElementById('userPhone').value.trim(),
-        role: roleSelect ? roleSelect.value : 'normal_user'
+        role: selectedRole('user')
       };
 
       try {

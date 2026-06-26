@@ -259,8 +259,8 @@ func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "reset token is required")
 		return
 	}
-	if len(password) < models.MinPasswordLength {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("password must be at least %d characters", models.MinPasswordLength))
+	if err := models.ValidatePasswordComplexity(password); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

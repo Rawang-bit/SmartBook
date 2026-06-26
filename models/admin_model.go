@@ -148,8 +148,8 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	if !utils.IsValidEmail(req.Email) {
 		return Admin{}, fmt.Errorf("invalid email address")
 	}
-	if len(req.Password) < MinPasswordLength {
-		return Admin{}, fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	if err := ValidatePasswordComplexity(req.Password); err != nil {
+		return Admin{}, err
 	}
 	req.Role = normalizeAdminRole(req.Role)
 
@@ -265,11 +265,20 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 // ResetPassword sets a new bcrypt-hashed password for any admin, chosen by
 // someone other than the account's owner — so, like CreateWithGeneratedPassword,
 // it forces a change on next login rather than letting a password someone
-// else now knows remain in use indefinitely.
+// else now knows remain in use indefinitely. Rejected if it's the same
+// password the account already has, so a reset can't just restate the
+// password being replaced.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
-	if len(newPassword) < MinPasswordLength {
-		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	if err := ValidatePasswordComplexity(newPassword); err != nil {
+		return err
+	}
+	oldHash, err := m.GetPasswordHash(id)
+	if err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(oldHash), []byte(newPassword)) == nil {
+		return fmt.Errorf("new password must be different from the current password")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -288,11 +297,14 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 
 // ChangeOwnPassword verifies the admin's current password then stores the new
 // one, and clears must_reset_password so a temporary password is only ever
-// usable once.
+// usable once. Rejected if the new password is the same as the current one —
+// this is the path a forced password-reset flows through, so it's what stops
+// someone from "changing" straight back to the temporary/default password
+// they were just issued.
 // Returns ErrUnauthorized if the current password is wrong.
 func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error {
-	if len(newPw) < MinPasswordLength {
-		return fmt.Errorf("new password must be at least %d characters", MinPasswordLength)
+	if err := ValidatePasswordComplexity(newPw); err != nil {
+		return err
 	}
 	hash, err := m.GetPasswordHash(id)
 	if err != nil {
@@ -300,6 +312,9 @@ func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error 
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(currentPw)); err != nil {
 		return ErrUnauthorized
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(newPw)) == nil {
+		return fmt.Errorf("new password must be different from your current password")
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPw), bcrypt.DefaultCost)
 	if err != nil {

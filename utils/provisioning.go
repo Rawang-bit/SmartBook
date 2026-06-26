@@ -7,30 +7,72 @@ import (
 	"fmt"
 )
 
-// passwordCharset deliberately excludes visually ambiguous characters
+// Character classes deliberately exclude visually ambiguous characters
 // (0/O, 1/l/I) since a human may need to retype this temporary password.
-const passwordCharset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*"
+const (
+	upperChars      = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+	lowerChars      = "abcdefghijkmnopqrstuvwxyz"
+	digitChars      = "23456789"
+	symbolChars     = "!@#$%*"
+	passwordCharset = upperChars + lowerChars + digitChars + symbolChars
+)
 
 // GenerateRandomPassword returns a cryptographically random password of the
 // given length (minimum 12, to satisfy the application's password policy).
-// Intended for one-time temporary passwords that the recipient must change
-// on first login — see AdminModel.CreateWithGeneratedPassword.
+// At least one character from each class (upper, lower, digit, symbol) is
+// guaranteed, not left to chance, so a generated password always satisfies
+// models.ValidatePasswordComplexity. Intended for one-time temporary
+// passwords that the recipient must change on first login — see
+// AdminModel.CreateWithGeneratedPassword.
 func GenerateRandomPassword(length int) (string, error) {
 	if length < 12 {
 		length = 12
 	}
 
-	buf := make([]byte, length)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("crypto/rand: %w", err)
+	result := make([]byte, length)
+	classes := []string{upperChars, lowerChars, digitChars, symbolChars}
+	for i, class := range classes {
+		c, err := randomCharFrom(class)
+		if err != nil {
+			return "", err
+		}
+		result[i] = c
+	}
+	for i := len(classes); i < length; i++ {
+		c, err := randomCharFrom(passwordCharset)
+		if err != nil {
+			return "", err
+		}
+		result[i] = c
 	}
 
-	charsetLen := byte(len(passwordCharset))
-	result := make([]byte, length)
-	for i, b := range buf {
-		result[i] = passwordCharset[b%charsetLen]
+	if err := shuffleBytes(result); err != nil {
+		return "", err
 	}
 	return string(result), nil
+}
+
+func randomCharFrom(set string) (byte, error) {
+	buf := make([]byte, 1)
+	if _, err := rand.Read(buf); err != nil {
+		return 0, fmt.Errorf("crypto/rand: %w", err)
+	}
+	return set[buf[0]%byte(len(set))], nil
+}
+
+// shuffleBytes randomizes order in place (Fisher-Yates) so the guaranteed
+// one-per-class characters from GenerateRandomPassword aren't always in the
+// same leading positions.
+func shuffleBytes(b []byte) error {
+	for i := len(b) - 1; i > 0; i-- {
+		buf := make([]byte, 1)
+		if _, err := rand.Read(buf); err != nil {
+			return fmt.Errorf("crypto/rand: %w", err)
+		}
+		j := int(buf[0]) % (i + 1)
+		b[i], b[j] = b[j], b[i]
+	}
+	return nil
 }
 
 // GenerateSecureToken returns a cryptographically random 64-character hex
