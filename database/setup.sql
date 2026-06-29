@@ -13,7 +13,11 @@
 -- scratch reference and a way to provision a database without first
 -- running the app.
 
-CREATE DATABASE bookroom_db;
+-- Created only if it doesn't already exist, so re-running this script
+-- against a server where it partially ran before doesn't error out.
+SELECT 'CREATE DATABASE bookroom_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'bookroom_db')\gexec
+
 \c bookroom_db
 
 -- ── Admins table ─────────────────────────────────────────────────────────────
