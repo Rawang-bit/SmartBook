@@ -14,6 +14,7 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 
 	// ── Health ────────────────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/health", c.HealthCheck)
+	mux.HandleFunc("GET /api/config", c.PublicConfig)
 
 	// ── Auth ──────────────────────────────────────────────────────────────────
 	mux.HandleFunc("POST /api/auth/login",           c.Login)

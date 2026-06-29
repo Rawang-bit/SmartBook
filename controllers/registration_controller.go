@@ -100,6 +100,10 @@ func (c *Controller) SendRegistrationOTP(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "valid email address is required")
 		return
 	}
+	if err := utils.VerifyTurnstile(req.CaptchaToken, clientIP(r)); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Don't issue a code for an email that is already registered — the
 	// caller should use the access page directly instead.

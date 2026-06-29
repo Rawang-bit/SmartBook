@@ -82,8 +82,9 @@ type LoginResponse struct {
 // ForgotPasswordRequest is the JSON body sent by the forgot-password form.
 // Both username and email must match a single admin account for the reset to proceed.
 type ForgotPasswordRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	Username     string `json:"username"`
+	Email        string `json:"email"`
+	CaptchaToken string `json:"captchaToken"`
 }
 
 // ResetPasswordRequest is the JSON body sent by the reset-password form.
@@ -154,8 +155,9 @@ type CheckEmailRequest struct {
 
 // SendOTPRequest is the JSON body sent to request a registration verification code.
 type SendOTPRequest struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	CaptchaToken string `json:"captchaToken"`
 }
 
 // VerifyOTPRequest is the JSON body sent to verify a one-time code — either

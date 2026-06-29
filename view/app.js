@@ -365,8 +365,8 @@ function togglePw(btn) {
 }
 
 // Password-reset helpers — public endpoints, no session cookie required.
-async function forgotPasswordApi(username, email) {
-  return api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email }) });
+async function forgotPasswordApi(username, email, captchaToken) {
+  return api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email, captchaToken }) });
 }
 async function resetPasswordApi(token, password) {
   return api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });

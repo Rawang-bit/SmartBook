@@ -7,6 +7,7 @@
 
   <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://challenge.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -92,6 +93,7 @@
             <input type="tel" id="registerPhone" placeholder="Your phone number"
               class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
+          <div id="registerTurnstile" class="flex justify-center"></div>
           <button type="submit" id="registerSubmitBtn"
             class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white shadow-xl transition hover:bg-indigo-700">
             Send Verification Code
@@ -188,6 +190,7 @@
     </div>
   </div>
 
+  <script src="turnstile-helper.js"></script>
   <script>
     // { mode: 'register' | 'device', name?, email } — name is only set (and
     // required) for mode 'register'; mode 'device' re-verifies an existing
@@ -209,6 +212,7 @@
         document.getElementById(s).classList.toggle('hidden', s !== id);
       });
       ['emailMsg', 'registerMsg', 'otpMsg'].forEach(clearMsg);
+      if (id === 'registerStep') initTurnstile('registerTurnstile');
     }
 
     function clearMsg(id) {
@@ -303,7 +307,8 @@
       btn.textContent = 'Sending…';
 
       try {
-        await api('/api/register/send-otp', { method: 'POST', body: JSON.stringify({ name, email }) });
+        const captchaToken = getTurnstileToken('registerTurnstile');
+        await api('/api/register/send-otp', { method: 'POST', body: JSON.stringify({ name, email, captchaToken }) });
         pendingRegistration = { mode: 'register', name, email, phone };
         document.getElementById('otpSubtext').textContent = `Enter the 6-digit code sent to ${email}.`;
         document.getElementById('otpCode').value = '';
@@ -312,6 +317,7 @@
       } catch (err) {
         showMsg('registerMsg', err.message, 'error');
       } finally {
+        resetTurnstile('registerTurnstile');
         btn.disabled = false;
         btn.textContent = 'Send Verification Code';
       }

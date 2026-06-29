@@ -19,6 +19,17 @@ func (c *Controller) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// PublicConfig exposes frontend-safe configuration values that depend on the
+// environment — currently just the Turnstile site key, which (unlike the
+// secret key used in utils.VerifyTurnstile) is public by design and meant to
+// be embedded in the page. Blank if TURNSTILE_SITE_KEY isn't set, in which
+// case the frontend skips rendering the widget entirely.
+func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"turnstileSiteKey": os.Getenv("TURNSTILE_SITE_KEY"),
+	})
+}
+
 // recordFailedLoginAttempt counts one more failed attempt for username and
 // writes either a lockout notice or a "remaining attempts" warning. Shared by
 // the unknown-username and wrong-password branches of Login, which must
@@ -194,6 +205,10 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if !utils.IsValidEmail(email) {
 		writeError(w, http.StatusBadRequest, "valid email address is required")
+		return
+	}
+	if err := utils.VerifyTurnstile(req.CaptchaToken, clientIP(r)); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
