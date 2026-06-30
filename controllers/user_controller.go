@@ -429,7 +429,10 @@ func (c *Controller) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, _ := c.Users.GetByID(id)
+	target, getErr := c.Users.GetByID(id)
+	if getErr != nil {
+		log.Printf("[USER] GetByID(%d) before delete failed — audit label will be empty: %v", id, getErr)
+	}
 
 	err := c.Users.Delete(id)
 	if errors.Is(err, models.ErrNotFound) {

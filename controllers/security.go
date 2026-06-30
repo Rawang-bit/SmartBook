@@ -101,21 +101,25 @@ func SecureHeaders(next http.Handler) http.Handler {
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 
 		// Content Security Policy
-		// script-src  — self + inline scripts (Tailwind/Lucide need it) + trusted CDN hosts
-		// style-src   — self + inline styles (Tailwind generates them)
-		// font-src    — self only; every page uses the system Helvetica/Arial stack, no web fonts
+		// script-src  — self + inline scripts (Tailwind needs unsafe-inline) + CDN hosts +
+		//               Cloudflare Turnstile script host
+		// frame-src   — Cloudflare Turnstile renders its challenge as a sandboxed iframe;
+		//               without this the widget is blank in every browser
+		// connect-src — Turnstile's JS calls Cloudflare to verify the solved challenge
+		// style-src   — self + inline styles (Tailwind generates them at runtime)
+		// font-src    — self only; every page uses the system Helvetica/Arial stack
 		// img-src     — self + data URIs (base64 favicons / avatars)
-		// connect-src — API calls stay on the same origin only
-		// frame-ancestors — block all framing (aligns with X-Frame-Options: DENY)
+		// frame-ancestors — block all framing of THIS page (aligns with X-Frame-Options: DENY)
 		// base-uri    — prevent <base> tag hijacking
 		// form-action — restrict form POST targets to the same origin
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; "+
+				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://challenge.cloudflare.com https://challenges.cloudflare.com; "+
+				"frame-src https://challenges.cloudflare.com; "+
+				"connect-src 'self' https://challenges.cloudflare.com; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"font-src 'self'; "+
 				"img-src 'self' data:; "+
-				"connect-src 'self'; "+
 				"frame-ancestors 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self';",

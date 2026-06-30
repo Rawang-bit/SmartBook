@@ -10,12 +10,14 @@ import (
 	"bookroom-management-system/utils"
 )
 
-// AdminModel manages all database operations and authentication logic for admin accounts.
+// AdminModel handles all database operations for admin accounts.
 type AdminModel struct {
 	DB *sql.DB
 }
 
-// normalizeAdminRole defaults any role other than "super_admin" to "general_admin".
+// normalizeAdminRole coerces any unrecognised role string to "general_admin".
+// "super_admin" is the only other valid value; anything else is a caller error
+// that we fail safely rather than leaving the field empty or invalid in the DB.
 func normalizeAdminRole(role string) string {
 	if role == "super_admin" {
 		return role
@@ -23,17 +25,17 @@ func normalizeAdminRole(role string) string {
 	return "general_admin"
 }
 
-// nullableString converts an empty string to SQL NULL so a unique constraint
-// on an optional column (e.g. admins.email) doesn't treat multiple blank
-// values as duplicates of each other.
-func nullableString(s string) interface{} {
+// nullableString returns nil for an empty string so a UNIQUE constraint on an
+// optional column (e.g. admins.email) doesn't treat every empty value as a
+// duplicate of every other empty value.
+func nullableString(s string) any {
 	if s == "" {
 		return nil
 	}
 	return s
 }
 
-// List returns all admin accounts ordered by creation date, including their email.
+// List returns all admin accounts ordered by creation date.
 func (m *AdminModel) List() ([]AdminDetail, error) {
 	rows, err := m.DB.Query(`
 		SELECT id, username, name, role, COALESCE(email, ''), status, TO_CHAR(created_at, 'YYYY-MM-DD')
@@ -49,16 +51,15 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 	for rows.Next() {
 		var a AdminDetail
 		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Email, &a.Status, &a.CreatedAt); err != nil {
-			continue
+			return nil, err
 		}
 		admins = append(admins, a)
 	}
 	return admins, rows.Err()
 }
 
-// GetByUsername fetches an admin by username along with its bcrypt hash and account status.
-// The returned Admin's MustResetPassword field tells the caller whether this
-// account still needs to replace a generated temporary password.
+// GetByUsername returns the admin row, bcrypt hash, and status for a given username.
+// MustResetPassword on the returned Admin indicates an unresolved temporary password.
 // Returns ErrNotFound if the username does not exist.
 func (m *AdminModel) GetByUsername(username string) (Admin, string, string, error) {
 	var admin  Admin
@@ -129,12 +130,10 @@ func (m *AdminModel) GetPasswordHash(id int64) (string, error) {
 	return hash, err
 }
 
-// Create inserts a new admin account after validating and hashing the password.
-// The admin's email address doubles as their login username — there is no
-// separate username field — so every admin created here logs in with the
-// same address used for password-reset emails, matching the username
-// assigned when a self-registration is promoted to an admin role (see
-// createAdminFromApproval in the users controller).
+// Create adds a new admin account. The email doubles as the login username so
+// password-reset emails always reach the correct inbox. Because a super admin
+// typed the initial password (not the new admin themselves), must_reset_password
+// is set to force a change on first login.
 // Returns ErrDuplicate if the email is already taken.
 func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	req.Name     = strings.TrimSpace(req.Name)
@@ -160,9 +159,6 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 
 	username := req.Email
 
-	// A super admin chose this password directly, not the new admin
-	// themselves — force a change on first login so it isn't a password
-	// someone else picked and now knows, mirroring CreateWithGeneratedPassword.
 	var admin Admin
 	err = m.DB.QueryRow(`
 		INSERT INTO admins(username, password, name, role, email, must_reset_password)
@@ -180,13 +176,11 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	return admin, nil
 }
 
-// CreateWithGeneratedPassword creates a new admin account with a securely
-// generated random temporary password and marks it as requiring a password
-// change on first login. Used when a pending self-registration is promoted
-// to an admin role instead of approved as a normal booking user.
-//
-// Returns the created admin and the plaintext temporary password — the
-// caller is responsible for emailing it and must never log or persist it.
+// CreateWithGeneratedPassword creates an admin with a secure random temporary
+// password. Used when a self-registration is promoted to an admin role instead
+// of approved as a normal booking user.
+// Returns the plaintext temporary password so the caller can email it — never
+// log or store it.
 // Returns ErrDuplicate if the username or email is already taken.
 func (m *AdminModel) CreateWithGeneratedPassword(username, name, role, email string) (Admin, string, error) {
 	username = strings.TrimSpace(username)

@@ -1,21 +1,24 @@
-// Cloudflare Turnstile integration, shared by every public page that needs
-// a CAPTCHA before triggering an email send (self-registration OTP, admin
-// password reset). The token collected here proves nothing by itself — the
-// Go backend re-verifies it server-side (utils.VerifyTurnstile) before
-// acting on the request; this file only handles getting that token onto
-// the page and into the request body.
+// Cloudflare Turnstile integration for the self-registration and admin
+// forgot-password flows. The token collected here is sent to the Go backend
+// which re-verifies it server-side — the frontend can't bypass the check.
 //
-// Rendering is lazy and idempotent — call initTurnstile(containerId) right
-// before its container becomes visible (e.g. inside showStep()); it's a
-// no-op on every call after the first for that container.
+// Call initTurnstile(containerId) when the container first becomes visible.
+// It is idempotent: subsequent calls for the same container are no-ops.
 //
-// If TURNSTILE_SITE_KEY isn't configured on the server, /api/config returns
-// an empty key and the container is left empty — getTurnstileToken then
-// always returns '', and the backend fails open in that same case, so the
-// feature is transparently disabled end to end until it's configured.
+// If TURNSTILE_SITE_KEY is not set on the server, /api/config returns an empty
+// key, the containers stay empty, and getTurnstileToken returns ''. The backend
+// VerifyTurnstile also fails open when TURNSTILE_SECRET_KEY is unset, so both
+// sides degrade gracefully together in environments without Turnstile configured.
 
+// Cached promise so /api/config is only fetched once per page load.
 let turnstileSiteKeyPromise = null;
-const turnstileWidgets = {}; // containerId -> widgetId, or null while pending
+
+// Maps containerId → widgetId once rendered, or null while the render is pending.
+const turnstileWidgets = {};
+
+// Maximum number of 100 ms polls to wait for the Turnstile script to load
+// before giving up. Prevents an infinite loop if the CDN script fails to load.
+const TURNSTILE_MAX_RETRIES = 50; // 5 seconds total
 
 function getTurnstileSiteKey() {
   if (!turnstileSiteKeyPromise) {
@@ -28,14 +31,16 @@ function getTurnstileSiteKey() {
 }
 
 async function initTurnstile(containerId) {
-  if (containerId in turnstileWidgets) return; // already rendered or in progress
-  turnstileWidgets[containerId] = null;
+  if (containerId in turnstileWidgets) return;
+  turnstileWidgets[containerId] = null; // mark in-progress to block duplicate calls
 
   const siteKey = await getTurnstileSiteKey();
   if (!siteKey) return;
 
+  var retries = 0;
   (function renderWhenReady() {
     if (typeof turnstile === 'undefined') {
+      if (++retries > TURNSTILE_MAX_RETRIES) return; // script failed to load
       setTimeout(renderWhenReady, 100);
       return;
     }
@@ -43,12 +48,16 @@ async function initTurnstile(containerId) {
   })();
 }
 
+// Returns the solved CAPTCHA token, or '' if the widget hasn't loaded yet.
 function getTurnstileToken(containerId) {
   const widgetId = turnstileWidgets[containerId];
   if (!widgetId || typeof turnstile === 'undefined') return '';
   return turnstile.getResponse(widgetId) || '';
 }
 
+// Resets the widget after a submission so the next attempt requires a fresh solve.
+// Turnstile tokens are single-use; skipping this would cause the backend to
+// reject a reused token on the very next attempt.
 function resetTurnstile(containerId) {
   const widgetId = turnstileWidgets[containerId];
   if (widgetId && typeof turnstile !== 'undefined') {

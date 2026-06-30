@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"bookroom-management-system/models"
@@ -79,7 +80,10 @@ func (c *Controller) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room, _ := c.Rooms.GetByID(id)
+	room, getErr := c.Rooms.GetByID(id)
+	if getErr != nil {
+		log.Printf("[ROOM] GetByID(%d) before delete failed — audit label will be empty: %v", id, getErr)
+	}
 
 	err := c.Rooms.Delete(id)
 	if errors.Is(err, models.ErrForeignKey) {

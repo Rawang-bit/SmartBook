@@ -55,7 +55,10 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	before, _, _ := c.Admins.GetByID(id)
+	before, _, err := c.Admins.GetByID(id)
+	if err != nil {
+		log.Printf("[ADMIN] GetByID(%d) before update failed — audit will show empty before-role: %v", id, err)
+	}
 
 	sess, _ := c.getSession(r)
 	admin, err := c.Admins.Update(id, req, sess.AdminID, sess.Role)
@@ -122,7 +125,10 @@ func (c *Controller) ResetAdminPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	target, _, _ := c.Admins.GetByID(id)
+	target, _, getErr := c.Admins.GetByID(id)
+	if getErr != nil {
+		log.Printf("[ADMIN] GetByID(%d) before password reset failed — audit label will be empty: %v", id, getErr)
+	}
 
 	err := c.Admins.ResetPassword(id, req.NewPassword)
 	if errors.Is(err, models.ErrNotFound) {
@@ -209,7 +215,10 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, _, _ := c.Admins.GetByID(id)
+	target, _, getErr := c.Admins.GetByID(id)
+	if getErr != nil {
+		log.Printf("[ADMIN] GetByID(%d) before status change failed — audit label will be empty: %v", id, getErr)
+	}
 
 	err := c.Admins.SetStatus(id, newStatus)
 	if errors.Is(err, models.ErrNotFound) {
@@ -247,7 +256,10 @@ func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, _, _ := c.Admins.GetByID(id)
+	target, _, getErr := c.Admins.GetByID(id)
+	if getErr != nil {
+		log.Printf("[ADMIN] GetByID(%d) before delete failed — audit label will be empty: %v", id, getErr)
+	}
 
 	err := c.Admins.Delete(id)
 	if errors.Is(err, models.ErrNotFound) {

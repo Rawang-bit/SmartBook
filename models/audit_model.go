@@ -35,9 +35,9 @@ func (m *AuditModel) Record(e AuditEntry) {
 	}
 }
 
-// nullableInt64 converts a zero ID (meaning "none") to SQL NULL, since 0 is
-// never a valid admin/user/room/booking primary key.
-func nullableInt64(id int64) interface{} {
+// nullableInt64 returns nil for a zero ID so optional foreign-key columns
+// store NULL instead of 0 (0 is never a valid primary key in this schema).
+func nullableInt64(id int64) any {
 	if id == 0 {
 		return nil
 	}

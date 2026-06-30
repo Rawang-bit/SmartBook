@@ -1,36 +1,34 @@
 /*
   SmartBook Admin Frontend Helpers
   ------------------------------------------------------------------
-  This file contains shared admin-side JavaScript:
-  - API wrapper with admin token
-  - authentication helpers
-  - formatting utilities
-  - shared booking/room/user fetch helpers
+  Shared utilities used across every admin page:
+  - api(): fetch wrapper that sends the session cookie and handles 401 redirects
+  - auth helpers (isSuperAdmin, requireAuth, logout)
+  - time / date formatting utilities
+  - API call wrappers for bookings, rooms, users, admins, audit
 
-  Keep page-specific rendering inside each HTML page unless the same
-  behavior is reused across multiple pages.
+  Keep page-specific rendering logic inside each HTML page's own <script>.
 */
 
 const API_BASE = '/api';
 
-// Common fetch helper for admin API calls.
-// Cookies are sent automatically by the browser — no manual token needed.
+// api() is the single fetch wrapper for all admin API calls. The session cookie
+// is sent automatically (same-origin) — no manual token is needed.
+// A 401 on any endpoint other than /auth/login means the session expired on the
+// server (it's re-validated on every request), so we redirect to login rather
+// than leaving the admin staring at a broken page.
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
 
   const res = await fetch(API_BASE + path, {
     headers,
-    credentials: 'same-origin', // Always include cookies with same-origin requests
+    credentials: 'same-origin',
     ...options,
   });
 
   let data = null;
   try { data = await res.json(); } catch (_) {}
 
-  // A 401 from any endpoint other than the login attempt itself means the
-  // session cookie is missing or has expired server-side (RequireAdmin /
-  // RequireSuperAdmin rejected the request). Force the admin back to the
-  // login page instead of leaving them looking at a broken admin page.
   if (res.status === 401 && path !== '/auth/login') {
     forceLogout();
   }
@@ -309,10 +307,13 @@ function formatDateDisplay(value) {
   return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' });
 }
 
+// Returns a booking's start time as minutes since midnight for sorting.
+// Guards against a missing start field by returning 0 rather than NaN.
 function bookingStartMinutes(booking) {
   const time = toTime24(booking.start || booking.startTime || '');
+  if (!time) return 0;
   const parts = time.split(':').map(Number);
-  return parts[0] * 60 + parts[1];
+  return (parts[0] || 0) * 60 + (parts[1] || 0);
 }
 
 function hasConflictInList(bookings, roomId, date, start, end, excludeId = null) {
