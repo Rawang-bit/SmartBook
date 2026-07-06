@@ -30,27 +30,39 @@ func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// recordFailedLoginAttempt counts one more failed attempt for username and
+// recordFailedLoginAttempt increments the failure counter for username and
 // writes either a lockout notice or a "remaining attempts" warning. Shared by
-// the unknown-username and wrong-password branches of Login, which must
-// respond identically so an attacker can't distinguish "no such user" from
-// "wrong password".
+// the unknown-username and wrong-password branches of Login so both paths
+// respond identically — an attacker can't distinguish "no such user" from
+// "wrong password" by timing or message.
 func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string) {
+	nowLocked := c.LoginAttempts.RecordFailure(username)
+	remaining := c.LoginAttempts.Remaining(username)
+
+	details := fmt.Sprintf("attempt %d of %d", session.MaxLoginAttempts-remaining, session.MaxLoginAttempts)
 	c.Audit.Record(models.AuditEntry{
 		ActorType:  "system",
 		ActorLabel: username,
 		Action:     "login_failed",
+		Details:    details,
 		IPAddress:  clientIP(r),
 		UserAgent:  r.UserAgent(),
 	})
 
-	if c.LoginAttempts.RecordFailure(username) {
+	if nowLocked {
+		c.Audit.Record(models.AuditEntry{
+			ActorType:  "system",
+			ActorLabel: username,
+			Action:     "account_locked",
+			Details:    fmt.Sprintf("locked after %d failed attempts — auto-unlocks in 15 minutes", session.MaxLoginAttempts),
+			IPAddress:  clientIP(r),
+			UserAgent:  r.UserAgent(),
+		})
 		writeError(w, http.StatusTooManyRequests,
 			fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
 				session.MaxLoginAttempts))
 		return
 	}
-	remaining := c.LoginAttempts.Remaining(username)
 	writeError(w, http.StatusUnauthorized,
 		fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
 }
@@ -83,6 +95,14 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	// immediately, regardless of whether the password would have been correct.
 	if locked, until := c.LoginAttempts.IsLocked(username); locked {
 		mins := int(time.Until(until).Minutes()) + 1
+		c.Audit.Record(models.AuditEntry{
+			ActorType:  "system",
+			ActorLabel: username,
+			Action:     "login_blocked_locked",
+			Details:    fmt.Sprintf("account is locked — %d minute(s) remaining", mins),
+			IPAddress:  clientIP(r),
+			UserAgent:  r.UserAgent(),
+		})
 		writeError(w, http.StatusTooManyRequests,
 			fmt.Sprintf("account locked after %d failed attempts — try again in %d minute(s)",
 				session.MaxLoginAttempts, mins))
@@ -106,6 +126,15 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	// time for a revoked account with a correct password is indistinguishable from a
 	// failed login (timing-attack safe).
 	if status == "revoked" {
+		c.Audit.Record(models.AuditEntry{
+			ActorType:  "admin",
+			ActorID:    admin.ID,
+			ActorLabel: admin.Username,
+			Action:     "login_blocked_revoked",
+			Details:    "login attempt on a revoked account",
+			IPAddress:  clientIP(r),
+			UserAgent:  r.UserAgent(),
+		})
 		writeError(w, http.StatusForbidden, "your account access has been revoked")
 		return
 	}
@@ -216,10 +245,29 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	adminID, adminName, adminEmail, err := c.Admins.GetByUsernameAndEmail(username, email)
 	if err != nil {
-		// No match (or DB error) — return the neutral message to prevent enumeration.
+		// No match — log for security monitoring but return the neutral message
+		// to prevent username/email enumeration by the caller.
+		c.Audit.Record(models.AuditEntry{
+			ActorType:  "system",
+			ActorLabel: username,
+			Action:     "password_reset_failed",
+			Details:    "no active account matched the provided email",
+			IPAddress:  clientIP(r),
+			UserAgent:  r.UserAgent(),
+		})
 		writeJSON(w, http.StatusOK, map[string]string{"message": neutralMsg})
 		return
 	}
+
+	c.Audit.Record(models.AuditEntry{
+		ActorType:  "admin",
+		ActorID:    adminID,
+		ActorLabel: adminEmail,
+		Action:     "password_reset_requested",
+		Details:    "reset link sent to " + adminEmail,
+		IPAddress:  clientIP(r),
+		UserAgent:  r.UserAgent(),
+	})
 
 	token := c.ResetTokens.Create(adminID)
 	appURL := os.Getenv("APP_URL")
@@ -281,14 +329,38 @@ func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	adminID, ok := c.ResetTokens.Consume(token)
 	if !ok {
+		c.Audit.Record(models.AuditEntry{
+			ActorType:  "system",
+			ActorLabel: "unknown",
+			Action:     "password_reset_token_invalid",
+			Details:    "reset token was invalid or already expired",
+			IPAddress:  clientIP(r),
+			UserAgent:  r.UserAgent(),
+		})
 		writeError(w, http.StatusBadRequest, "this reset link is invalid or has expired — please request a new one")
 		return
 	}
 
-	if err := c.Admins.ResetPassword(adminID, password); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update password, please try again")
+	if err := c.Admins.ApplyPasswordReset(adminID, password); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Best-effort label lookup — the reset completed regardless of whether this succeeds.
+	resetAdmin, _, _ := c.Admins.GetByID(adminID)
+	actorLabel := resetAdmin.Username
+	if actorLabel == "" {
+		actorLabel = fmt.Sprintf("admin#%d", adminID)
+	}
+	c.Audit.Record(models.AuditEntry{
+		ActorType:  "admin",
+		ActorID:    adminID,
+		ActorLabel: actorLabel,
+		Action:     "password_reset_completed",
+		Details:    "password changed via reset link",
+		IPAddress:  clientIP(r),
+		UserAgent:  r.UserAgent(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Password reset successfully. You can now log in with your new password.",

@@ -289,6 +289,33 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	return nil
 }
 
+// ApplyPasswordReset stores a new password chosen by the admin themselves via
+// the forgot-password link — the admin proved ownership of the account by
+// clicking a single-use token sent to their email, so must_reset_password is
+// cleared (not set). This is distinct from ResetPassword, which is called by
+// another admin and therefore forces a change on next login.
+func (m *AdminModel) ApplyPasswordReset(id int64, newPassword string) error {
+	if err := ValidatePasswordComplexity(newPassword); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password")
+	}
+	result, err := m.DB.Exec(
+		`UPDATE admins SET password = $1, must_reset_password = FALSE WHERE id = $2`,
+		string(hash), id,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ChangeOwnPassword verifies the admin's current password then stores the new
 // one, and clears must_reset_password so a temporary password is only ever
 // usable once. Rejected if the new password is the same as the current one —
