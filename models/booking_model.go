@@ -234,6 +234,18 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
 // Cancel marks a booking as Cancelled by ID.
 // Returns ErrNotFound if the booking does not exist.
+// GetByID fetches the minimal booking fields needed for audit log labels.
+func (m *BookingModel) GetByID(id int64) (Booking, error) {
+	var b Booking
+	err := m.DB.QueryRow(`
+		SELECT id, user_name, email, purpose, status FROM bookings WHERE id = $1
+	`, id).Scan(&b.ID, &b.User, &b.Email, &b.Purpose, &b.Status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Booking{}, ErrNotFound
+	}
+	return b, err
+}
+
 func (m *BookingModel) Cancel(id int64) error {
 	result, err := m.DB.Exec(`
 		UPDATE bookings SET status = 'Cancelled', updated_at = NOW() WHERE id = $1

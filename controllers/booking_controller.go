@@ -102,6 +102,9 @@ func (c *Controller) CancelBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch before cancelling so the audit log has the booking's purpose and owner.
+	b, _ := c.Bookings.GetByID(id)
+
 	err := c.Bookings.Cancel(id)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "booking not found")
@@ -112,7 +115,7 @@ func (c *Controller) CancelBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.audit(r, "booking_cancelled", "booking", "", id, "")
+	c.audit(r, "booking_cancelled", "booking", b.Purpose, id, "booked by: "+b.Email)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
@@ -130,6 +133,10 @@ func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch before deleting — the row will be gone after Delete() so we capture
+	// the purpose and owner now for the audit log.
+	b, _ := c.Bookings.GetByID(id)
+
 	err := c.Bookings.Delete(id)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "booking not found")
@@ -140,7 +147,7 @@ func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.audit(r, "booking_deleted", "booking", "", id, "")
+	c.audit(r, "booking_deleted", "booking", b.Purpose, id, "booked by: "+b.Email)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -185,6 +192,9 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Fetch before cancelling to capture the booking purpose for the audit log.
+	b, _ := c.Bookings.GetByID(id)
+
 	err := c.Bookings.PublicCancel(id, email)
 	if errors.Is(err, models.ErrOwnerMismatch) {
 		writeError(w, http.StatusForbidden, "only the original booking owner can cancel this meeting")
@@ -195,7 +205,7 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	c.auditPublic(r, email, "booking_cancelled_by_owner", "booking", "", id, "")
+	c.auditPublic(r, email, "booking_cancelled_by_owner", "booking", b.Purpose, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }

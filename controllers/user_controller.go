@@ -78,7 +78,7 @@ func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[USER INVITE] failed to email confirmation link to %s: %v", u.Email, sendErr)
 	}
 
-	c.audit(r, "user_created", "user", u.Email, u.ID, "intended role: "+role)
+	c.audit(r, "user_created", "user", u.Email, u.ID, "intended role: "+models.RoleLabel(role))
 
 	writeJSON(w, http.StatusCreated, u)
 }
@@ -148,7 +148,7 @@ func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request)
 		log.Printf("[ADMIN PROMOTED] failed to activate Normal User access for row %d: %v", user.ID, statusErr)
 	}
 
-	c.auditPublic(r, user.Email, "user_confirmed_admin_promotion", "user", user.Email, user.ID, "role: "+user.IntendedRole)
+	c.auditPublic(r, user.Email, "user_confirmed_admin_promotion", "user", user.Email, user.ID, "role: "+models.RoleLabel(user.IntendedRole))
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Your admin account is ready. Check your email for login credentials.",

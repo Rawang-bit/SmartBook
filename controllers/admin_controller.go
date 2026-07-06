@@ -38,7 +38,7 @@ func (c *Controller) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
-	c.audit(r, "admin_created", "admin", admin.Username, admin.ID, "role: "+admin.Role)
+	c.audit(r, "admin_created", "admin", admin.Username, admin.ID, "role: "+models.RoleLabel(admin.Role))
 
 	writeJSON(w, http.StatusCreated, admin)
 }
@@ -82,9 +82,9 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 		// caller.
 		c.Sessions.DeleteByAdminID(id)
 
-		c.audit(r, "admin_role_changed", "admin", admin.Username, admin.ID, "role: "+before.Role+" -> "+admin.Role)
+		c.audit(r, "admin_role_changed", "admin", admin.Username, admin.ID, "role: "+models.RoleLabel(before.Role)+" → "+models.RoleLabel(admin.Role))
 	} else {
-		c.audit(r, "admin_updated", "admin", admin.Username, admin.ID, "")
+		c.audit(r, "admin_updated", "admin", admin.Username, admin.ID, "name/email updated")
 	}
 
 	writeJSON(w, http.StatusOK, admin)
@@ -237,7 +237,11 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 		c.Sessions.DeleteByAdminID(id)
 	}
 
-	c.audit(r, "admin_"+newStatus, "admin", target.Username, id, "")
+	action := map[string]string{
+		"active":  "admin_activated",
+		"revoked": "admin_revoked",
+	}[newStatus]
+	c.audit(r, action, "admin", target.Username, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": newStatus})
 }
