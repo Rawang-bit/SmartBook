@@ -7,7 +7,7 @@
 
   <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://challenge.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -30,10 +30,10 @@
 
   <!-- Card -->
   <div class="relative min-h-screen flex items-center justify-center px-4 py-10">
-    <div class="w-full max-w-md rounded-3xl bg-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.35)] overflow-hidden">
+    <div class="w-full max-w-md rounded-3xl bg-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.35)]">
 
-      <!-- Top accent bar -->
-      <div class="h-1.5 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-600"></div>
+      <!-- Top accent bar — rounded-t-3xl matches the card corners without overflow-hidden -->
+      <div class="h-1.5 w-full rounded-t-3xl bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-600"></div>
 
       <div class="px-10 pt-8 pb-10">
 
@@ -114,7 +114,10 @@
             <input type="tel" id="registerPhone" placeholder="Your phone number"
               class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
-          <div id="registerTurnstile" class="flex justify-center"></div>
+          <div>
+            <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Security Check</label>
+            <div id="registerTurnstile"></div>
+          </div>
           <button type="submit" id="registerSubmitBtn"
             class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white shadow-xl transition hover:bg-indigo-700">
             Send Verification Code

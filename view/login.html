@@ -7,7 +7,7 @@
 
   <link rel="icon" type="image/png" sizes="32x32" href="./images/favicon_io/favicon-32x32.png">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://challenge.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -94,7 +94,10 @@
             <input type="email" id="forgotEmail" placeholder="your@email.com" required
               class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
-          <div id="forgotTurnstile" class="flex justify-center"></div>
+          <div>
+            <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Security Check</label>
+            <div id="forgotTurnstile"></div>
+          </div>
           <button type="submit" id="forgotBtn"
             class="w-full rounded-2xl bg-indigo-600 py-4 font-black text-white shadow-xl transition hover:bg-indigo-700">
             Send Reset Link

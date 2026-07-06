@@ -112,14 +112,17 @@ func SecureHeaders(next http.Handler) http.Handler {
 		// frame-ancestors — block all framing of THIS page (aligns with X-Frame-Options: DENY)
 		// base-uri    — prevent <base> tag hijacking
 		// form-action — restrict form POST targets to the same origin
+		// Cloudflare Turnstile uses both challenge.cloudflare.com (script load)
+		// and challenges.cloudflare.com (iframe, XHR, images). Both must appear
+		// in every relevant directive or the widget silently fails to render.
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://challenge.cloudflare.com https://challenges.cloudflare.com; "+
-				"frame-src https://challenges.cloudflare.com; "+
-				"connect-src 'self' https://challenges.cloudflare.com; "+
+				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://challenges.cloudflare.com https://challenge.cloudflare.com; "+
+				"frame-src https://challenges.cloudflare.com https://challenge.cloudflare.com; "+
+				"connect-src 'self' https://challenges.cloudflare.com https://challenge.cloudflare.com; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"font-src 'self'; "+
-				"img-src 'self' data:; "+
+				"img-src 'self' data: https://challenges.cloudflare.com; "+
 				"frame-ancestors 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self';",
