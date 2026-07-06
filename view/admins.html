@@ -406,9 +406,12 @@
         const isRevoked = a.status === 'revoked';
         const rowClass  = isRevoked ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50';
 
+        const normalBadge  = `<span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-extrabold text-slate-600">Normal User</span>`;
+        const generalBadge = `<span class="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-extrabold text-indigo-700">General Admin</span>`;
+        const superBadge   = `<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">Super Admin</span>`;
         const roleBadge = a.role === 'super_admin'
-          ? `<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">Super Admin</span>`
-          : `<span class="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-extrabold text-indigo-700">General Admin</span>`;
+          ? superBadge
+          : `<div class="flex flex-col gap-1">${normalBadge}${generalBadge}</div>`;
 
         const statusBadge = isRevoked
           ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
