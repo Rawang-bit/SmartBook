@@ -19,13 +19,14 @@
 -- ── Admins table ─────────────────────────────────────────────────────────────
 -- Stores admin login credentials. Passwords are bcrypt hashes, never plaintext.
 --
+-- username:            the email address used to log in. Named 'username' in the
+--                      schema for historical reasons but always stores an email.
 -- role:                'super_admin' — security, user management, audit only
 --                        (no room or booking operations); or
 --                      'general_admin' — manages rooms, bookings, and normal-user approvals.
 -- status:              'active' (can log in) or 'revoked' (suspended by a super admin).
--- email:               optional; used for password-reset lookups. Doubles as
---                      the login username for admin accounts created through the
---                      app — the seed admin below is the one exception.
+-- email:               must match username; used by the password-reset lookup so
+--                      the admin can recover access without knowing a separate identifier.
 -- must_reset_password: true for accounts given a generated temporary password;
 --                      cleared the moment the password is replaced.
 CREATE TABLE IF NOT EXISTS admins (
@@ -171,12 +172,13 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id   ON audit_logs (actor_id);
 -- Password: Rawang@3013  (bcrypt hash stored below)
 -- IMPORTANT: Change this password immediately after first login.
 -- To generate a replacement hash: go run scripts/hashpw.go <newpassword>
-INSERT INTO admins (username, password, name, role) VALUES
+INSERT INTO admins (username, password, name, role, email) VALUES
 (
-    'Rawang',
+    'ratuwangchuk@dhi.bt',
     '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2',
     'System Admin',
-    'super_admin'
+    'super_admin',
+    'ratuwangchuk@dhi.bt'
 )
 ON CONFLICT (username) DO NOTHING;
 

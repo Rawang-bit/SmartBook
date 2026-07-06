@@ -99,8 +99,9 @@ func migrate(db *sql.DB) error {
 		// ── Seed: default super admin account ────────────────────────────────
 		// Password: Rawang@3013 — CHANGE THIS IMMEDIATELY after first login.
 		// Skipped silently if the username already exists.
-		`INSERT INTO admins(username, password, name, role)
-		 VALUES ('Rawang', '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2', 'System Admin', 'super_admin')
+		// username = email so the forgot-password flow works for this account.
+		`INSERT INTO admins(username, password, name, role, email)
+		 VALUES ('ratuwangchuk@dhi.bt', '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2', 'System Admin', 'super_admin', 'ratuwangchuk@dhi.bt')
 		 ON CONFLICT(username) DO NOTHING`,
 
 		// ── Incremental columns (safe to re-run on existing databases) ────────

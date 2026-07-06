@@ -48,8 +48,8 @@
 
         <form id="loginForm" class="space-y-5">
           <div>
-            <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Username</label>
-            <input type="text" id="username" placeholder="Enter admin username" required
+            <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Email Address</label>
+            <input type="email" id="username" placeholder="your@email.com" required
               class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
           <div>
@@ -90,13 +90,8 @@
 
         <form id="forgotForm" class="space-y-4">
           <div>
-            <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Username</label>
-            <input type="text" id="forgotUsername" placeholder="Your admin username" required
-              class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-          </div>
-          <div>
             <label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Email Address</label>
-            <input type="email" id="forgotEmail" placeholder="Email on your admin account" required
+            <input type="email" id="forgotEmail" placeholder="your@email.com" required
               class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
           <div id="forgotTurnstile" class="flex justify-center"></div>
@@ -242,16 +237,16 @@
     // ── Step 2: Forgot password ──────────────────────────────────────────────
     document.getElementById('forgotForm').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const btn      = document.getElementById('forgotBtn');
-      const username = document.getElementById('forgotUsername').value.trim();
-      const email    = document.getElementById('forgotEmail').value.trim();
+      const btn   = document.getElementById('forgotBtn');
+      const email = document.getElementById('forgotEmail').value.trim();
 
       btn.disabled    = true;
       btn.textContent = 'Sending…';
 
       try {
         const captchaToken = getTurnstileToken('forgotTurnstile');
-        const res = await forgotPasswordApi(username, email, captchaToken);
+        // Email is the login username — pass it as both fields.
+        const res = await forgotPasswordApi(email, email, captchaToken);
 
         if (res.devResetUrl) {
           // No SMTP configured — show the link directly on screen.
