@@ -5,6 +5,19 @@ import (
 	"unicode"
 )
 
+// RoleLabel converts an internal role key to a human-readable label for
+// audit log entries and user-facing messages.
+func RoleLabel(role string) string {
+	switch role {
+	case "super_admin":
+		return "Super Admin"
+	case "general_admin":
+		return "General Admin"
+	default:
+		return "Normal User"
+	}
+}
+
 // MinPasswordLength is the minimum number of characters required for any
 // admin password — set at login, reset, self-service change, or creation.
 // Centralized so a future policy change only needs to happen in one place.

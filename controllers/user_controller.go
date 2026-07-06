@@ -198,7 +198,7 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			if !promoted {
 				return
 			}
-			c.audit(r, "user_promoted_to_admin", "user", u.Email, id, "role: normal_user -> "+requestedRole)
+			c.audit(r, "user_promoted_to_admin", "user", u.Email, id, "role: Normal User → "+models.RoleLabel(requestedRole))
 			writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": requestedRole, "username": admin.Username})
 			return
 		}
@@ -274,7 +274,7 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 			log.Printf("[USER APPROVED] failed to notify %s: %v", user.Email, sendErr)
 		}
 
-		c.audit(r, "user_approved", "user", user.Email, user.ID, "role: normal_user")
+		c.audit(r, "user_approved", "user", user.Email, user.ID, "approved with role: Normal User")
 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": "normal_user"})
 		return
@@ -306,7 +306,7 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
-	c.audit(r, "user_promoted_to_admin", "user", pendingUser.Email, id, "role: "+pendingUser.IntendedRole+" -> "+role)
+	c.audit(r, "user_approved", "user", pendingUser.Email, id, "approved with role: "+models.RoleLabel(role))
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": role, "username": admin.Username})
 }
