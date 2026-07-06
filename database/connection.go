@@ -48,13 +48,62 @@ func Connect() (*sql.DB, error) {
 	return db, nil
 }
 
-// migrate applies any schema changes that must run at startup.
-// Each statement is idempotent (IF NOT EXISTS guards) so it is safe to run on
-// every boot against both fresh and existing databases.
-// Statements are executed individually because pgx does not support multiple
-// statements in a single Exec call.
+// migrate creates and evolves the schema on every boot.
+// All statements are idempotent (CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
+// so they are safe to re-run on an already-populated database.
+// Executed individually because pgx does not support multiple statements in one Exec.
 func migrate(db *sql.DB) error {
 	stmts := []string{
+		// ── Base tables ───────────────────────────────────────────────────────
+		// Created first so the ALTER TABLE statements below are always safe to
+		// run — on an existing database the IF NOT EXISTS is a no-op.
+		`CREATE TABLE IF NOT EXISTS admins (
+		    id                  BIGSERIAL PRIMARY KEY,
+		    username            TEXT UNIQUE NOT NULL,
+		    password            TEXT NOT NULL,
+		    name                TEXT NOT NULL,
+		    role                TEXT NOT NULL DEFAULT 'general_admin',
+		    status              TEXT NOT NULL DEFAULT 'active',
+		    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS users (
+		    id         BIGSERIAL PRIMARY KEY,
+		    email      TEXT UNIQUE NOT NULL,
+		    name       TEXT NOT NULL,
+		    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS rooms (
+		    id         BIGSERIAL PRIMARY KEY,
+		    name       TEXT UNIQUE NOT NULL,
+		    capacity   INTEGER NOT NULL DEFAULT 1,
+		    location   TEXT NOT NULL,
+		    status     TEXT NOT NULL DEFAULT 'Active',
+		    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS bookings (
+		    id           BIGSERIAL PRIMARY KEY,
+		    user_name    TEXT NOT NULL,
+		    email        TEXT NOT NULL,
+		    room_id      BIGINT NOT NULL REFERENCES rooms(id) ON DELETE RESTRICT,
+		    booking_date DATE NOT NULL,
+		    start_time   TEXT NOT NULL,
+		    end_time     TEXT NOT NULL,
+		    purpose      TEXT NOT NULL,
+		    status       TEXT NOT NULL DEFAULT 'Booked',
+		    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings(room_id, booking_date)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email))`,
+
+		// ── Seed: default super admin account ────────────────────────────────
+		// Password: Rawang@3013 — CHANGE THIS IMMEDIATELY after first login.
+		// Skipped silently if the username already exists.
+		`INSERT INTO admins(username, password, name, role)
+		 VALUES ('Rawang', '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2', 'System Admin', 'super_admin')
+		 ON CONFLICT(username) DO NOTHING`,
+
+		// ── Incremental columns (safe to re-run on existing databases) ────────
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE`,
 		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
 		     ON admins (LOWER(TRIM(email)))
