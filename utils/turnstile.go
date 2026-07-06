@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-const turnstileVerifyURL = "https://challenge.cloudflare.com/turnstile/v0/siteverify"
+const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 type turnstileVerifyResponse struct {
 	Success    bool     `json:"success"`
