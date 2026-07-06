@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,7 +30,15 @@ type turnstileVerifyResponse struct {
 // dev-mode shortcut when RESEND_API_KEY is blank).
 func VerifyTurnstile(token, remoteIP string) error {
 	secret := os.Getenv("TURNSTILE_SECRET_KEY")
-	if secret == "" {
+	siteKey := os.Getenv("TURNSTILE_SITE_KEY")
+
+	// Both keys must be configured for enforcement. If only one is set the
+	// deployment is misconfigured — the widget can't render without the site
+	// key, so blocking the user serves no purpose. Log a warning and allow.
+	if secret == "" || siteKey == "" {
+		if secret != siteKey { // one is set, the other isn't
+			log.Printf("[TURNSTILE] warning: only one of TURNSTILE_SECRET_KEY / TURNSTILE_SITE_KEY is configured — skipping verification until both are set")
+		}
 		return nil
 	}
 	if token == "" {
