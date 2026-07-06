@@ -90,6 +90,11 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := utils.VerifyTurnstile(req.CaptchaToken, clientIP(r)); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	// ── Lockout check ─────────────────────────────────────────────────────────
 	// Must happen before any database work so locked accounts are rejected
 	// immediately, regardless of whether the password would have been correct.

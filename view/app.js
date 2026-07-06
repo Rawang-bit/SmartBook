@@ -109,8 +109,8 @@ async function logout() {
 // Sends login credentials to the server.
 // On success, the server sets an HttpOnly session cookie automatically.
 // We save the admin's name and role in localStorage only for display purposes.
-async function loginAdmin(username, password) {
-  const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+async function loginAdmin(username, password, captchaToken) {
+  const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password, captchaToken }) });
   localStorage.setItem('adminLoggedIn', 'true');
   localStorage.setItem('adminId',   String(result.admin.id));
   localStorage.setItem('adminName', result.admin.name);

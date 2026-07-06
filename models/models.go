@@ -83,8 +83,9 @@ type AdminRequest struct {
 
 // LoginRequest is the JSON body sent by the admin login form.
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	CaptchaToken string `json:"captchaToken"`
 }
 
 // LoginResponse is returned after a successful login.

@@ -78,6 +78,10 @@
               </button>
             </div>
           </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Security Check</label>
+            <div id="loginTurnstile"></div>
+          </div>
           <button type="submit"
             class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 font-black text-white shadow-lg shadow-indigo-200 transition hover:from-indigo-700 hover:to-violet-700 hover:shadow-indigo-300 active:scale-[0.98]">
             Login
@@ -206,6 +210,7 @@
       clearMsg('resetMsg');
       document.getElementById('devResetBox').classList.add('hidden');
       if (id === 'forgotStep') initTurnstile('forgotTurnstile');
+      if (id === 'loginStep')  initTurnstile('loginTurnstile');
     }
 
     function showStepMsg(id, text, type) {
@@ -234,6 +239,9 @@
         showStep('resetStep');
         // Clean the token from the address bar without reloading the page
         history.replaceState(null, '', window.location.pathname);
+      } else {
+        // Default step — initialise its Turnstile widget
+        initTurnstile('loginTurnstile');
       }
     })();
 
@@ -241,15 +249,18 @@
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       try {
+        const captchaToken = getTurnstileToken('loginTurnstile');
         const result = await loginAdmin(
           document.getElementById('username').value.trim(),
-          document.getElementById('password').value.trim()
+          document.getElementById('password').value.trim(),
+          captchaToken
         );
         window.location.href = result.admin.mustResetPassword
           ? 'force-password-change.html'
           : 'dashboard.html';
       } catch (err) {
         showMessage('loginMsg', err.message, 'error');
+        resetTurnstile('loginTurnstile');
       }
     });
 
