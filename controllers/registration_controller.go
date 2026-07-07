@@ -187,6 +187,11 @@ func (c *Controller) SendAccessVerificationOTP(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if err := utils.VerifyTurnstile(req.CaptchaToken, clientIP(r)); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	user, err := c.Users.GetByEmail(email)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusBadRequest, "this email is not a registered user")

@@ -163,8 +163,11 @@ type ApproveUserRequest struct {
 
 // CheckEmailRequest is the JSON body sent by the public access gate to find
 // out whether an email already belongs to a registered user.
+// CaptchaToken is only used by the device-OTP send path (POST /api/access/send-otp),
+// not by the email-check path (POST /api/access/check-email).
 type CheckEmailRequest struct {
-	Email string `json:"email"`
+	Email        string `json:"email"`
+	CaptchaToken string `json:"captchaToken"`
 }
 
 // SendOTPRequest is the JSON body sent to request a registration verification code.
