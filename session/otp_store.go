@@ -28,8 +28,7 @@ func NewOTPStore() *OTPStore {
 	return s
 }
 
-// Create generates a random 6-digit code for email, valid for OTPExpiry.
-// A new call for the same email overwrites any previous unused code.
+// Create generates a random 6-digit code for email (valid OTPExpiry); overwrites any previous code for that email.
 func (s *OTPStore) Create(email string) string {
 	code := generateCode()
 
@@ -40,8 +39,7 @@ func (s *OTPStore) Create(email string) string {
 	return code
 }
 
-// Verify checks code against the stored value for email.
-// The record is consumed (deleted) regardless of outcome — a code can only be used once.
+// Verify checks code against the stored value and deletes the record regardless of outcome — codes are single-use.
 func (s *OTPStore) Verify(email, code string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

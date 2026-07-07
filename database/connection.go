@@ -11,8 +11,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // pgx driver registered as "pgx" for database/sql
 )
 
-// Connect reads DATABASE_URL from the environment, opens a connection to PostgreSQL,
-// and verifies it with a ping. Returns a ready-to-use *sql.DB or an error.
+// Connect reads DATABASE_URL, opens a PostgreSQL connection, pings it, and runs migrations.
 func Connect() (*sql.DB, error) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -45,9 +44,7 @@ func Connect() (*sql.DB, error) {
 	return db, nil
 }
 
-// migrate creates and evolves the schema on every boot. All statements are idempotent
-// (CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS) so they are safe to re-run.
-// Executed individually because pgx does not support multiple statements in one Exec.
+// migrate runs idempotent schema statements on every boot (executed one at a time — pgx rejects batched DDL).
 func migrate(db *sql.DB) error {
 	stmts := []string{
 		// ── Base tables ───────────────────────────────────────────────────────

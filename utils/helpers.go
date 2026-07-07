@@ -1,5 +1,4 @@
-// Package utils provides shared, model-agnostic helper functions
-// used across the models and controllers layers.
+// Package utils provides shared helper functions for models and controllers.
 package utils
 
 import (
@@ -48,8 +47,7 @@ func To24HourTime(value string) string {
 	return value
 }
 
-// ToDisplayTime converts a 24-hour time string to 12-hour AM/PM format.
-// Example: "14:30" → "02:30 PM"
+// ToDisplayTime converts a 24-hour time string to 12-hour AM/PM — e.g. "14:30" → "02:30 PM".
 func ToDisplayTime(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -69,8 +67,7 @@ func ToDisplayTime(value string) string {
 	return value
 }
 
-// MinutesFromTime converts a time string to total minutes since midnight.
-// Example: "09:30" → 570 (9×60 + 30).
+// MinutesFromTime converts a time string to total minutes since midnight — e.g. "09:30" → 570.
 func MinutesFromTime(value string) (int, error) {
 	value = To24HourTime(value)
 	t, err := time.Parse("15:04", value)
@@ -80,8 +77,7 @@ func MinutesFromTime(value string) (int, error) {
 	return t.Hour()*60 + t.Minute(), nil
 }
 
-// ComputeBookingStatus derives the live status from current time: Cancelled stays as-is;
-// otherwise Booked → In Progress → Completed as the meeting window passes.
+// ComputeBookingStatus derives the live status: Cancelled stays as-is; otherwise Booked → In Progress → Completed.
 func ComputeBookingStatus(dateStr, startStr, endStr, savedStatus string) string {
 	if strings.EqualFold(strings.TrimSpace(savedStatus), "Cancelled") {
 		return "Cancelled"

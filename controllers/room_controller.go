@@ -18,8 +18,7 @@ func (c *Controller) ListRooms(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rooms)
 }
 
-// CreateRoom adds a new room. General admin only — room management is an
-// operational task, so super_admin is deliberately excluded.
+// CreateRoom adds a new room (general_admin only; super_admin excluded from operational tasks).
 func (c *Controller) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	var req models.RoomRequest
 	if !decodeJSON(w, r, &req) {
@@ -72,8 +71,7 @@ func (c *Controller) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, room)
 }
 
-// DeleteRoom permanently removes a room. General admin only — see CreateRoom.
-// The database blocks this if the room has any bookings attached to it.
+// DeleteRoom permanently removes a room (general_admin only); returns ErrForeignKey if it has bookings.
 func (c *Controller) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/rooms/")
 	if !ok {

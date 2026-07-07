@@ -11,8 +11,7 @@ import (
 	"bookroom-management-system/utils"
 )
 
-// CheckEmail looks up whether an email belongs to a registered user.
-// Also checks the trusted-device cookie so active users on a recognized device skip OTP.
+// CheckEmail looks up a user by email and checks the device cookie so recognized devices can skip OTP.
 func (c *Controller) CheckEmail(w http.ResponseWriter, r *http.Request) {
 	var req models.CheckEmailRequest
 	if !decodeJSON(w, r, &req) {
@@ -53,9 +52,7 @@ func (c *Controller) CheckEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// rememberDeviceIfRequested issues or revokes the trusted-device cookie based on the
-// user's explicit choice after OTP verification. When remember is false, any previous
-// device trust is cleared so an old opt-in doesn't linger as a silent bypass.
+// rememberDeviceIfRequested issues or clears the trusted-device cookie based on the user's opt-in choice.
 func (c *Controller) rememberDeviceIfRequested(w http.ResponseWriter, userID int64, remember bool) error {
 	if !remember {
 		return c.Users.ClearDeviceToken(userID)
@@ -75,8 +72,7 @@ func (c *Controller) rememberDeviceIfRequested(w http.ResponseWriter, userID int
 	return nil
 }
 
-// SendRegistrationOTP emails a one-time code to verify a new user's email before
-// they are added to the registered users table.
+// SendRegistrationOTP sends an OTP to verify a new user's email before self-registration.
 func (c *Controller) SendRegistrationOTP(w http.ResponseWriter, r *http.Request) {
 	var req models.SendOTPRequest
 	if !decodeJSON(w, r, &req) {
@@ -115,8 +111,7 @@ func (c *Controller) SendRegistrationOTP(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"message": "A 6-digit verification code has been sent to your email."})
 }
 
-// VerifyRegistrationOTP checks the submitted code and, on success, creates the user
-// with status "pending". An admin must approve them before they can book rooms.
+// VerifyRegistrationOTP validates the code and creates a "pending" user row; an admin must approve before they can book.
 func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyOTPRequest
 	if !decodeJSON(w, r, &req) {
@@ -163,8 +158,7 @@ func (c *Controller) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{"name": user.Name, "email": user.Email, "status": user.Status})
 }
 
-// SendAccessVerificationOTP emails a one-time code to an already-registered active user
-// accessing the public calendar from an unrecognized device.
+// SendAccessVerificationOTP sends an OTP to an active user on an unrecognized device.
 func (c *Controller) SendAccessVerificationOTP(w http.ResponseWriter, r *http.Request) {
 	var req models.CheckEmailRequest
 	if !decodeJSON(w, r, &req) {
@@ -206,9 +200,7 @@ func (c *Controller) SendAccessVerificationOTP(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]string{"message": "A 6-digit verification code has been sent to your email."})
 }
 
-// VerifyAccessOTP confirms the one-time code for an already-active user on an
-// unrecognized device. On success, optionally issues a trusted-device cookie (30-day
-// OTP bypass) if the user explicitly opted in.
+// VerifyAccessOTP confirms OTP for an active user on an unrecognized device and optionally issues a trusted-device cookie.
 func (c *Controller) VerifyAccessOTP(w http.ResponseWriter, r *http.Request) {
 	var req models.VerifyOTPRequest
 	if !decodeJSON(w, r, &req) {

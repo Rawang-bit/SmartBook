@@ -7,8 +7,7 @@ import (
 	"bookroom-management-system/models"
 )
 
-// ListAuditLogs returns the audit trail filtered by actor, action, or date range.
-// ?page=N paginates (50 rows, default 1); ?all=1 returns every row (export use only).
+// ListAuditLogs returns the audit trail filtered by actor, action, or date; ?page=N paginates, ?all=1 returns all rows.
 func (c *Controller) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	if r.URL.Query().Get("all") == "1" {

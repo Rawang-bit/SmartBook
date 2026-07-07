@@ -13,8 +13,7 @@ import (
 	"bookroom-management-system/session"
 )
 
-// Controller coordinates HTTP requests by delegating to the appropriate domain model.
-// It holds no business logic — that lives exclusively in the model layer.
+// Controller delegates HTTP requests to domain models; holds no business logic.
 type Controller struct {
 	Sessions      *session.Store
 	ResetTokens   *session.ResetStore
@@ -54,8 +53,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, models.ErrorResponse{Error: message})
 }
 
-// decodeJSON reads the request body into target.
-// Returns true on success; writes a 400 error and returns false on failure.
+// decodeJSON reads the request body into target; writes 400 and returns false on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON request body")
@@ -64,14 +62,10 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	return true
 }
 
-// forcePasswordChangePath is the only admin endpoint reachable while MustResetPassword
-// is set — every other admin endpoint is blocked until the temporary password is replaced.
+// forcePasswordChangePath is the only endpoint allowed for temporary-password accounts.
 const forcePasswordChangePath = "/api/admin/change-password"
 
-// requireAdminSession does the shared cookie + session lookup for RequireAdmin and
-// RequireSuperAdmin. Returns ok=false after writing the error — callers must return
-// immediately. A DB error responds 503 (not 401) so a transient hiccup doesn't
-// force-logout an admin whose session is actually still valid.
+// requireAdminSession looks up the session cookie; DB errors return 503 so transient failures don't force-logout valid sessions.
 func (c *Controller) requireAdminSession(w http.ResponseWriter, r *http.Request) (session.SessionData, bool) {
 	cookie, err := r.Cookie(sessionCookieName())
 	if err != nil {
@@ -98,8 +92,7 @@ func (c *Controller) requireAdminSession(w http.ResponseWriter, r *http.Request)
 	return data, true
 }
 
-// RequireAdmin is middleware that rejects requests without a valid session cookie.
-// Also blocks all endpoints except forcePasswordChangePath for temporary-password accounts.
+// RequireAdmin rejects unauthenticated requests and blocks all endpoints except forcePasswordChangePath for temp-password accounts.
 func (c *Controller) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := c.requireAdminSession(w, r); !ok {
@@ -127,9 +120,7 @@ func (c *Controller) RequireSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// RequireGeneralAdmin allows only general_admin through. Super Admin is deliberately
-// excluded from operational endpoints (rooms, bookings) — its scope is security,
-// users, roles, and audit monitoring, not day-to-day operations.
+// RequireGeneralAdmin allows only general_admin through (super_admin excluded from operational endpoints).
 func (c *Controller) RequireGeneralAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data, ok := c.requireAdminSession(w, r)
@@ -144,9 +135,7 @@ func (c *Controller) RequireGeneralAdmin(next http.HandlerFunc) http.HandlerFunc
 	}
 }
 
-// BlockSuperAdmin rejects requests from an authenticated super_admin but passes
-// everyone else through (including anonymous callers with no session at all).
-// Used on endpoints that serve both the public calendar and general_admin.
+// BlockSuperAdmin rejects super_admin requests; passes everyone else (including unauthenticated).
 func (c *Controller) BlockSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if sess, ok := c.getSession(r); ok && sess.Role == "super_admin" {
@@ -157,10 +146,7 @@ func (c *Controller) BlockSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// getSession returns the session data for the current request.
-// A DB error is treated as "no session" — this is only called inside handlers already
-// gated by RequireAdmin, so a second DB error within the same request is vanishingly
-// unlikely; failing closed (denying the privilege check) is the safe default.
+// getSession returns session data for the current request; treats DB errors as "no session".
 func (c *Controller) getSession(r *http.Request) (session.SessionData, bool) {
 	cookie, err := r.Cookie(sessionCookieName())
 	if err != nil {
@@ -170,8 +156,7 @@ func (c *Controller) getSession(r *http.Request) (session.SessionData, bool) {
 	return data, found
 }
 
-// idFromPath extracts a positive integer ID from the URL path segment after prefix.
-// Example: "/api/rooms/42" with prefix "/api/rooms/" → 42.
+// idFromPath extracts the integer ID after prefix (e.g. "/api/rooms/42" → 42).
 func idFromPath(w http.ResponseWriter, r *http.Request, prefix string) (int64, bool) {
 	remaining := strings.TrimPrefix(r.URL.Path, prefix)
 	remaining = strings.Trim(remaining, "/")
@@ -189,9 +174,7 @@ func idFromPath(w http.ResponseWriter, r *http.Request, prefix string) (int64, b
 	return id, true
 }
 
-// clientIP extracts the caller's address for the audit trail. Prefers X-Forwarded-For
-// (set by the reverse proxy) over r.RemoteAddr, which behind a proxy would otherwise
-// always be the proxy's own address.
+// clientIP prefers X-Forwarded-For over RemoteAddr (behind a proxy RemoteAddr is the proxy's IP).
 func clientIP(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 		// May be "client, proxy1, proxy2" — the original client is always first.
@@ -205,8 +188,7 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// audit records one audit-trail entry attributed to the currently logged-in admin.
-// Falls back to "system" actor when no session is present (unusual for gated handlers).
+// audit records an audit entry for the logged-in admin; falls back to "system" if no session.
 func (c *Controller) audit(r *http.Request, action, targetType, targetLabel string, targetID int64, details string) {
 	sess, ok := c.getSession(r)
 
@@ -231,8 +213,7 @@ func (c *Controller) audit(r *http.Request, action, targetType, targetLabel stri
 	})
 }
 
-// auditPublic records an audit entry for a public, unauthenticated caller who proves
-// ownership of actorEmail (self-registration, booking create/cancel, Minutes of Meeting).
+// auditPublic records an audit entry for a public caller identified by email (registration, booking).
 func (c *Controller) auditPublic(r *http.Request, actorEmail, action, targetType, targetLabel string, targetID int64, details string) {
 	c.Audit.Record(models.AuditEntry{
 		ActorType:   "system",

@@ -87,9 +87,7 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, admin)
 }
 
-// syncNormalUserAccess keeps an admin's Normal User row consistent with the multi-role
-// rule: General Admin retains booking capability; Super Admin (exclusive) gets none.
-// Legacy non-email usernames are skipped to avoid bad rows in the users table.
+// syncNormalUserAccess keeps Normal User access in sync: general_admin keeps it, super_admin loses it.
 func syncNormalUserAccess(c *Controller, username, name, role string) {
 	if !utils.IsValidEmail(username) {
 		return
@@ -142,8 +140,7 @@ func (c *Controller) ResetAdminPassword(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password reset"})
 }
 
-// ChangeOwnPassword lets any logged-in admin change their own password.
-// Requires the current password as verification.
+// ChangeOwnPassword lets a logged-in admin change their own password; requires current password as proof.
 func (c *Controller) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	sess, ok := c.getSession(r)
 	if !ok {
@@ -180,8 +177,7 @@ func (c *Controller) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password changed"})
 }
 
-// ToggleAdminStatus revokes or restores an admin's login access. Super admin only.
-// Path must end in /revoke or /restore — e.g. POST /api/admins/5/revoke.
+// ToggleAdminStatus revokes or restores an admin (super_admin only); path must end in /revoke or /restore.
 func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/admins/")
 
@@ -237,8 +233,7 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": newStatus})
 }
 
-// DeleteAdmin removes an admin account. Super admin only.
-// An admin cannot delete their own account.
+// DeleteAdmin removes an admin account (super_admin only); an admin cannot delete their own account.
 func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/admins/")
 	if !ok {

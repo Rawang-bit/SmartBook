@@ -7,21 +7,15 @@ import (
 	"strings"
 )
 
-// AuditModel records and retrieves the audit trail. Entries are append-only —
-// there is deliberately no Update or Delete method, and no controller exposes
-// one, so the trail can never be edited or erased through the application.
+// AuditModel records and retrieves the audit trail; entries are append-only — no Update or Delete method exists.
 type AuditModel struct {
 	DB *sql.DB
 }
 
-// AuditPageSize is how many rows the paginated audit-trail view shows per
-// page. There is no cap on how many total rows are reachable across pages —
-// unlike a hard row limit, pagination keeps every entry in the table viewable.
+// AuditPageSize is rows per page; every entry is reachable via pagination (no hard cap on total rows).
 const AuditPageSize = 50
 
-// Record writes one audit entry. Failures are logged but never returned to
-// the caller — exactly like email delivery elsewhere in this app, a logging
-// problem must never block or roll back the action it's describing.
+// Record writes one audit entry; failures are logged but never returned — audit errors must not block the action.
 func (m *AuditModel) Record(e AuditEntry) {
 	actorID := nullableInt64(e.ActorID)
 	targetID := nullableInt64(e.TargetID)
@@ -35,8 +29,7 @@ func (m *AuditModel) Record(e AuditEntry) {
 	}
 }
 
-// nullableInt64 returns nil for a zero ID so optional foreign-key columns
-// store NULL instead of 0 (0 is never a valid primary key in this schema).
+// nullableInt64 returns nil for a zero ID so foreign-key columns store NULL rather than 0.
 func nullableInt64(id int64) any {
 	if id == 0 {
 		return nil
@@ -44,8 +37,7 @@ func nullableInt64(id int64) any {
 	return id
 }
 
-// auditWhereClause builds the WHERE clause and args shared by both the count
-// and the row-fetch queries in List, so the two can never drift apart.
+// auditWhereClause builds the shared WHERE clause and args for List so count and fetch queries cannot drift.
 func auditWhereClause(filter AuditFilter) (string, []any) {
 	clause := "WHERE 1=1"
 	args := []any{}
@@ -71,12 +63,7 @@ func auditWhereClause(filter AuditFilter) (string, []any) {
 	return clause, args
 }
 
-// List returns audit entries newest-first, narrowed by filter.
-// filter.Page >= 1 returns that page, AuditPageSize rows at a time, with
-// Total/TotalPages filled in so the caller can render pagination controls.
-// filter.Page <= 0 returns every matching row in one result, with no LIMIT —
-// used only for exporting the full filtered trail (see ListAuditLogs), never
-// for the on-screen paginated list.
+// List returns audit entries newest-first; Page>=1 paginates (AuditPageSize rows), Page<=0 returns all rows for export.
 func (m *AuditModel) List(filter AuditFilter) (AuditPage, error) {
 	whereClause, args := auditWhereClause(filter)
 

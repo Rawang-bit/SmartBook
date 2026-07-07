@@ -1,6 +1,4 @@
-// hashpw is a small helper to generate a bcrypt password hash.
-// Usage:  go run scripts/hashpw.go yourpassword
-// Copy the output and paste it into the admins table.
+// hashpw generates a bcrypt hash. Usage: go run scripts/hashpw.go <password>; paste the output into the admins table.
 package main
 
 import (

@@ -13,8 +13,7 @@ type ResetTokenData struct {
 	ExpiresAt time.Time
 }
 
-// ResetStore is an in-memory store for single-use password-reset tokens, each valid
-// for 15 minutes and deleted the moment it is consumed, so replay always fails.
+// ResetStore is an in-memory store for single-use password-reset tokens; tokens are valid 15 minutes and deleted on first use.
 type ResetStore struct {
 	mu     sync.Mutex
 	tokens map[string]ResetTokenData
@@ -27,8 +26,7 @@ func NewResetStore() *ResetStore {
 	return rs
 }
 
-// Create generates a cryptographically random 64-char hex token linked to adminID,
-// expiring in 15 minutes.
+// Create generates a random 64-char hex token for adminID, expiring in 15 minutes.
 func (rs *ResetStore) Create(adminID int64) string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
@@ -44,9 +42,7 @@ func (rs *ResetStore) Create(adminID int64) string {
 	return token
 }
 
-// Consume atomically validates and removes a token.
-// Returns the associated admin ID and true on success.
-// Returns 0 and false if the token is unknown, already used, or expired.
+// Consume atomically validates and deletes a token; returns (adminID, true) on success, (0, false) if unknown/used/expired.
 func (rs *ResetStore) Consume(token string) (int64, bool) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()

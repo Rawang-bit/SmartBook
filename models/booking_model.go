@@ -65,7 +65,6 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 }
 
 // Save validates all booking business rules then inserts (id==0) or updates (id>0).
-// This is the single authoritative source for all booking constraints and workflow.
 func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
 	// ── Step 1: Clean up input ────────────────────────────────────────────────
@@ -242,8 +241,7 @@ func (m *BookingModel) GetByID(id int64) (Booking, error) {
 	return b, err
 }
 
-// Cancel marks a booking as Cancelled by ID.
-// Returns ErrNotFound if the booking does not exist.
+// Cancel marks a booking as Cancelled; returns ErrNotFound if missing.
 func (m *BookingModel) Cancel(id int64) error {
 	result, err := m.DB.Exec(`
 		UPDATE bookings SET status = 'Cancelled', updated_at = NOW() WHERE id = $1
@@ -258,8 +256,7 @@ func (m *BookingModel) Cancel(id int64) error {
 	return nil
 }
 
-// PublicCancel cancels a booking only if the provided email matches the booking's owner.
-// Returns ErrOwnerMismatch if the email does not match.
+// PublicCancel cancels a booking only if the provided email matches the booking owner.
 func (m *BookingModel) PublicCancel(id int64, email string) error {
 	result, err := m.DB.Exec(`
 		UPDATE bookings
@@ -279,10 +276,7 @@ func (m *BookingModel) PublicCancel(id int64, email string) error {
 // MinutesEditWindow is how long after a meeting ends its owner may add or edit Minutes of Meeting.
 const MinutesEditWindow = 24 * time.Hour
 
-// SetMinutesOfMeeting records what was discussed in a completed meeting. Only the
-// booking owner (proven by email) may do this, and only within MinutesEditWindow after
-// the meeting's end time — the window prevents editing long after the fact.
-// Returns ErrNotFound, ErrOwnerMismatch, or a plain error for business-rule violations.
+// SetMinutesOfMeeting saves meeting notes; only the email-proven owner may edit, within MinutesEditWindow after end time.
 func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Booking, error) {
 	var b Booking
 	var startTimeStr, endTimeStr string
@@ -329,8 +323,7 @@ func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Boo
 	return b, nil
 }
 
-// Delete permanently removes a booking.
-// Returns ErrNotFound if the booking does not exist.
+// Delete permanently removes a booking; returns ErrNotFound if missing.
 func (m *BookingModel) Delete(id int64) error {
 	result, err := m.DB.Exec(`DELETE FROM bookings WHERE id = $1`, id)
 	if err != nil {
@@ -346,8 +339,7 @@ func (m *BookingModel) Delete(id int64) error {
 // BookingRetentionDays is how long a booking record is kept before it is purged.
 const BookingRetentionDays = 365
 
-// PurgeOldBookings permanently deletes every booking whose booking_date is older than
-// BookingRetentionDays, regardless of status. Returns the number of rows removed.
+// PurgeOldBookings deletes bookings older than BookingRetentionDays; returns the row count.
 func (m *BookingModel) PurgeOldBookings() (int64, error) {
 	result, err := m.DB.Exec(`
 		DELETE FROM bookings WHERE booking_date < CURRENT_DATE - $1::int

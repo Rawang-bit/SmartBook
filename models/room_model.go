@@ -9,7 +9,6 @@ import (
 )
 
 // RoomModel manages all database operations and validation for meeting rooms.
-// It is the single source of truth for room availability and configuration.
 type RoomModel struct {
 	DB *sql.DB
 }
@@ -35,8 +34,7 @@ func (m *RoomModel) List() ([]Room, error) {
 	return rooms, rows.Err()
 }
 
-// GetByID fetches a single room by its primary key.
-// Returns ErrNotFound if no room has that ID.
+// GetByID fetches a room by primary key; returns ErrNotFound if missing.
 func (m *RoomModel) GetByID(id int64) (Room, error) {
 	var room Room
 	err := m.DB.QueryRow(`
@@ -48,8 +46,7 @@ func (m *RoomModel) GetByID(id int64) (Room, error) {
 	return room, err
 }
 
-// GetByName fetches a single room by its unique name.
-// Returns ErrNotFound if no room has that name.
+// GetByName fetches a room by unique name; returns ErrNotFound if missing.
 func (m *RoomModel) GetByName(name string) (Room, error) {
 	var room Room
 	err := m.DB.QueryRow(`
@@ -61,8 +58,7 @@ func (m *RoomModel) GetByName(name string) (Room, error) {
 	return room, err
 }
 
-// Save inserts (id == 0) or updates (id > 0) a room after validating all required fields.
-// Returns ErrDuplicate if the name is taken, ErrNotFound on update with an unknown ID.
+// Save inserts (id==0) or updates (id>0) a room; returns ErrDuplicate if name taken, ErrNotFound if ID unknown.
 func (m *RoomModel) Save(id int64, req RoomRequest) (Room, error) {
 	req.Name     = strings.TrimSpace(req.Name)
 	req.Location = strings.TrimSpace(req.Location)
@@ -106,8 +102,7 @@ func (m *RoomModel) Save(id int64, req RoomRequest) (Room, error) {
 	return room, nil
 }
 
-// Delete permanently removes a room.
-// Returns ErrForeignKey if the room still has bookings, ErrNotFound if the ID is unknown.
+// Delete permanently removes a room; returns ErrForeignKey if it has bookings, ErrNotFound if ID unknown.
 func (m *RoomModel) Delete(id int64) error {
 	result, err := m.DB.Exec(`DELETE FROM rooms WHERE id = $1`, id)
 	if err != nil {

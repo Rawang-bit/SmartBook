@@ -15,8 +15,7 @@ type loginRecord struct {
 	lockedUntil time.Time
 }
 
-// AttemptStore tracks consecutive failed login attempts per username in memory.
-// After MaxLoginAttempts failures the username is locked for LockoutDuration.
+// AttemptStore tracks consecutive failed login attempts; after MaxLoginAttempts failures the username is locked for LockoutDuration.
 type AttemptStore struct {
 	mu      sync.Mutex
 	records map[string]*loginRecord
@@ -29,8 +28,7 @@ func NewAttemptStore() *AttemptStore {
 	return s
 }
 
-// RecordFailure increments the failure counter for username.
-// Returns true if the account is now locked (failure threshold just reached).
+// RecordFailure increments the failure counter; returns true if the account just reached the lock threshold.
 func (s *AttemptStore) RecordFailure(username string) (nowLocked bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -61,8 +59,7 @@ func (s *AttemptStore) Remaining(username string) int {
 	return left
 }
 
-// IsLocked reports whether the username is currently locked and when the lock expires.
-// An expired lock is cleared automatically and reported as unlocked.
+// IsLocked reports whether the username is locked and when it expires; expired locks are cleared automatically.
 func (s *AttemptStore) IsLocked(username string) (locked bool, until time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

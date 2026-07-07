@@ -6,10 +6,7 @@ import (
 	"bookroom-management-system/controllers"
 )
 
-// RegisterRoutes wires every API URL to its handler.
-//
-// Public routes  — callable by anyone, no login needed.
-// Admin routes   — wrapped with RequireAdmin; rejected with 401 if no valid session cookie.
+// RegisterRoutes wires every API URL to its handler (public routes need no login; admin routes require a session cookie).
 func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 
 	// ── Health ────────────────────────────────────────────────────────────────

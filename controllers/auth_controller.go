@@ -19,17 +19,14 @@ func (c *Controller) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// PublicConfig exposes TURNSTILE_SITE_KEY to the frontend; blank when unset, which
-// tells the frontend to skip rendering the widget entirely.
+// PublicConfig exposes TURNSTILE_SITE_KEY to the frontend; blank when unset tells the frontend to skip the widget.
 func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"turnstileSiteKey": os.Getenv("TURNSTILE_SITE_KEY"),
 	})
 }
 
-// recordFailedLoginAttempt increments the failure counter and responds with a lockout
-// or remaining-attempts message. Both unknown-username and wrong-password paths call
-// this so the error is identical — preventing user enumeration by timing or message.
+// recordFailedLoginAttempt increments the counter; same error for bad username or bad password prevents enumeration.
 func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string) {
 	nowLocked := c.LoginAttempts.RecordFailure(username)
 	remaining := c.LoginAttempts.Remaining(username)
@@ -62,9 +59,7 @@ func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Req
 		fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
 }
 
-// Login validates credentials, creates a server-side session, and sets an HttpOnly
-// cookie. Cookie flags: HttpOnly, Secure (production), SameSite=Strict, __Host- prefix
-// in production (binds to exact host, prevents subdomain injection).
+// Login validates credentials and creates a server-side session with a hardened cookie.
 func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if !decodeJSON(w, r, &req) {
@@ -203,9 +198,7 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ForgotPassword initiates a password reset. Both username and email must match the
-// same active account before issuing a token. Always responds 200 OK regardless of
-// match — prevents username/email enumeration via differing responses.
+// ForgotPassword issues a reset token only when username+email match; always responds 200 OK to prevent enumeration.
 func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req models.ForgotPasswordRequest
 	if !decodeJSON(w, r, &req) {
@@ -288,8 +281,7 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": neutralMsg})
 }
 
-// ResetPassword consumes a single-use reset token and updates the admin's password.
-// The token is validated and deleted atomically — replaying the same token always fails.
+// ResetPassword validates and atomically consumes a reset token, then updates the password.
 func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req models.ResetPasswordRequest
 	if !decodeJSON(w, r, &req) {

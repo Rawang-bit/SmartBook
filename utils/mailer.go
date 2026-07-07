@@ -32,8 +32,7 @@ func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Password Reset Request", body, "PASSWORD RESET")
 }
 
-// sendSimpleEmail is a shared helper for short notification emails.
-// Falls back to logging when RESEND_API_KEY is not set.
+// sendSimpleEmail sends a notification via Resend; logs instead when RESEND_API_KEY is unset.
 func sendSimpleEmail(toEmail, subject, body, logTag string) error {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	from   := os.Getenv("EMAIL_FROM")
@@ -78,8 +77,7 @@ func sendSimpleEmail(toEmail, subject, body, logTag string) error {
 	return nil
 }
 
-// SendRegistrationConfirmationEmail notifies an admin-added user that they must click a
-// link to prove email ownership before the account activates.
+// SendRegistrationConfirmationEmail emails an admin-added user a confirmation link to prove email ownership.
 func SendRegistrationConfirmationEmail(toEmail, toName, token string) error {
 	confirmURL := baseAppURL() + "/confirm-registration.html?token=" + token
 
@@ -121,8 +119,7 @@ func SendRejectionEmail(toEmail, toName string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Access Request Declined", body, "USER REJECTED")
 }
 
-// SendBookingConfirmationEmail notifies a recipient that a room has been booked.
-// toName may be empty for participants (names are never collected) — greeting falls back.
+// SendBookingConfirmationEmail notifies a recipient of a room booking; toName may be empty for participants.
 func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, agenda string) error {
 	greeting := "Hello,"
 	if toName != "" {
@@ -145,8 +142,7 @@ func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, en
 	return sendSimpleEmail(toEmail, fmt.Sprintf("SmartBook — Room Booked: %s", roomName), body, "BOOKING CONFIRMATION")
 }
 
-// SendTemporaryAdminPasswordEmail notifies a newly promoted admin of their login credentials.
-// The server enforces a password change on first login regardless of whether this is read.
+// SendTemporaryAdminPasswordEmail sends login credentials to a newly promoted admin (server enforces password change on first login).
 func SendTemporaryAdminPasswordEmail(toEmail, toName, username, tempPassword string) error {
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+

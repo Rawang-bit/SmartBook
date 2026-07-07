@@ -32,9 +32,7 @@ func main() {
 	routes.RegisterRoutes(mux, controller)
 	mux.Handle("/", http.FileServer(http.Dir("view")))
 
-	// Build the middleware chain (outermost applied first):
-	//   HTTPSRedirect — redirects plain HTTP to HTTPS in production (308 Permanent)
-	//   SecureHeaders — attaches defensive security headers to every response
+	// Middleware chain (outermost first): HTTPS redirect → secure headers.
 	var handler http.Handler = mux
 	handler = controllers.SecureHeaders(handler)
 	handler = controllers.HTTPSRedirect(handler)
@@ -43,15 +41,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
 
-// configureTimezone pins time.Local to Bhutan time (UTC+6, no DST) regardless
-// of the host machine's own clock. Every booking date/time comparison in this
-// app — computed status, the past-booking check, the Minutes of Meeting
-// 24-hour edit window — uses time.Local; left unset, a deployment host
-// running in UTC (the default on most container platforms, including Render)
-// would misjudge "has this meeting ended yet" by a fixed 6-hour offset
-// against meeting times entered by Bhutan-based users. The tzdata import
-// makes LoadLocation work even on minimal images without a system zoneinfo
-// database.
+// configureTimezone pins time.Local to Asia/Thimphu so booking comparisons match Bhutan time, not UTC.
 func configureTimezone() {
 	loc, err := time.LoadLocation("Asia/Thimphu")
 	if err != nil {
@@ -61,9 +51,7 @@ func configureTimezone() {
 	time.Local = loc
 }
 
-// runBookingRetentionJob permanently purges booking records older than
-// models.BookingRetentionDays. It runs once at startup and then once a day
-// for as long as the process is alive.
+// runBookingRetentionJob purges bookings older than BookingRetentionDays — once at startup, then daily.
 func runBookingRetentionJob(bookings *models.BookingModel) {
 	purge := func() {
 		n, err := bookings.PurgeOldBookings()

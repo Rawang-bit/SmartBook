@@ -12,9 +12,7 @@ func isProduction() bool {
 	return os.Getenv("APP_ENV") == "production"
 }
 
-// sessionCookieName returns the session cookie name, with the __Host- prefix in
-// production (enforces Secure flag, no Domain attribute, path="/", preventing
-// subdomain injection). Plain name in development for plain-HTTP compatibility.
+// sessionCookieName returns the cookie name; __Host- prefix in production prevents subdomain injection.
 func sessionCookieName() string {
 	if isProduction() {
 		return "__Host-smartbook_session"
@@ -22,8 +20,7 @@ func sessionCookieName() string {
 	return "smartbook_session"
 }
 
-// deviceCookieName mirrors sessionCookieName's __Host- hardening for the trusted-device
-// cookie, which lets a recognized browser skip OTP verification.
+// deviceCookieName returns the device-trust cookie name with the same __Host- hardening as sessionCookieName.
 func deviceCookieName() string {
 	if isProduction() {
 		return "__Host-smartbook_device"
@@ -34,8 +31,7 @@ func deviceCookieName() string {
 // DeviceTrustDuration is how long a "remembered" device skips OTP on the public access gate.
 const DeviceTrustDuration = 30 * 24 * time.Hour
 
-// setCookie writes a cookie with shared security attributes: HttpOnly, Secure in
-// production, and SameSite=Strict.
+// setCookie writes a cookie with HttpOnly, SameSite=Strict, and Secure (production only).
 func setCookie(w http.ResponseWriter, name, value string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
@@ -58,8 +54,7 @@ func setDeviceCookie(w http.ResponseWriter, value string, maxAge int) {
 	setCookie(w, deviceCookieName(), value, maxAge)
 }
 
-// SecureHeaders wraps every HTTP response with a hardened set of security headers.
-// Must be the outermost middleware so headers appear on every response including errors.
+// SecureHeaders wraps every response with hardened security headers; must be outermost middleware.
 func SecureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -70,11 +65,7 @@ func SecureHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 
-		// CSP notes:
-		// script-src: unsafe-inline required by Tailwind; CDN hosts for Tailwind + Turnstile.
-		// frame-src/connect-src: Turnstile renders its challenge as a sandboxed iframe and
-		//   calls Cloudflare to verify the solve — both challenge.cloudflare.com and
-		//   challenges.cloudflare.com must appear or the widget silently fails.
+		// CSP: unsafe-inline needed by Tailwind; both challenge/challenges.cloudflare.com required — widget fails silently without both.
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://challenges.cloudflare.com https://challenge.cloudflare.com; "+
@@ -97,9 +88,7 @@ func SecureHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// HTTPSRedirect permanently redirects HTTP to HTTPS in production.
-// Honours X-Forwarded-Proto from reverse proxies so the redirect works even when
-// the Go server itself receives plain TCP connections from the proxy.
+// HTTPSRedirect permanently redirects HTTP to HTTPS in production, honouring X-Forwarded-Proto from reverse proxies.
 func HTTPSRedirect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isProduction() {

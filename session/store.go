@@ -1,6 +1,4 @@
-// Package session manages admin login sessions, persisted in PostgreSQL so active
-// logins survive process restarts (deploys, crashes, free-tier idle spin-down).
-// An in-memory map would be wiped on every restart, logging admins out prematurely.
+// Package session manages admin login sessions persisted in PostgreSQL (survives restarts).
 package session
 
 import (
@@ -14,8 +12,7 @@ import (
 // SessionDuration is how long an admin session stays valid after login.
 const SessionDuration = 30 * time.Minute
 
-// SessionData holds a snapshot of the admin's identity taken at login time.
-// A role change does not apply to an already-active session until the admin re-logs in.
+// SessionData is a snapshot of admin identity at login; role changes only apply after re-login.
 type SessionData struct {
 	AdminID           int64
 	Username          string
@@ -37,9 +34,7 @@ func New(db *sql.DB) *Store {
 	return s
 }
 
-// Create inserts a new session row and returns a random 64-char hex session ID.
-// Returns an error if the row could not be written — the caller must not treat
-// the login as successful since the returned ID would point to a non-existent session.
+// Create inserts a session row and returns a random 64-char hex ID; error means login must fail.
 func (s *Store) Create(adminID int64, username, name, role string, mustResetPassword bool) (string, error) {
 	// 32 random bytes → 64-character hex string, impossible to guess.
 	randomBytes := make([]byte, 32)
@@ -59,11 +54,7 @@ func (s *Store) Create(adminID int64, username, name, role string, mustResetPass
 	return sessionID, nil
 }
 
-// Get looks up a session by ID.
-// Returns (data, true, nil) if found and not expired.
-// Returns (zero, false, nil) if the session does not exist or has expired — treat as unauthenticated.
-// Returns (zero, false, err) on a transient DB error — callers MUST NOT treat this as
-// "not authenticated"; the session may still be valid and forcing a logout is confusing.
+// Get looks up a session; DB errors return (zero, false, err) — MUST NOT be treated as "not authenticated".
 func (s *Store) Get(sessionID string) (SessionData, bool, error) {
 	var data SessionData
 	var expiresAt time.Time
@@ -95,17 +86,14 @@ func (s *Store) Delete(sessionID string) {
 	}
 }
 
-// DeleteByAdminID immediately invalidates every active session for adminID.
-// Without this, revoking an admin or resetting their password only takes effect
-// at next login — their current session would keep working until natural expiry.
+// DeleteByAdminID invalidates all sessions for adminID — ensures revoke/password-reset takes effect immediately.
 func (s *Store) DeleteByAdminID(adminID int64) {
 	if _, err := s.db.Exec(`DELETE FROM sessions WHERE admin_id = $1`, adminID); err != nil {
 		log.Printf("[SESSION] failed to delete sessions for admin %d: %v", adminID, err)
 	}
 }
 
-// ClearMustResetPassword removes the forced-password-reset flag from an active session.
-// Called immediately after ChangeOwnPassword so the admin doesn't have to re-login.
+// ClearMustResetPassword clears the forced-reset flag from the active session after password change.
 func (s *Store) ClearMustResetPassword(sessionID string) {
 	if _, err := s.db.Exec(`UPDATE sessions SET must_reset_password = FALSE WHERE id = $1`, sessionID); err != nil {
 		log.Printf("[SESSION] failed to clear must_reset_password: %v", err)

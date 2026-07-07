@@ -20,8 +20,7 @@ func RoleLabel(role string) string {
 // MinPasswordLength is the minimum character count for any admin password.
 const MinPasswordLength = 12
 
-// ValidatePasswordComplexity enforces minimum length plus a mix of character classes.
-// Applied everywhere an admin password is set — creation, reset, and self-service change.
+// ValidatePasswordComplexity enforces length + upper/lower/digit/symbol mix.
 func ValidatePasswordComplexity(password string) error {
 	if len(password) < MinPasswordLength {
 		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
@@ -65,8 +64,7 @@ type AdminDetail struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-// AdminRequest is the JSON body for creating or updating an admin account.
-// Email doubles as the login username; Password is ignored on updates.
+// AdminRequest is the JSON body for creating or updating an admin (email doubles as username; Password ignored on updates).
 type AdminRequest struct {
 	Password string `json:"password"`
 	Name     string `json:"name"`
@@ -86,8 +84,7 @@ type LoginResponse struct {
 	Admin Admin `json:"admin"`
 }
 
-// ForgotPasswordRequest is the JSON body sent by the forgot-password form.
-// Both username and email must match a single active admin account.
+// ForgotPasswordRequest requires username AND email to match one active admin (prevents enumeration).
 type ForgotPasswordRequest struct {
 	Username     string `json:"username"`
 	Email        string `json:"email"`
@@ -100,11 +97,7 @@ type ResetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// User is a registered person who may make room bookings.
-// Self-registered users start as "pending" until an admin approves or rejects them.
-// Admin-added users also start as "pending" with AwaitingConfirmation=true until
-// the recipient clicks the emailed confirmation link.
-// Active users can be set to "revoked" to pull booking access without deleting the record.
+// User is a registered person who can make room bookings. Starts as "pending"; admin approves/rejects.
 type User struct {
 	ID                   int64  `json:"id"`
 	Name                 string `json:"name"`
@@ -131,20 +124,17 @@ type RejectUserRequest struct {
 	Reason string `json:"reason"`
 }
 
-// ConfirmRegistrationRequest is the JSON body when a newly admin-added user clicks
-// the confirmation link emailed to them.
+// ConfirmRegistrationRequest is the JSON body for the admin-emailed confirmation link.
 type ConfirmRegistrationRequest struct {
 	Token string `json:"token"`
 }
 
-// ApproveUserRequest is the JSON body when an admin approves a pending self-registration.
-// Role defaults to "normal_user"; any admin role promotes to a new admin account.
+// ApproveUserRequest approves a pending registration; admin role triggers admin-account creation.
 type ApproveUserRequest struct {
 	Role string `json:"role"`
 }
 
-// CheckEmailRequest is the JSON body for the public access gate's email lookup.
-// CaptchaToken is used only by the OTP-send path, not by the email-check path.
+// CheckEmailRequest is the JSON body for the public access gate email check; CaptchaToken is only used by the OTP-send path.
 type CheckEmailRequest struct {
 	Email        string `json:"email"`
 	CaptchaToken string `json:"captchaToken"`
@@ -157,9 +147,7 @@ type SendOTPRequest struct {
 	CaptchaToken string `json:"captchaToken"`
 }
 
-// VerifyOTPRequest is the JSON body to verify a one-time code — for self-registration
-// (Name required) or re-verifying an active user on an unrecognized device (Name ignored).
-// RememberDevice=true issues a trusted-device cookie valid for 30 days; never assumed.
+// VerifyOTPRequest verifies a one-time code for registration (Name required) or device re-auth (Name ignored).
 type VerifyOTPRequest struct {
 	Name           string `json:"name"`
 	Email          string `json:"email"`
@@ -240,9 +228,7 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// AuditEntry is what a controller records for one audit-trail event.
-// ActorLabel/TargetLabel are denormalized snapshots taken at action time so entries stay
-// meaningful even if the underlying actor or target is later renamed or deleted.
+// AuditEntry is one audit-trail event. Labels are snapshots so entries survive renames/deletes.
 type AuditEntry struct {
 	ActorType   string // "admin" or "system"
 	ActorID     int64  // 0 when there is no authenticated actor
@@ -270,8 +256,7 @@ type AuditLog struct {
 	CreatedAt   string `json:"createdAt"`
 }
 
-// AuditFilter narrows ListAuditLogs. Every field is optional.
-// Page is 1-based; Page<=0 means "no pagination" (full export, not on-screen list).
+// AuditFilter narrows audit results; every field is optional. Page is 1-based; Page<=0 returns all rows for export.
 type AuditFilter struct {
 	ActorLabel string // case-insensitive substring match on actor or target label
 	Action     string // exact match

@@ -14,8 +14,7 @@ type UserModel struct {
 	DB *sql.DB
 }
 
-// normalizeAndValidateUserInput trims/normalizes Name and Email in place and
-// returns an error if either is invalid. Shared by Create, Register, and Update.
+// normalizeAndValidateUserInput trims/normalizes Name and Email; returns error if invalid.
 func normalizeAndValidateUserInput(req *UserRequest) error {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Email = utils.NormalizeEmail(req.Email)
@@ -30,9 +29,7 @@ func normalizeAndValidateUserInput(req *UserRequest) error {
 	return nil
 }
 
-// List returns all users ordered alphabetically by name, excluding those whose
-// email matches a super_admin username — super_admin is exclusive and any such
-// users row would be stale data, not an active booking grant.
+// List returns all users alphabetically, excluding rows whose email matches a super_admin (exclusive role).
 func (m *UserModel) List() ([]User, error) {
 	rows, err := m.DB.Query(`
 		SELECT u.id, u.name, u.email, u.phone, u.status, u.intended_role, u.confirm_token IS NOT NULL,
@@ -61,8 +58,7 @@ func (m *UserModel) List() ([]User, error) {
 	return users, rows.Err()
 }
 
-// GetByID fetches a single user by primary key.
-// Returns ErrNotFound if no user has that ID.
+// GetByID fetches a single user by primary key; returns ErrNotFound if missing.
 func (m *UserModel) GetByID(id int64) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
@@ -76,8 +72,7 @@ func (m *UserModel) GetByID(id int64) (User, error) {
 	return u, err
 }
 
-// GetByEmail looks up a user by email address (case-insensitive).
-// Returns ErrNotFound if no user has that email.
+// GetByEmail looks up a user by email (case-insensitive); returns ErrNotFound if missing.
 func (m *UserModel) GetByEmail(email string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
@@ -90,13 +85,7 @@ func (m *UserModel) GetByEmail(email string) (User, error) {
 	return u, err
 }
 
-// Create registers a new user added directly by an admin. Starts as "pending" with a
-// 7-day confirmation token — the admin typing someone else's email hasn't proved they
-// own it, so the recipient must click the emailed link to activate.
-// req.Role records what happens on confirm: "normal_user" activates the booking row;
-// any admin role promotes it to a new admin account (see ConsumeConfirmToken).
-// Returns the created user and plaintext token (caller must email it, never log it).
-// Returns ErrDuplicate if the email is already registered.
+// Create adds an admin-invited user as "pending" with a 7-day confirm token; normal_user activates, admin roles promote.
 func (m *UserModel) Create(req UserRequest) (User, string, error) {
 	if err := normalizeAndValidateUserInput(&req); err != nil {
 		return User{}, "", err
@@ -127,9 +116,7 @@ func (m *UserModel) Create(req UserRequest) (User, string, error) {
 	return u, token, nil
 }
 
-// ConsumeConfirmToken validates and single-uses a registration confirmation token.
-// The token is cleared immediately regardless of outcome — it can never be replayed.
-// Returns ErrNotFound if the token doesn't exist (already used or never issued).
+// ConsumeConfirmToken validates and burns a registration token (cleared on first use, cannot replay).
 func (m *UserModel) ConsumeConfirmToken(token string) (User, error) {
 	var u User
 	var expiresAt sql.NullTime
@@ -154,9 +141,7 @@ func (m *UserModel) ConsumeConfirmToken(token string) (User, error) {
 	return u, nil
 }
 
-// Register self-registers a new user through the public access gate. The OTP already
-// proved email ownership so no confirmation step is needed — the row starts as "pending"
-// and appears for admin review immediately. Returns ErrDuplicate if already registered.
+// Register self-registers a user via the public gate as "pending"; OTP already proved email ownership.
 func (m *UserModel) Register(req UserRequest) (User, error) {
 	if err := normalizeAndValidateUserInput(&req); err != nil {
 		return User{}, err
@@ -177,9 +162,7 @@ func (m *UserModel) Register(req UserRequest) (User, error) {
 	return u, nil
 }
 
-// SetStatus updates a user's approval status ("active", "rejected", or "revoked").
-// Returns the updated user so the caller can notify them by email.
-// Returns ErrNotFound if the user does not exist.
+// SetStatus updates a user's status; returns the user (for email notifications) or ErrNotFound.
 func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
@@ -192,8 +175,7 @@ func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 	return u, err
 }
 
-// Reject marks a pending registration as rejected and stores the reason.
-// Returns ErrNotFound if the user does not exist.
+// Reject marks a user as rejected and stores the reason; returns ErrNotFound if missing.
 func (m *UserModel) Reject(id int64, reason string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
@@ -206,8 +188,7 @@ func (m *UserModel) Reject(id int64, reason string) (User, error) {
 	return u, err
 }
 
-// Update changes a user's name, email, or phone.
-// Returns ErrNotFound if the user does not exist, ErrDuplicate if the new email is taken.
+// Update changes a user's name, email, or phone; returns ErrNotFound or ErrDuplicate on conflict.
 func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 	if err := normalizeAndValidateUserInput(&req); err != nil {
 		return User{}, err
@@ -230,8 +211,7 @@ func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 	return u, nil
 }
 
-// Delete removes a registered user.
-// Returns ErrNotFound if the user does not exist.
+// Delete removes a user; returns ErrNotFound if missing.
 func (m *UserModel) Delete(id int64) error {
 	result, err := m.DB.Exec(`DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
@@ -244,9 +224,7 @@ func (m *UserModel) Delete(id int64) error {
 	return nil
 }
 
-// EnsureActiveForEmail upserts an active booking-capable row for email.
-// Called whenever General Admin role is granted — Normal User + General Admin is the
-// one allowed multi-role combination, so the Normal User row must exist and be active.
+// EnsureActiveForEmail upserts an active user row for email — required for the Normal User + General Admin multi-role combo.
 func (m *UserModel) EnsureActiveForEmail(name, email string) error {
 	name = strings.TrimSpace(name)
 	email = utils.NormalizeEmail(email)
@@ -258,17 +236,14 @@ func (m *UserModel) EnsureActiveForEmail(name, email string) error {
 	return err
 }
 
-// RemoveNormalUserAccess deletes any users-table row for email. Super Admin is an
-// exclusive role — no Normal User booking capability is allowed alongside it.
-// A no-op if no such row exists.
+// RemoveNormalUserAccess deletes the users row for email (Super Admin is exclusive — no booking row allowed).
 func (m *UserModel) RemoveNormalUserAccess(email string) error {
 	email = utils.NormalizeEmail(email)
 	_, err := m.DB.Exec(`DELETE FROM users WHERE LOWER(TRIM(email)) = $1`, email)
 	return err
 }
 
-// DeviceTokenMatches reports whether rawToken matches the stored trusted-device token
-// for email, and that it has not expired. Returns false for users who never opted in.
+// DeviceTokenMatches checks rawToken against the stored trusted-device hash for email; false if expired or unset.
 func (m *UserModel) DeviceTokenMatches(email, rawToken string) (bool, error) {
 	if rawToken == "" {
 		return false, nil
@@ -295,9 +270,7 @@ func (m *UserModel) DeviceTokenMatches(email, rawToken string) (bool, error) {
 	return storedHash.String == utils.HashToken(rawToken), nil
 }
 
-// SetDeviceToken stores the hash and expiry of a new trusted-device token for a user,
-// overwriting any previously remembered device — only one is trusted at a time.
-// Called only when the user explicitly opts in to "remember this device" after OTP.
+// SetDeviceToken stores a new trusted-device token hash (overwrites any previous — one device at a time).
 func (m *UserModel) SetDeviceToken(id int64, rawToken string, expiresAt time.Time) error {
 	_, err := m.DB.Exec(`
 		UPDATE users SET device_token_hash = $1, device_token_expires_at = $2 WHERE id = $3
@@ -305,8 +278,7 @@ func (m *UserModel) SetDeviceToken(id int64, rawToken string, expiresAt time.Tim
 	return err
 }
 
-// ClearDeviceToken revokes any previously remembered device for a user so an old
-// opt-in doesn't linger as a silent OTP bypass.
+// ClearDeviceToken removes any trusted-device token so the user must re-verify on next access.
 func (m *UserModel) ClearDeviceToken(id int64) error {
 	_, err := m.DB.Exec(`
 		UPDATE users SET device_token_hash = NULL, device_token_expires_at = NULL WHERE id = $1

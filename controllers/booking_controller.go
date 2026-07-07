@@ -10,8 +10,7 @@ import (
 	"bookroom-management-system/utils"
 )
 
-// ListBookings returns all bookings with room name and location.
-// Optional ?room= query param filters by room name or ID. Public endpoint.
+// ListBookings returns all bookings; optional ?room= filters by room name or ID.
 func (c *Controller) ListBookings(w http.ResponseWriter, r *http.Request) {
 	roomFilter := strings.TrimSpace(r.URL.Query().Get("room"))
 	bookings, err := c.Bookings.List(roomFilter)
@@ -22,8 +21,7 @@ func (c *Controller) ListBookings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bookings)
 }
 
-// CreateBooking allows a public user to book a room.
-// The user's email must already be registered by an admin.
+// CreateBooking books a room for a registered user (email must be active in the users table).
 func (c *Controller) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	var req models.BookingRequest
 	if !decodeJSON(w, r, &req) {
@@ -43,9 +41,7 @@ func (c *Controller) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, booking)
 }
 
-// sendBookingConfirmations emails the booking owner and every listed
-// participant that the room has been reserved. Failures are logged but never
-// block the response — the reservation itself already succeeded.
+// sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
 func (c *Controller) sendBookingConfirmations(b models.Booking) {
 	recipients := []string{b.Email}
 	if b.Participants != "" {
@@ -120,8 +116,7 @@ func (c *Controller) CancelBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
-// DeleteBooking permanently removes a booking when ?hard=1 is in the URL.
-// Without ?hard=1 it cancels instead of deleting (soft delete).
+// DeleteBooking hard-deletes when ?hard=1 is set; otherwise cancels (soft delete).
 func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/bookings/")
 	if !ok {
@@ -152,8 +147,7 @@ func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// PublicBookingAction dispatches POST /api/bookings/{id}/cancel and /minutes
-// by trailing path segment. Ownership is proved by email in the request body.
+// PublicBookingAction dispatches /cancel and /minutes by trailing path segment; ownership proved by email.
 func (c *Controller) PublicBookingAction(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
 	switch {
@@ -166,8 +160,7 @@ func (c *Controller) PublicBookingAction(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// PublicCancelBooking lets a user cancel their own booking by proving their email.
-// URL must end with "/cancel" and the body must contain {"email": "..."}.
+// PublicCancelBooking cancels a booking only if the request body's email matches the booking owner.
 func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/bookings/")
 	if !ok {
@@ -208,8 +201,7 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
-// UpdateMinutesOfMeeting lets the booking owner add/edit meeting notes within the
-// 24-hour edit window, proved by email. URL must end with "/minutes".
+// UpdateMinutesOfMeeting saves meeting notes for a completed booking; email proves ownership, subject to the edit window.
 func (c *Controller) UpdateMinutesOfMeeting(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/bookings/")
 	if !ok {

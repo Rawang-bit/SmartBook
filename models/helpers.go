@@ -8,8 +8,7 @@ import (
 	"bookroom-management-system/utils"
 )
 
-// NormalizeBookingInput cleans all fields in a booking request: trims whitespace,
-// normalises the email, and converts times to 24-hour format.
+// NormalizeBookingInput trims whitespace, normalises email, and converts times to 24-hour format.
 func NormalizeBookingInput(req *BookingRequest) {
 	req.User    = strings.TrimSpace(req.User)
 	req.Email   = utils.NormalizeEmail(req.Email)
@@ -32,9 +31,7 @@ func NormalizeBookingInput(req *BookingRequest) {
 	req.End   = utils.To24HourTime(req.End)
 }
 
-// NormalizeParticipants cleans a comma-separated participant email list: trims whitespace,
-// drops empty entries, and lower-cases each address.
-// Returns an error naming the first invalid address found, if any.
+// NormalizeParticipants cleans and validates a comma-separated participant email list.
 func NormalizeParticipants(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -56,11 +53,7 @@ func NormalizeParticipants(raw string) (string, error) {
 	return strings.Join(cleaned, ", "), nil
 }
 
-// FillBookingDisplayFields populates derived display fields on a Booking:
-//   - Room       = copy of RoomName (legacy alias expected by the frontend)
-//   - StartTime / EndTime converted to 12-hour AM/PM format
-//   - Status     recomputed from the current wall clock
-//   - MinutesEditable = whether SetMinutesOfMeeting would currently accept a save
+// FillBookingDisplayFields populates Room alias, AM/PM display times, live status, and MinutesEditable flag.
 func FillBookingDisplayFields(b *Booking) {
 	b.Room      = b.RoomName
 	b.StartTime = utils.ToDisplayTime(b.Start)
@@ -69,10 +62,7 @@ func FillBookingDisplayFields(b *Booking) {
 	b.MinutesEditable = isWithinMinutesEditWindow(b.Date, b.End, b.Status)
 }
 
-// isWithinMinutesEditWindow reports whether a booking is currently eligible for
-// SetMinutesOfMeeting: status is "Completed" and MinutesEditWindow hasn't elapsed.
-// Sharing this check here ensures the public calendar's "eligible" list never
-// disagrees with what a save will actually accept.
+// isWithinMinutesEditWindow reports whether a booking is Completed and still within MinutesEditWindow.
 func isWithinMinutesEditWindow(dateStr, endStr, computedStatus string) bool {
 	if computedStatus != "Completed" {
 		return false

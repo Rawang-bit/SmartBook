@@ -17,12 +17,7 @@ type turnstileVerifyResponse struct {
 	ErrorCodes []string `json:"error-codes"`
 }
 
-// VerifyTurnstile checks a Cloudflare Turnstile token server-side using the secret key.
-// Call this before taking any action the token is meant to gate (e.g. sending OTP or
-// a password-reset email).
-// Fails open when either TURNSTILE_SECRET_KEY or TURNSTILE_SITE_KEY is unset — both
-// must be configured for enforcement. If only one is set the deployment is misconfigured
-// (the widget can't render without the site key), so blocking the user serves no purpose.
+// VerifyTurnstile checks a Turnstile token server-side; fails open when either env key is unset (both required for enforcement).
 func VerifyTurnstile(token, remoteIP string) error {
 	secret := os.Getenv("TURNSTILE_SECRET_KEY")
 	siteKey := os.Getenv("TURNSTILE_SITE_KEY")
