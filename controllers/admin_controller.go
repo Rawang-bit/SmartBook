@@ -37,7 +37,7 @@ func (c *Controller) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
+	syncNormalUserAccess(c, admin.Username, admin.Role)
 	c.audit(r, "admin_created", "admin", admin.Username, admin.ID, "role: "+models.RoleLabel(admin.Role))
 
 	writeJSON(w, http.StatusCreated, admin)
@@ -72,7 +72,7 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if before.Role != admin.Role {
-		syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
+		syncNormalUserAccess(c, admin.Username, admin.Role)
 
 		// Sessions are a snapshot of role taken at login — invalidate now so the old
 		// role doesn't stay effective for up to SessionDuration. AdminModel.Update
@@ -87,19 +87,14 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, admin)
 }
 
-// syncNormalUserAccess keeps Normal User access in sync: general_admin keeps it, super_admin loses it.
-func syncNormalUserAccess(c *Controller, username, name, role string) {
-	if !utils.IsValidEmail(username) {
+// syncNormalUserAccess enforces Super Admin exclusivity: removes the Normal User row when a super_admin
+// is created or promoted. Does NOT auto-grant Normal User access for general_admin — that must be done explicitly.
+func syncNormalUserAccess(c *Controller, username, role string) {
+	if role != "super_admin" || !utils.IsValidEmail(username) {
 		return
 	}
-	var err error
-	if role == "super_admin" {
-		err = c.Users.RemoveNormalUserAccess(username)
-	} else {
-		err = c.Users.EnsureActiveForEmail(name, username)
-	}
-	if err != nil {
-		log.Printf("[ADMIN SYNC] failed to sync Normal User access for %s (role=%s): %v", username, role, err)
+	if err := c.Users.RemoveNormalUserAccess(username); err != nil {
+		log.Printf("[ADMIN SYNC] failed to remove Normal User access for super_admin %s: %v", username, err)
 	}
 }
 
