@@ -133,10 +133,10 @@ func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, en
 
 	body := fmt.Sprintf(
 		"%s\r\n\r\n"+
-			"This room %s has been booked for \"%s\" on %s at %s - %s.\r\n"+
+			"This room, %s has been booked for \"%s\" on %s at %s - %s.\r\n"+
 			"%s\r\n"+
 			"— SmartBook",
-		greeting, roomName, purpose, date, startTime, endTime, agendaBlock,
+			greeting, roomName, purpose, date, startTime, endTime, agendaBlock,
 	)
 
 	return sendSimpleEmail(toEmail, fmt.Sprintf("SmartBook — Room Booked: %s", roomName), body, "BOOKING CONFIRMATION")
