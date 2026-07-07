@@ -348,11 +348,11 @@
   <script>
     requireAuth();
 
-    // History is a super-admin module — general_admin doesn't get even
-    // view-only access here. The backend itself doesn't need a matching
+    // History is a general-admin module — super_admin doesn't manage bookings
+    // so doesn't need this view. The backend itself doesn't need a matching
     // gate: history only reads bookings/rooms, which both roles can already
     // read; this is purely about which UI module each role sees.
-    if (!isSuperAdmin()) {
+    if (!isGeneralAdmin()) {
       window.location.replace('dashboard.html');
     }
 

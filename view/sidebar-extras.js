@@ -31,19 +31,14 @@
         }
       });
 
-      // Rooms, Book Room, and Bookings are general-admin-only modules — hide
-      // them from super_admin in the opposite direction. These links have no
-      // id (their styling already varies per page for the "active" one), so
-      // they're targeted by href instead of needing an HTML change.
-      ['rooms.html', 'book-room.html', 'bookings.html'].forEach(function (href) {
+      // Rooms, Book Room, Bookings, and History are general-admin-only modules
+      // — hide them from super_admin. These links have no id (their styling
+      // already varies per page for the "active" one), so they're targeted by
+      // href instead of needing an HTML change.
+      ['rooms.html', 'book-room.html', 'bookings.html', 'history.html'].forEach(function (href) {
         const link = document.querySelector('a.sidebar-link[href="' + href + '"]');
         if (link) link.classList.add('hidden');
       });
-    } else {
-      // History is the mirror image — a super-admin-only module, hidden from
-      // general_admin. Same href-based targeting, same reasoning.
-      const historyLink = document.querySelector('a.sidebar-link[href="history.html"]');
-      if (historyLink) historyLink.classList.add('hidden');
     }
 
     // Header admin name badge (present on every admin page)
