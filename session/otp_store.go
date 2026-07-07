@@ -16,7 +16,6 @@ type otpRecord struct {
 }
 
 // OTPStore is an in-memory store of one-time verification codes keyed by email.
-// Used to confirm ownership of an email address during public self-registration.
 type OTPStore struct {
 	mu    sync.Mutex
 	codes map[string]otpRecord
@@ -42,8 +41,7 @@ func (s *OTPStore) Create(email string) string {
 }
 
 // Verify checks code against the stored value for email.
-// The record is consumed (deleted) regardless of outcome, so a code can only
-// ever be used once — replaying it after a successful or failed attempt fails.
+// The record is consumed (deleted) regardless of outcome — a code can only be used once.
 func (s *OTPStore) Verify(email, code string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -237,10 +237,8 @@
       if (token) {
         document.getElementById('resetToken').value = token;
         showStep('resetStep');
-        // Clean the token from the address bar without reloading the page
-        history.replaceState(null, '', window.location.pathname);
+        history.replaceState(null, '', window.location.pathname); // remove ?token= from URL
       } else {
-        // Default step — initialise its Turnstile widget
         initTurnstile('loginTurnstile');
       }
     })();
@@ -275,16 +273,15 @@
 
       try {
         const captchaToken = getTurnstileToken('forgotTurnstile');
-        // Email is the login username — pass it as both fields.
+        // Email doubles as the username for admin accounts.
         const res = await forgotPasswordApi(email, email, captchaToken);
 
         if (res.devResetUrl) {
-          // No SMTP configured — show the link directly on screen.
+          // No SMTP configured — show the reset link on screen (dev only).
           const box  = document.getElementById('devResetBox');
           const link = document.getElementById('devResetLink');
           link.href  = res.devResetUrl;
           box.classList.remove('hidden');
-          // Scroll so the dev box is visible on small screens
           box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
           showStepMsg('forgotMsg', res.message, 'success');

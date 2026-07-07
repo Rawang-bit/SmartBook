@@ -1,22 +1,15 @@
 /*
   SmartBook Admin Frontend Helpers
-  ------------------------------------------------------------------
-  Shared utilities used across every admin page:
-  - api(): fetch wrapper that sends the session cookie and handles 401 redirects
-  - auth helpers (isSuperAdmin, requireAuth, logout)
-  - time / date formatting utilities
-  - API call wrappers for bookings, rooms, users, admins, audit
-
-  Keep page-specific rendering logic inside each HTML page's own <script>.
+  Shared utilities used across every admin page.
 */
 
 const API_BASE = '/api';
 
-// api() is the single fetch wrapper for all admin API calls. The session cookie
-// is sent automatically (same-origin) — no manual token is needed.
-// A 401 on any endpoint other than /auth/login means the session expired on the
-// server (it's re-validated on every request), so we redirect to login rather
-// than leaving the admin staring at a broken page.
+// ── Core fetch wrapper ──────────────────────────────────────────────────────
+
+// api() is the single fetch wrapper for all admin API calls. The session cookie is
+// sent automatically (same-origin). A 401 on any endpoint except /auth/login means
+// the server-side session expired — redirect rather than leaving a broken page.
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
 
@@ -37,32 +30,27 @@ async function api(path, options = {}) {
   return data;
 }
 
-// Returns true if the admin appears to be logged in.
-// Note: this localStorage flag is only for quick UI checks (e.g. redirects).
-// The real security happens server-side — the session cookie is validated by the server.
+// ── Auth ────────────────────────────────────────────────────────────────────
+
+// adminLoggedIn is a quick UI check only — real security is the server-side session cookie.
 function adminLoggedIn() {
   return localStorage.getItem('adminLoggedIn') === 'true';
 }
 
-// Returns the current admin's role from localStorage ('super_admin' or 'general_admin').
 function adminRole() {
   return localStorage.getItem('adminRole') || 'general_admin';
 }
 
-// Returns true if the current admin is a super admin.
 function isSuperAdmin() {
   return adminRole() === 'super_admin';
 }
 
-// Returns true if the current admin is a general admin. Room and booking
-// management are general-admin-only operations — super_admin is deliberately
-// excluded, since its responsibilities are security, users, roles, and
-// audit monitoring, not day-to-day operations (see RequireGeneralAdmin).
+// isGeneralAdmin: room/booking management is general-admin-only — super_admin is
+// deliberately excluded (its scope is security, users, roles, audit, not operations).
 function isGeneralAdmin() {
   return adminRole() === 'general_admin';
 }
 
-// Redirects to login.html if the admin is not logged in.
 function requireAuth() {
   const page = window.location.pathname.split('/').pop() || 'index.html';
   const adminPages = ['dashboard.html', 'rooms.html', 'users.html', 'bookings.html', 'book-room.html', 'history.html', 'admins.html', 'audit-logs.html', 'force-password-change.html'];
@@ -72,15 +60,12 @@ function requireAuth() {
   }
 }
 
-// Returns true if the current admin must replace a temporary password
-// before they can use anything else in the admin panel.
 function mustResetPassword() {
   return localStorage.getItem('adminMustResetPassword') === 'true';
 }
 
-// Clears the local admin session markers and sends the browser to the login
-// page. Used both for manual "Sign Out" and when the server reports a missing
-// or expired session (401) on any admin API call.
+// forceLogout clears local state and redirects to login. Called on manual sign-out
+// and on any 401 from an admin API call.
 function forceLogout() {
   localStorage.removeItem('adminLoggedIn');
   localStorage.removeItem('adminId');
@@ -93,22 +78,17 @@ function forceLogout() {
   }
 }
 
-// Logs out the admin by:
-// 1. Calling the server to delete the session
-// 2. Clearing the localStorage UI flag
-// 3. Redirecting to the login page
 async function logout() {
   try {
     await api('/auth/logout', { method: 'POST' });
   } catch (_) {
-    // Even if the server call fails, we still clear local state and redirect
+    // Server call failing doesn't block local cleanup.
   }
   forceLogout();
 }
 
-// Sends login credentials to the server.
-// On success, the server sets an HttpOnly session cookie automatically.
-// We save the admin's name and role in localStorage only for display purposes.
+// loginAdmin: server sets the HttpOnly session cookie; localStorage holds display
+// metadata only (name, role) — it cannot grant API access.
 async function loginAdmin(username, password, captchaToken) {
   const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password, captchaToken }) });
   localStorage.setItem('adminLoggedIn', 'true');
@@ -119,17 +99,18 @@ async function loginAdmin(username, password, captchaToken) {
   return result;
 }
 
+// ── Rooms ───────────────────────────────────────────────────────────────────
+
 async function getRooms() { return api('/rooms'); }
 async function createRoom(room) { return api('/rooms', { method: 'POST', body: JSON.stringify(room) }); }
 async function updateRoom(id, room) { return api('/rooms/' + id, { method: 'PUT', body: JSON.stringify(room) }); }
 async function deleteRoomApi(id) { return api('/rooms/' + id, { method: 'DELETE' }); }
 
-// Normalize every booking returned from the backend so all admin pages use
-// one reliable shape. status is left exactly as the server computed it
-// (Booked/In Progress/Completed/Cancelled) — the server's clock is pinned to
-// Bhutan time (see main.go), so recomputing "has this ended" again here from
-// the viewer's own device clock could only ever introduce a disagreement,
-// never improve on it.
+// ── Bookings ────────────────────────────────────────────────────────────────
+
+// getBookings: status is left exactly as the server computed it (Booked/In Progress/
+// Completed/Cancelled). The server's clock is pinned to Bhutan time, so recomputing
+// "has this ended" from the viewer's device clock could only introduce disagreement.
 async function getBookings() {
   const rows = await api('/bookings');
   return (rows || []).map(normalizeBookingRecord);
@@ -138,6 +119,8 @@ async function getBookings() {
 async function createBooking(booking) { return api('/bookings', { method: 'POST', body: JSON.stringify(booking) }); }
 async function cancelBookingApi(id) { return api('/bookings/' + id, { method: 'DELETE' }); }
 async function deleteBookingApi(id) { return api('/bookings/' + id + '?hard=1', { method: 'DELETE' }); }
+
+// ── Users ───────────────────────────────────────────────────────────────────
 
 async function getUsers() { return api('/users'); }
 async function createUser(user) { return api('/users', { method: 'POST', body: JSON.stringify(user) }); }
@@ -149,6 +132,45 @@ async function approveUserApi(id, role) {
 async function rejectUserApi(id, reason) { return api('/users/' + id + '/reject', { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }); }
 async function revokeUserApi(id) { return api('/users/' + id + '/revoke', { method: 'POST' }); }
 async function restoreUserApi(id) { return api('/users/' + id + '/restore', { method: 'POST' }); }
+
+// ── Admins ──────────────────────────────────────────────────────────────────
+
+async function getAdmins() { return api('/admins'); }
+async function createAdminApi(data) { return api('/admins', { method: 'POST', body: JSON.stringify(data) }); }
+async function updateAdminApi(id, data) { return api('/admins/' + id, { method: 'PUT', body: JSON.stringify(data) }); }
+async function resetAdminPasswordApi(id, newPassword) { return api('/admins/' + id, { method: 'PATCH', body: JSON.stringify({ newPassword }) }); }
+async function revokeAdminApi(id) { return api('/admins/' + id + '/revoke', { method: 'POST' }); }
+async function restoreAdminApi(id) { return api('/admins/' + id + '/restore', { method: 'POST' }); }
+async function deleteAdminApi(id) { return api('/admins/' + id, { method: 'DELETE' }); }
+
+// ── Audit ───────────────────────────────────────────────────────────────────
+
+// getAuditLogs: filter is a plain object — non-empty values become query params.
+async function getAuditLogs(filter) {
+  const params = new URLSearchParams();
+  Object.keys(filter || {}).forEach(function (key) {
+    if (filter[key]) params.set(key, filter[key]);
+  });
+  const qs = params.toString();
+  return api('/audit-logs' + (qs ? '?' + qs : ''));
+}
+
+// ── Password ─────────────────────────────────────────────────────────────────
+
+async function changeOwnPasswordApi(currentPassword, newPassword) {
+  const result = await api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+  localStorage.setItem('adminMustResetPassword', 'false');
+  return result;
+}
+
+async function forgotPasswordApi(username, email, captchaToken) {
+  return api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email, captchaToken }) });
+}
+async function resetPasswordApi(token, password) {
+  return api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
+}
+
+// ── Data normalization ───────────────────────────────────────────────────────
 
 function normalizeBookingRecord(b) {
   const startRaw = b.start || b.startTime || '';
@@ -169,6 +191,8 @@ function normalizeBookingRecord(b) {
     status: b.status || 'Booked'
   };
 }
+
+// ── UI helpers ───────────────────────────────────────────────────────────────
 
 function formatStatus(status) {
   const classes = {
@@ -191,8 +215,7 @@ function showMessage(id, text, type='success') {
   setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// Generic show/hide for any modal built with the "hidden flex" pattern used
-// throughout the admin panel (admins.html, users.html, sidebar-extras.js).
+// showModal/hideModal: toggling the "hidden flex" pattern used by admin panel modals.
 function showModal(id) {
   const el = document.getElementById(id);
   el.classList.remove('hidden');
@@ -205,9 +228,7 @@ function hideModal(id) {
   el.classList.remove('flex');
 }
 
-// Shows a persistent message inside a modal (no auto-dismiss timeout, unlike
-// showMessage) — used for in-form validation/error feedback that should stay
-// visible until the admin fixes the input or closes the modal.
+// showModalMsg: persistent in-form feedback (no auto-dismiss, unlike showMessage).
 function showModalMsg(id, text, type = 'error') {
   const el = document.getElementById(id);
   el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${type === 'success'
@@ -223,8 +244,9 @@ function clearModalMsg(id) {
   el.classList.add('hidden');
 }
 
-// Shared 18px outline icon glyphs for the compact action buttons used in
-// admin tables and cards (rooms, users, bookings, admins).
+// ── Icon buttons ─────────────────────────────────────────────────────────────
+
+// Shared 18px outline icon glyphs for compact action buttons in admin tables/cards.
 const ICON_PATHS = {
   edit: '<path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />',
   trash: '<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />',
@@ -245,9 +267,7 @@ const ICON_BUTTON_TONES = {
   slate: 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
 };
 
-// Renders a compact 36x36 icon-only action button — the same visual language
-// as the room-card action rail, reused for table-row actions across the
-// admin panel. onclickJs is inserted verbatim as the onclick attribute value.
+// iconButton: renders a 36×36 icon-only action button. onclickJs is inserted verbatim.
 function iconButton(iconKey, onclickJs, title, tone = 'slate') {
   const toneClass = ICON_BUTTON_TONES[tone] || ICON_BUTTON_TONES.slate;
   return `<button type="button" onclick="${onclickJs}" title="${title}" aria-label="${title}"
@@ -255,6 +275,8 @@ function iconButton(iconKey, onclickJs, title, tone = 'slate') {
       <svg class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">${ICON_PATHS[iconKey] || ''}</svg>
     </button>`;
 }
+
+// ── Formatting utils ─────────────────────────────────────────────────────────
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -307,7 +329,7 @@ function formatDateDisplay(value) {
   return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' });
 }
 
-// Returns a booking's start time as minutes since midnight for sorting.
+// bookingStartMinutes: converts start time to minutes-since-midnight for sorting.
 // Guards against a missing start field by returning 0 rather than NaN.
 function bookingStartMinutes(booking) {
   const time = toTime24(booking.start || booking.startTime || '');
@@ -329,33 +351,9 @@ function hasConflictInList(bookings, roomId, date, start, end, excludeId = null)
   });
 }
 
-// Admin management API helpers (super_admin only)
-async function getAdmins() { return api('/admins'); }
-async function createAdminApi(data) { return api('/admins', { method: 'POST', body: JSON.stringify(data) }); }
-async function updateAdminApi(id, data) { return api('/admins/' + id, { method: 'PUT', body: JSON.stringify(data) }); }
-async function resetAdminPasswordApi(id, newPassword) { return api('/admins/' + id, { method: 'PATCH', body: JSON.stringify({ newPassword }) }); }
-async function revokeAdminApi(id) { return api('/admins/' + id + '/revoke', { method: 'POST' }); }
-async function restoreAdminApi(id) { return api('/admins/' + id + '/restore', { method: 'POST' }); }
-async function deleteAdminApi(id) { return api('/admins/' + id, { method: 'DELETE' }); }
+// ── Password helpers ─────────────────────────────────────────────────────────
 
-// Audit trail (super_admin only). filter is a plain object — any key with a
-// non-empty value becomes a query param (actor, action, from, to).
-async function getAuditLogs(filter) {
-  const params = new URLSearchParams();
-  Object.keys(filter || {}).forEach(function (key) {
-    if (filter[key]) params.set(key, filter[key]);
-  });
-  const qs = params.toString();
-  return api('/audit-logs' + (qs ? '?' + qs : ''));
-}
-async function changeOwnPasswordApi(currentPassword, newPassword) {
-  const result = await api('/admin/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
-  localStorage.setItem('adminMustResetPassword', 'false');
-  return result;
-}
-
-// Toggles a password field between hidden and visible.
-// Call with the toggle button element; it finds the input via the nearest .pw-wrap parent.
+// togglePw: call with the toggle button element; finds the input via nearest .pw-wrap.
 function togglePw(btn) {
   var wrap   = btn.closest('.pw-wrap');
   var input  = wrap.querySelector('input');
@@ -365,15 +363,9 @@ function togglePw(btn) {
   wrap.querySelector('.eye-closed').classList.toggle('hidden', isHidden);
 }
 
-// Password-reset helpers — public endpoints, no session cookie required.
-async function forgotPasswordApi(username, email, captchaToken) {
-  return api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username, email, captchaToken }) });
-}
-async function resetPasswordApi(token, password) {
-  return api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
-}
+// ── Booking time slots ───────────────────────────────────────────────────────
 
-// Shared admin booking slots. Matches the public calendar: 30-minute gaps.
+// Shared 30-minute time slots matching the public calendar.
 const BOOKING_TIME_OPTIONS = [
   '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
   '12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM',

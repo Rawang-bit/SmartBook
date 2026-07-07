@@ -1,14 +1,7 @@
-// Cloudflare Turnstile integration for the self-registration and admin
-// forgot-password flows. The token collected here is sent to the Go backend
-// which re-verifies it server-side — the frontend can't bypass the check.
-//
-// Call initTurnstile(containerId) when the container first becomes visible.
-// It is idempotent: subsequent calls for the same container are no-ops.
-//
-// If TURNSTILE_SITE_KEY is not set on the server, /api/config returns an empty
-// key, the containers stay empty, and getTurnstileToken returns ''. The backend
-// VerifyTurnstile also fails open when TURNSTILE_SECRET_KEY is unset, so both
-// sides degrade gracefully together in environments without Turnstile configured.
+// Cloudflare Turnstile helpers for registration and forgot-password flows.
+// Tokens are verified server-side; if TURNSTILE_SITE_KEY is unset, both sides
+// fail open so the app works without Turnstile configured.
+// initTurnstile(containerId) is idempotent — safe to call multiple times.
 
 // Cached promise so /api/config is only fetched once per page load.
 let turnstileSiteKeyPromise = null;
@@ -16,8 +9,7 @@ let turnstileSiteKeyPromise = null;
 // Maps containerId → widgetId once rendered, or null while the render is pending.
 const turnstileWidgets = {};
 
-// Maximum number of 100 ms polls to wait for the Turnstile script to load
-// before giving up. Prevents an infinite loop if the CDN script fails to load.
+// Max 100 ms polls before giving up waiting for the Turnstile CDN script.
 const TURNSTILE_MAX_RETRIES = 50; // 5 seconds total
 
 function getTurnstileSiteKey() {

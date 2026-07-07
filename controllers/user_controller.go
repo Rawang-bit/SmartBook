@@ -22,12 +22,8 @@ func (c *Controller) ListUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, users)
 }
 
-// canAssignRole reports whether an admin with sessionRole may assign target
-// to a user — whether by creating, editing, or approving them. Both
-// general_admin and super_admin may grant normal_user or general_admin
-// (Normal User + General Admin is the one allowed multi-role combination);
-// only super_admin may grant super_admin itself, since that's the one
-// privilege escalation general_admin must never be able to perform.
+// canAssignRole reports whether an admin with sessionRole may assign target.
+// Both roles may grant normal_user or general_admin; only super_admin may grant super_admin.
 func canAssignRole(sessionRole, target string) bool {
 	switch target {
 	case "", "normal_user":
@@ -39,14 +35,9 @@ func canAssignRole(sessionRole, target string) bool {
 	}
 }
 
-// CreateUser pre-registers a new user. Admin only.
-//
-// The new entry is never approved instantly — the admin typing in someone
-// else's email hasn't proven they actually own it, so it starts as
-// "pending" and a confirmation link is emailed to that address. Only once
-// the recipient clicks it does the account (or admin promotion, if role
-// is not "normal_user") actually activate. Choosing a role other than
-// normal_user is a privilege grant, gated by canAssignRole.
+// CreateUser pre-registers a new user. Starts as "pending" — a confirmation link is
+// emailed to the address to prove ownership before the account activates.
+// Role records the intended promotion if not "normal_user", gated by canAssignRole.
 func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req models.UserRequest
 	if !decodeJSON(w, r, &req) {
@@ -83,15 +74,9 @@ func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, u)
 }
 
-// ConfirmRegistration activates an admin-added user once they click the
-// confirmation link emailed to them. Public endpoint — the token itself,
-// not a session cookie, is the proof that the request comes from the
-// person who actually owns that email address.
-//
-// If the role chosen when the entry was created is "normal_user", this just
-// marks the booking-user row approved. Any other role instead promotes the
-// confirmation into a brand-new admin account — the same path used when a
-// super_admin approves a self-registration with an admin role.
+// ConfirmRegistration activates an admin-added user once they click the emailed link.
+// The token proves email ownership. For "normal_user" it marks the row active; for
+// admin roles it promotes the confirmation into a new admin account instead.
 func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request) {
 	var req models.ConfirmRegistrationRequest
 	if !decodeJSON(w, r, &req) {
@@ -137,9 +122,8 @@ func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request)
 		log.Printf("[ADMIN PROMOTED] failed to email temp password to %s: %v", user.Email, sendErr)
 	}
 
-	// Normal User + General Admin is the one allowed multi-role combination,
-	// so a general_admin keeps their booking access. Super Admin must be
-	// exclusive, so it gets no Normal User row at all.
+	// Normal User + General Admin is the one allowed multi-role combination.
+	// Super Admin is exclusive, so its Normal User row is deleted instead.
 	if user.IntendedRole == "super_admin" {
 		if delErr := c.Users.Delete(user.ID); delErr != nil {
 			log.Printf("[ADMIN PROMOTED] failed to remove confirmed user row %d: %v", user.ID, delErr)
@@ -184,9 +168,8 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Editing can also promote this person to admin — skip if they already
-	// hold that role (re-running the promotion would just fail trying to
-	// create a second admin account for the same email).
+	// Editing can also promote to admin — skip if they already hold that role
+	// to avoid trying to create a duplicate admin account for the same email.
 	if requestedRole == "general_admin" || requestedRole == "super_admin" {
 		if _, _, _, existsErr := c.Admins.GetByUsername(u.Email); existsErr != nil {
 			sess, ok := c.getSession(r)
@@ -209,10 +192,8 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
-// ToggleUserStatus approves, rejects, revokes, or restores a registered
-// user. Path must end in /approve, /reject, /revoke, or /restore — e.g.
-// POST /api/users/5/approve. Admin only (approving with an admin role
-// additionally requires super_admin — see approveUser).
+// ToggleUserStatus dispatches /approve, /reject, /revoke, or /restore actions.
+// Path must end with one of those suffixes, e.g. POST /api/users/5/approve.
 func (c *Controller) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/users/")
 
@@ -236,18 +217,9 @@ func (c *Controller) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // approveUser handles POST /api/users/{id}/approve.
-//
-// Approving with role "normal_user" (the default when the role is omitted)
-// keeps the original behaviour: the pending row is marked "active" and the
-// applicant can book/cancel rooms from the public calendar.
-//
-// Approving with "general_admin" or "super_admin" instead promotes the
-// applicant straight into a new admin account: a random temporary password
-// is generated and emailed to them, must_reset_password is set so they are
-// forced to replace it on first login, and the pending users-table row is
-// removed if the role is super_admin (exclusive) or kept active otherwise
-// (Normal User + General Admin). Which roles the caller may choose is
-// gated by canAssignRole.
+// "normal_user" marks the row active; "general_admin" or "super_admin" promotes the
+// applicant into a new admin account with a generated temporary password.
+// Which roles the caller may assign is gated by canAssignRole.
 func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int64) {
 	var req models.ApproveUserRequest
 	if r.Body != nil {
@@ -311,9 +283,8 @@ func (c *Controller) approveUser(w http.ResponseWriter, r *http.Request, id int6
 	writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": role, "username": admin.Username})
 }
 
-// createAdminFromApproval creates the admin account using the applicant's
-// email address as their login username, so admins promoted this way always
-// log in with the same email they registered and were approved with.
+// createAdminFromApproval creates an admin account using the applicant's email as their
+// login username, so promoted admins always log in with the same email they registered with.
 func (c *Controller) createAdminFromApproval(name, email, role string) (models.Admin, string, error) {
 	admin, password, err := c.Admins.CreateWithGeneratedPassword(email, name, role, email)
 	if err != nil {
@@ -325,14 +296,9 @@ func (c *Controller) createAdminFromApproval(name, email, role string) (models.A
 	return admin, password, nil
 }
 
-// promoteUserToAdmin creates a new admin account for an existing user row
-// with the given role, e-mails them a temporary password, and applies the
-// same multi-role sync used everywhere else a promotion happens: a new
-// general_admin keeps their Normal User row active (the one allowed
-// combination); a new super_admin loses it (exclusive role). Shared by
-// approveUser (a pending registration) and UpdateUser (an already-active
-// user promoted via an edit). Writes its own error response and returns
-// ok=false on failure — callers should return immediately when ok is false.
+// promoteUserToAdmin creates a new admin account, emails the temp password, and applies
+// multi-role sync: general_admin keeps their Normal User row; super_admin loses it.
+// Writes its own error response and returns ok=false on failure.
 func (c *Controller) promoteUserToAdmin(w http.ResponseWriter, userID int64, name, email, role string) (admin models.Admin, ok bool) {
 	admin, tempPassword, err := c.createAdminFromApproval(name, email, role)
 	if err != nil {
@@ -355,9 +321,8 @@ func (c *Controller) promoteUserToAdmin(w http.ResponseWriter, userID int64, nam
 	return admin, true
 }
 
-// rejectUser handles POST /api/users/{id}/reject. Any admin may reject —
-// rejection never grants privileges, so it doesn't need the super_admin gate.
-// An optional {"reason": "..."} body is stored on the user record.
+// rejectUser handles POST /api/users/{id}/reject.
+// Any admin may reject — it never grants privileges. Optional {"reason": "..."} body.
 func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64) {
 	var req models.RejectUserRequest
 	if r.Body != nil {
@@ -383,11 +348,8 @@ func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64
 	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
 }
 
-// revokeUser handles POST /api/users/{id}/revoke. Pulls booking access from
-// an already-active user without deleting their record — BookingModel.Save
-// only allows status "active", so a revoked user is blocked from booking
-// the moment this is set, with no other code changes needed. Any admin may
-// revoke, mirroring the reject gate above.
+// revokeUser handles POST /api/users/{id}/revoke. Sets status to "revoked" which
+// blocks booking immediately — BookingModel.Save only allows status "active".
 func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64) {
 	user, err := c.Users.SetStatus(id, "revoked")
 	if errors.Is(err, models.ErrNotFound) {
@@ -404,8 +366,7 @@ func (c *Controller) revokeUser(w http.ResponseWriter, r *http.Request, id int64
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
-// restoreUser handles POST /api/users/{id}/restore. Reactivates a
-// previously revoked user, restoring their booking access.
+// restoreUser handles POST /api/users/{id}/restore. Reactivates a previously revoked user.
 func (c *Controller) restoreUser(w http.ResponseWriter, r *http.Request, id int64) {
 	user, err := c.Users.SetStatus(id, "active")
 	if errors.Is(err, models.ErrNotFound) {

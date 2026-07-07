@@ -152,10 +152,8 @@ func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// PublicBookingAction dispatches POST /api/bookings/{id}/... requests by
-// their trailing path segment: "/cancel" cancels the booking, "/minutes"
-// adds or edits its Minutes of Meeting. Both prove ownership via the
-// booking's email, the only proof a public, unauthenticated caller has.
+// PublicBookingAction dispatches POST /api/bookings/{id}/cancel and /minutes
+// by trailing path segment. Ownership is proved by email in the request body.
 func (c *Controller) PublicBookingAction(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
 	switch {
@@ -210,10 +208,8 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
-// UpdateMinutesOfMeeting lets a booking's owner add or edit the Minutes of
-// Meeting once the meeting has ended, within a 24-hour window — proven by
-// the same email check PublicCancelBooking uses.
-// URL must end with "/minutes" and the body must contain {"email", "minutes"}.
+// UpdateMinutesOfMeeting lets the booking owner add/edit meeting notes within the
+// 24-hour edit window, proved by email. URL must end with "/minutes".
 func (c *Controller) UpdateMinutesOfMeeting(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/bookings/")
 	if !ok {

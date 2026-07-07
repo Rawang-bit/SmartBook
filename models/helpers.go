@@ -8,9 +8,8 @@ import (
 	"bookroom-management-system/utils"
 )
 
-// NormalizeBookingInput cleans all fields in a booking request:
-// trims whitespace, normalises the email, and converts times to 24-hour format.
-// Kept in the models package because it references the BookingRequest struct.
+// NormalizeBookingInput cleans all fields in a booking request: trims whitespace,
+// normalises the email, and converts times to 24-hour format.
 func NormalizeBookingInput(req *BookingRequest) {
 	req.User    = strings.TrimSpace(req.User)
 	req.Email   = utils.NormalizeEmail(req.Email)
@@ -20,7 +19,7 @@ func NormalizeBookingInput(req *BookingRequest) {
 	req.Agenda  = strings.TrimSpace(req.Agenda)
 	req.Status  = strings.TrimSpace(req.Status)
 
-	// Accept startTime/endTime (12-hour AM/PM) as fallbacks for start/end
+	// Accept startTime/endTime (12-hour AM/PM) as fallbacks when start/end are absent.
 	if req.Start == "" {
 		req.Start = req.StartTime
 	}
@@ -28,14 +27,13 @@ func NormalizeBookingInput(req *BookingRequest) {
 		req.End = req.EndTime
 	}
 
-	// Always store times in 24-hour HH:MM format
+	// Always store times in 24-hour HH:MM format.
 	req.Start = utils.To24HourTime(req.Start)
 	req.End   = utils.To24HourTime(req.End)
 }
 
-// NormalizeParticipants cleans a comma-separated list of participant emails:
-// trims whitespace, drops empty entries, and lower-cases each address.
-// The list is optional — an empty input returns an empty result with no error.
+// NormalizeParticipants cleans a comma-separated participant email list: trims whitespace,
+// drops empty entries, and lower-cases each address.
 // Returns an error naming the first invalid address found, if any.
 func NormalizeParticipants(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
@@ -58,13 +56,11 @@ func NormalizeParticipants(raw string) (string, error) {
 	return strings.Join(cleaned, ", "), nil
 }
 
-// FillBookingDisplayFields populates the derived display fields on a Booking:
-//   - Room            = copy of RoomName (legacy alias expected by the frontend)
+// FillBookingDisplayFields populates derived display fields on a Booking:
+//   - Room       = copy of RoomName (legacy alias expected by the frontend)
 //   - StartTime / EndTime converted to 12-hour AM/PM format
-//   - Status          recomputed from the current wall clock
+//   - Status     recomputed from the current wall clock
 //   - MinutesEditable = whether SetMinutesOfMeeting would currently accept a save
-//
-// Kept in the models package because it references the Booking struct.
 func FillBookingDisplayFields(b *Booking) {
 	b.Room      = b.RoomName
 	b.StartTime = utils.ToDisplayTime(b.Start)
@@ -73,13 +69,10 @@ func FillBookingDisplayFields(b *Booking) {
 	b.MinutesEditable = isWithinMinutesEditWindow(b.Date, b.End, b.Status)
 }
 
-// isWithinMinutesEditWindow reports whether a booking is currently eligible
-// for SetMinutesOfMeeting: its computed status is "Completed" (so it's
-// neither upcoming/in-progress nor cancelled) and MinutesEditWindow hasn't
-// elapsed since it ended. This is the exact check SetMinutesOfMeeting itself
-// enforces — sharing it here means the list of "eligible for minutes"
-// bookings the public calendar shows can never disagree with what a save
-// will actually accept.
+// isWithinMinutesEditWindow reports whether a booking is currently eligible for
+// SetMinutesOfMeeting: status is "Completed" and MinutesEditWindow hasn't elapsed.
+// Sharing this check here ensures the public calendar's "eligible" list never
+// disagrees with what a save will actually accept.
 func isWithinMinutesEditWindow(dateStr, endStr, computedStatus string) bool {
 	if computedStatus != "Completed" {
 		return false

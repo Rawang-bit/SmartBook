@@ -7,22 +7,14 @@ import (
 	"time"
 )
 
-// isProduction reports whether the application is running in production mode.
-// Set APP_ENV=production in the environment to activate all production security controls.
+// isProduction reports whether APP_ENV=production is set.
 func isProduction() bool {
 	return os.Getenv("APP_ENV") == "production"
 }
 
-// sessionCookieName returns the session cookie name for the current environment.
-//
-// In production the __Host- prefix is used. The browser enforces three invariants
-// on any cookie carrying this prefix:
-//   - Secure flag must be present (HTTPS-only delivery)
-//   - No Domain attribute (cookie is bound to the exact host, not subdomains)
-//   - Path must be "/"
-//
-// Together these prevent subdomain-injection and cookie-hijacking attacks.
-// In development the plain name is used so the app works over plain HTTP.
+// sessionCookieName returns the session cookie name, with the __Host- prefix in
+// production (enforces Secure flag, no Domain attribute, path="/", preventing
+// subdomain injection). Plain name in development for plain-HTTP compatibility.
 func sessionCookieName() string {
 	if isProduction() {
 		return "__Host-smartbook_session"
@@ -30,11 +22,8 @@ func sessionCookieName() string {
 	return "smartbook_session"
 }
 
-// deviceCookieName returns the trusted-device cookie name for the current
-// environment, mirroring sessionCookieName's __Host- hardening in production.
-// This cookie is public-facing (set from the access gate, not an admin
-// session) but warrants the same protections, since it lets a recognized
-// browser skip OTP verification.
+// deviceCookieName mirrors sessionCookieName's __Host- hardening for the trusted-device
+// cookie, which lets a recognized browser skip OTP verification.
 func deviceCookieName() string {
 	if isProduction() {
 		return "__Host-smartbook_device"
@@ -42,13 +31,11 @@ func deviceCookieName() string {
 	return "smartbook_device"
 }
 
-// DeviceTrustDuration is how long a "remembered" device skips OTP
-// verification on the public access gate before needing to re-verify.
+// DeviceTrustDuration is how long a "remembered" device skips OTP on the public access gate.
 const DeviceTrustDuration = 30 * 24 * time.Hour
 
-// setCookie writes a cookie with the security attributes shared by both the
-// admin session cookie and the public device-trust cookie: HttpOnly (no
-// client-JS access), Secure in production, and SameSite=Strict.
+// setCookie writes a cookie with shared security attributes: HttpOnly, Secure in
+// production, and SameSite=Strict.
 func setCookie(w http.ResponseWriter, name, value string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
@@ -61,60 +48,33 @@ func setCookie(w http.ResponseWriter, name, value string, maxAge int) {
 	})
 }
 
-// setSessionCookie writes the admin session cookie, sharing the same
-// attributes between login (value = session ID, maxAge = session lifetime)
-// and logout (value = "", maxAge = -1, which tells the browser to delete it
-// immediately).
+// setSessionCookie writes the admin session cookie (value="" + maxAge=-1 to delete).
 func setSessionCookie(w http.ResponseWriter, value string, maxAge int) {
 	setCookie(w, sessionCookieName(), value, maxAge)
 }
 
-// setDeviceCookie writes the public device-trust cookie. value = "" with
-// maxAge = -1 clears it (used when a user declines to be remembered after
-// previously opting in).
+// setDeviceCookie writes the public device-trust cookie (value="" + maxAge=-1 to clear).
 func setDeviceCookie(w http.ResponseWriter, value string, maxAge int) {
 	setCookie(w, deviceCookieName(), value, maxAge)
 }
 
 // SecureHeaders wraps every HTTP response with a hardened set of security headers.
-// It must be applied as the outermost middleware so headers appear on every response,
-// including error pages and redirects.
+// Must be the outermost middleware so headers appear on every response including errors.
 func SecureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 
-		// Prevent MIME-type sniffing — forces the browser to honour the declared Content-Type.
 		h.Set("X-Content-Type-Options", "nosniff")
-
-		// Block framing from any origin — prevents clickjacking.
-		// Duplicated by the CSP frame-ancestors directive for maximum compatibility.
 		h.Set("X-Frame-Options", "DENY")
-
-		// Enable the browser's built-in XSS filter for legacy browsers (IE, old Edge).
 		h.Set("X-XSS-Protection", "1; mode=block")
-
-		// Send the full URL as the referrer only to same-origin requests;
-		// send only the origin (no path) to cross-origin HTTPS destinations.
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-
-		// Disable browser features this application never needs.
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 
-		// Content Security Policy
-		// script-src  — self + inline scripts (Tailwind needs unsafe-inline) + CDN hosts +
-		//               Cloudflare Turnstile script host
-		// frame-src   — Cloudflare Turnstile renders its challenge as a sandboxed iframe;
-		//               without this the widget is blank in every browser
-		// connect-src — Turnstile's JS calls Cloudflare to verify the solved challenge
-		// style-src   — self + inline styles (Tailwind generates them at runtime)
-		// font-src    — self only; every page uses the system Helvetica/Arial stack
-		// img-src     — self + data URIs (base64 favicons / avatars)
-		// frame-ancestors — block all framing of THIS page (aligns with X-Frame-Options: DENY)
-		// base-uri    — prevent <base> tag hijacking
-		// form-action — restrict form POST targets to the same origin
-		// Cloudflare Turnstile uses both challenge.cloudflare.com (script load)
-		// and challenges.cloudflare.com (iframe, XHR, images). Both must appear
-		// in every relevant directive or the widget silently fails to render.
+		// CSP notes:
+		// script-src: unsafe-inline required by Tailwind; CDN hosts for Tailwind + Turnstile.
+		// frame-src/connect-src: Turnstile renders its challenge as a sandboxed iframe and
+		//   calls Cloudflare to verify the solve — both challenge.cloudflare.com and
+		//   challenges.cloudflare.com must appear or the widget silently fails.
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://challenges.cloudflare.com https://challenge.cloudflare.com; "+
@@ -128,10 +88,7 @@ func SecureHeaders(next http.Handler) http.Handler {
 				"form-action 'self';",
 		)
 
-		// HTTP Strict Transport Security — instruct browsers to only connect over HTTPS
-		// for the next year, and apply the same rule to all subdomains.
-		// Only set in production: the header is meaningless over plain HTTP and browsers
-		// ignore it there, but it avoids confusing local-dev tooling.
+		// HSTS only in production — meaningless over plain HTTP and ignored by browsers there.
 		if isProduction() {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
@@ -140,11 +97,8 @@ func SecureHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// HTTPSRedirect issues a permanent redirect from HTTP to HTTPS for every incoming
-// request when the application is running in production.
-//
-// It honours the X-Forwarded-Proto header injected by reverse proxies (nginx,
-// AWS ALB, Cloudflare, etc.) so that the redirect logic works correctly even when
+// HTTPSRedirect permanently redirects HTTP to HTTPS in production.
+// Honours X-Forwarded-Proto from reverse proxies so the redirect works even when
 // the Go server itself receives plain TCP connections from the proxy.
 func HTTPSRedirect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +107,6 @@ func HTTPSRedirect(next http.Handler) http.Handler {
 			return
 		}
 
-		// Detect the transport used by the original client.
 		proto := r.Header.Get("X-Forwarded-Proto")
 		if proto == "" {
 			if r.TLS != nil {
@@ -164,7 +117,7 @@ func HTTPSRedirect(next http.Handler) http.Handler {
 		}
 
 		if strings.ToLower(proto) != "https" {
-			// 308 Permanent Redirect preserves the HTTP method (important for POST/PUT).
+			// 308 preserves the HTTP method (important for POST/PUT).
 			http.Redirect(w, r, "https://"+r.Host+r.URL.RequestURI(), http.StatusPermanentRedirect)
 			return
 		}

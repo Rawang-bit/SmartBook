@@ -11,27 +11,24 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // pgx driver registered as "pgx" for database/sql
 )
 
-// Connect reads DATABASE_URL from the environment, opens a connection to
-// PostgreSQL, and verifies it with a ping.
-// Returns a ready-to-use *sql.DB or an error.
+// Connect reads DATABASE_URL from the environment, opens a connection to PostgreSQL,
+// and verifies it with a ping. Returns a ready-to-use *sql.DB or an error.
 func Connect() (*sql.DB, error) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL environment variable is not set")
 	}
 
-	// Open the pgx driver (does not actually dial the server yet)
+	// Open the pgx driver (does not actually dial the server yet).
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Connection pool settings
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
-	// Ping the database to confirm it is reachable (times out after 10 seconds)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -48,15 +45,12 @@ func Connect() (*sql.DB, error) {
 	return db, nil
 }
 
-// migrate creates and evolves the schema on every boot.
-// All statements are idempotent (CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
-// so they are safe to re-run on an already-populated database.
+// migrate creates and evolves the schema on every boot. All statements are idempotent
+// (CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS) so they are safe to re-run.
 // Executed individually because pgx does not support multiple statements in one Exec.
 func migrate(db *sql.DB) error {
 	stmts := []string{
 		// ── Base tables ───────────────────────────────────────────────────────
-		// Created first so the ALTER TABLE statements below are always safe to
-		// run — on an existing database the IF NOT EXISTS is a no-op.
 		`CREATE TABLE IF NOT EXISTS admins (
 		    id                  BIGSERIAL PRIMARY KEY,
 		    username            TEXT UNIQUE NOT NULL,
@@ -98,13 +92,12 @@ func migrate(db *sql.DB) error {
 
 		// ── Seed: default super admin account ────────────────────────────────
 		// Password: Rawang@3013 — CHANGE THIS IMMEDIATELY after first login.
-		// Skipped silently if the username already exists.
 		// username = email so the forgot-password flow works for this account.
 		`INSERT INTO admins(username, password, name, role, email)
 		 VALUES ('ratuwangchuk@dhi.bt', '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2', 'System Admin', 'super_admin', 'ratuwangchuk@dhi.bt')
 		 ON CONFLICT(username) DO NOTHING`,
 
-		// ── Incremental columns (safe to re-run on existing databases) ────────
+		// ── Incremental columns (added in later versions, safe to re-run) ─────
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE`,
 		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
 		     ON admins (LOWER(TRIM(email)))
@@ -128,27 +121,21 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token TEXT UNIQUE`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_token_expires_at TIMESTAMPTZ`,
 		`CREATE INDEX IF NOT EXISTS idx_users_confirm_token ON users(confirm_token) WHERE confirm_token IS NOT NULL`,
-		// One-time rename: "approved" became "active" as the status value for
-		// a user cleared to book rooms. Harmless to re-run — once no row has
-		// status 'approved' this is a no-op on every subsequent boot.
+		// One-time rename: "approved" became "active" as the active-user status value.
+		// Harmless to re-run — once no row has status 'approved' this is a no-op.
 		`UPDATE users SET status = 'active' WHERE status = 'approved'`,
-		// Trusted-device cookie support for the public access gate: a user who
-		// opts in to "remember this device" after OTP verification gets a
-		// hashed token stored here with an expiry, so a recognized browser can
-		// skip OTP next time (see UserModel.DeviceTokenMatches).
+		// Trusted-device support: stores a hashed token so a recognized browser
+		// can skip OTP next time (see UserModel.DeviceTokenMatches).
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token_hash TEXT`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token_expires_at TIMESTAMPTZ`,
-		// Minutes of Meeting: the booking's owner can record what was actually
-		// discussed once a meeting has ended, within a 24-hour edit window
-		// (see BookingModel.MinutesEditWindow).
+		// Minutes of Meeting: booking owner can record what was discussed within
+		// a 24-hour window after the meeting ends (see BookingModel.MinutesEditWindow).
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_of_meeting TEXT NOT NULL DEFAULT ''`,
-		// Optional contact number shown to an admin reviewing a pending
-		// registration, and the reason recorded when a registration is rejected.
+		// Optional contact number shown to an admin reviewing a pending registration;
+		// reason recorded when a registration is rejected.
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT NOT NULL DEFAULT ''`,
-		// Audit trail: every admin-initiated action (login/logout, user/admin/
-		// room/booking management) is recorded here. Append-only — no UPDATE or
-		// DELETE endpoint is ever exposed for this table (see AuditModel).
+		// Audit trail: append-only log of all admin-initiated actions.
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 		    id           BIGSERIAL PRIMARY KEY,
 		    actor_type   TEXT NOT NULL,

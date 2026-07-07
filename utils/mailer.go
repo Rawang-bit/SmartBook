@@ -18,17 +18,7 @@ type resendPayload struct {
 	Text    string   `json:"text"`
 }
 
-// SendPasswordResetEmail delivers a password-reset link via the Resend email API.
-//
-// Required environment variables:
-//
-//	RESEND_API_KEY  — API key from https://resend.com (free tier: 3,000 emails/month)
-//	EMAIL_FROM      — Verified "From" address, e.g. "SmartBook <no-reply@yourdomain.com>"
-//	                  During testing you may use "SmartBook <onboarding@resend.dev>"
-//	APP_URL         — Base URL for reset links, e.g. https://smartbook.onrender.com
-//
-// If RESEND_API_KEY is not set, the reset URL is logged to the server console
-// (development fallback — no email is sent).
+// SendPasswordResetEmail delivers a password-reset link via the Resend API.
 func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
@@ -42,8 +32,7 @@ func SendPasswordResetEmail(toEmail, toName, resetURL string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Password Reset Request", body, "PASSWORD RESET")
 }
 
-// sendSimpleEmail is a shared helper for the short notification emails
-// (approval / rejection) that just need a subject and a plain-text body.
+// sendSimpleEmail is a shared helper for short notification emails.
 // Falls back to logging when RESEND_API_KEY is not set.
 func sendSimpleEmail(toEmail, subject, body, logTag string) error {
 	apiKey := os.Getenv("RESEND_API_KEY")
@@ -89,11 +78,8 @@ func sendSimpleEmail(toEmail, subject, body, logTag string) error {
 	return nil
 }
 
-// SendRegistrationConfirmationEmail notifies a person an admin has added to
-// SmartBook. They must click the link to confirm their email and activate
-// the account before it becomes usable — admin-added entries are never
-// approved instantly, since the admin typing the address hasn't proven they
-// actually own it.
+// SendRegistrationConfirmationEmail notifies an admin-added user that they must click a
+// link to prove email ownership before the account activates.
 func SendRegistrationConfirmationEmail(toEmail, toName, token string) error {
 	confirmURL := baseAppURL() + "/confirm-registration.html?token=" + token
 
@@ -110,8 +96,7 @@ func SendRegistrationConfirmationEmail(toEmail, toName, token string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Confirm Your Account", body, "USER INVITE")
 }
 
-// SendApprovalEmail notifies a self-registered user that an admin approved
-// their access request. They can now return to the access page and book rooms.
+// SendApprovalEmail notifies a self-registered user that an admin approved their request.
 func SendApprovalEmail(toEmail, toName string) error {
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
@@ -124,8 +109,7 @@ func SendApprovalEmail(toEmail, toName string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Access Approved", body, "USER APPROVED")
 }
 
-// SendRejectionEmail notifies a self-registered user that an admin rejected
-// their access request.
+// SendRejectionEmail notifies a self-registered user that their request was rejected.
 func SendRejectionEmail(toEmail, toName string) error {
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
@@ -137,9 +121,8 @@ func SendRejectionEmail(toEmail, toName string) error {
 	return sendSimpleEmail(toEmail, "SmartBook — Access Request Declined", body, "USER REJECTED")
 }
 
-// SendBookingConfirmationEmail notifies a recipient that a room has been
-// booked. toName may be empty (e.g. for participants, whose names are never
-// collected) — the greeting falls back to a generic "Hello,".
+// SendBookingConfirmationEmail notifies a recipient that a room has been booked.
+// toName may be empty for participants (names are never collected) — greeting falls back.
 func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, agenda string) error {
 	greeting := "Hello,"
 	if toName != "" {
@@ -162,9 +145,8 @@ func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, en
 	return sendSimpleEmail(toEmail, fmt.Sprintf("SmartBook — Room Booked: %s", roomName), body, "BOOKING CONFIRMATION")
 }
 
-// SendTemporaryAdminPasswordEmail notifies a newly promoted admin of their
-// login credentials. The recipient must change this password immediately —
-// the server enforces that regardless of whether they read this email.
+// SendTemporaryAdminPasswordEmail notifies a newly promoted admin of their login credentials.
+// The server enforces a password change on first login regardless of whether this is read.
 func SendTemporaryAdminPasswordEmail(toEmail, toName, username, tempPassword string) error {
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
@@ -181,8 +163,7 @@ func SendTemporaryAdminPasswordEmail(toEmail, toName, username, tempPassword str
 	return sendSimpleEmail(toEmail, "SmartBook — Your Admin Account Is Ready", body, "ADMIN TEMP PASSWORD")
 }
 
-// baseAppURL returns the application's configured public base URL,
-// defaulting to localhost for development.
+// baseAppURL returns the configured public base URL, defaulting to localhost.
 func baseAppURL() string {
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
@@ -191,20 +172,17 @@ func baseAppURL() string {
 	return appURL
 }
 
-// accessURL returns the base URL of the public access page, used in
-// approval emails so the user has a direct link back to the app.
+// accessURL returns the public access page URL, used in approval emails.
 func accessURL() string {
 	return baseAppURL() + "/index.html"
 }
 
-// loginURL returns the base URL of the admin login page, used in admin
-// promotion emails so the recipient has a direct link to sign in.
+// loginURL returns the admin login page URL, used in admin promotion emails.
 func loginURL() string {
 	return baseAppURL() + "/login.html"
 }
 
-// SendOTPEmail delivers a one-time verification code used during public
-// self-registration on the booking access page.
+// SendOTPEmail delivers a one-time verification code used during self-registration.
 func SendOTPEmail(toEmail, toName, code string) error {
 	body := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+

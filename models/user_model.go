@@ -10,7 +10,6 @@ import (
 )
 
 // UserModel manages all database operations and validation for registered users.
-// It is the single source of truth for who is authorized to make room bookings.
 type UserModel struct {
 	DB *sql.DB
 }
@@ -31,13 +30,9 @@ func normalizeAndValidateUserInput(req *UserRequest) error {
 	return nil
 }
 
-// List returns all users ordered alphabetically by name — excluding anyone
-// who is currently a super_admin. Super Admin is an exclusive role with no
-// Normal User capability of its own (see syncNormalUserAccess), so a row
-// here for one would only ever be stale leftover data, never something the
-// Users page should show. Matched by username since that's what the sync
-// logic itself keys on — an admin's username doubles as their email for
-// every account created through this app.
+// List returns all users ordered alphabetically by name, excluding those whose
+// email matches a super_admin username — super_admin is exclusive and any such
+// users row would be stale data, not an active booking grant.
 func (m *UserModel) List() ([]User, error) {
 	rows, err := m.DB.Query(`
 		SELECT u.id, u.name, u.email, u.phone, u.status, u.intended_role, u.confirm_token IS NOT NULL,
@@ -95,24 +90,13 @@ func (m *UserModel) GetByEmail(email string) (User, error) {
 	return u, err
 }
 
-// Create registers a new user added directly by an admin. Unlike self-
-// registration (which already proves email ownership via OTP), an admin
-// typing in someone else's email address hasn't proven anything — so the
-// new entry starts as "pending" and stays inactive until the recipient
-// clicks the confirmation link emailed to them. It never appears in the
-// Users page as something an admin reviews/approves — AwaitingConfirmation
-// tells the frontend to hide the Approve/Reject actions for this row and
-// show a "Pending Approval" status instead.
-//
-// req.Role records what should happen once they confirm: "normal_user"
-// simply activates the booking-user row; "general_admin"/"super_admin"
-// promotes the confirmation into a brand-new admin account (the caller
-// handles that branch — see ConsumeConfirmToken).
-//
-// Returns the created user and the plaintext confirmation token — the
-// caller is responsible for emailing it; it is never stored in plaintext
-// logs and is cleared the moment it's used.
-// Returns ErrDuplicate if the email address is already registered.
+// Create registers a new user added directly by an admin. Starts as "pending" with a
+// 7-day confirmation token — the admin typing someone else's email hasn't proved they
+// own it, so the recipient must click the emailed link to activate.
+// req.Role records what happens on confirm: "normal_user" activates the booking row;
+// any admin role promotes it to a new admin account (see ConsumeConfirmToken).
+// Returns the created user and plaintext token (caller must email it, never log it).
+// Returns ErrDuplicate if the email is already registered.
 func (m *UserModel) Create(req UserRequest) (User, string, error) {
 	if err := normalizeAndValidateUserInput(&req); err != nil {
 		return User{}, "", err
@@ -143,10 +127,9 @@ func (m *UserModel) Create(req UserRequest) (User, string, error) {
 	return u, token, nil
 }
 
-// ConsumeConfirmToken validates and single-uses a registration confirmation
-// token sent to an admin-added user. The token is cleared immediately
-// regardless of outcome, so it can never be replayed.
-// Returns ErrNotFound if the token doesn't exist (already used or never valid).
+// ConsumeConfirmToken validates and single-uses a registration confirmation token.
+// The token is cleared immediately regardless of outcome — it can never be replayed.
+// Returns ErrNotFound if the token doesn't exist (already used or never issued).
 func (m *UserModel) ConsumeConfirmToken(token string) (User, error) {
 	var u User
 	var expiresAt sql.NullTime
@@ -162,8 +145,7 @@ func (m *UserModel) ConsumeConfirmToken(token string) (User, error) {
 		return User{}, err
 	}
 
-	// Clear the token now so it can never be used a second time, whether or
-	// not it turns out to have expired.
+	// Clear the token now so it can never be used a second time.
 	_, _ = m.DB.Exec(`UPDATE users SET confirm_token = NULL WHERE id = $1`, u.ID)
 
 	if !expiresAt.Valid || time.Now().After(expiresAt.Time) {
@@ -172,12 +154,9 @@ func (m *UserModel) ConsumeConfirmToken(token string) (User, error) {
 	return u, nil
 }
 
-// Register self-registers a new user through the public access gate.
-// The user is created with status "pending" and must be approved by an
-// admin before they can book rooms. Unlike admin-added users, no email
-// confirmation step is needed — the OTP already proved they own the address —
-// so this row always shows up in the Users page for an admin to review.
-// Returns ErrDuplicate if the email address is already registered.
+// Register self-registers a new user through the public access gate. The OTP already
+// proved email ownership so no confirmation step is needed — the row starts as "pending"
+// and appears for admin review immediately. Returns ErrDuplicate if already registered.
 func (m *UserModel) Register(req UserRequest) (User, error) {
 	if err := normalizeAndValidateUserInput(&req); err != nil {
 		return User{}, err
@@ -213,8 +192,7 @@ func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 	return u, err
 }
 
-// Reject marks a pending registration as rejected and records why, so the
-// reason is available later without needing a separate audit-log lookup.
+// Reject marks a pending registration as rejected and stores the reason.
 // Returns ErrNotFound if the user does not exist.
 func (m *UserModel) Reject(id int64, reason string) (User, error) {
 	var u User
@@ -266,11 +244,9 @@ func (m *UserModel) Delete(id int64) error {
 	return nil
 }
 
-// EnsureActiveForEmail makes sure an active, booking-capable row exists for
-// email — creating one if none exists yet, or reactivating it if it was
-// previously pending/rejected/revoked. "Normal User + General Admin" is the
-// one allowed multi-role combination, so every path that grants someone the
-// General Admin role calls this to keep their Normal User capability in sync.
+// EnsureActiveForEmail upserts an active booking-capable row for email.
+// Called whenever General Admin role is granted — Normal User + General Admin is the
+// one allowed multi-role combination, so the Normal User row must exist and be active.
 func (m *UserModel) EnsureActiveForEmail(name, email string) error {
 	name = strings.TrimSpace(name)
 	email = utils.NormalizeEmail(email)
@@ -282,9 +258,8 @@ func (m *UserModel) EnsureActiveForEmail(name, email string) error {
 	return err
 }
 
-// RemoveNormalUserAccess deletes any users-table row for email. Super Admin
-// must be an exclusive role — promoting someone to it (or creating them
-// directly as one) means they retain no separate Normal User capability.
+// RemoveNormalUserAccess deletes any users-table row for email. Super Admin is an
+// exclusive role — no Normal User booking capability is allowed alongside it.
 // A no-op if no such row exists.
 func (m *UserModel) RemoveNormalUserAccess(email string) error {
 	email = utils.NormalizeEmail(email)
@@ -292,11 +267,8 @@ func (m *UserModel) RemoveNormalUserAccess(email string) error {
 	return err
 }
 
-// DeviceTokenMatches reports whether rawToken matches the stored
-// trusted-device token for email, and that it has not expired. Used by the
-// public access gate to decide whether a returning visitor can skip OTP
-// verification. A user who never opted in to "remember this device" simply
-// has no stored hash, so this always returns false for them.
+// DeviceTokenMatches reports whether rawToken matches the stored trusted-device token
+// for email, and that it has not expired. Returns false for users who never opted in.
 func (m *UserModel) DeviceTokenMatches(email, rawToken string) (bool, error) {
 	if rawToken == "" {
 		return false, nil
@@ -323,10 +295,9 @@ func (m *UserModel) DeviceTokenMatches(email, rawToken string) (bool, error) {
 	return storedHash.String == utils.HashToken(rawToken), nil
 }
 
-// SetDeviceToken stores the hash of a newly-issued device-trust token for a
-// user along with its expiry, overwriting any previously remembered device —
-// only one device is trusted at a time. Called only when the user explicitly
-// opts in to "remember this device" after a successful OTP verification.
+// SetDeviceToken stores the hash and expiry of a new trusted-device token for a user,
+// overwriting any previously remembered device — only one is trusted at a time.
+// Called only when the user explicitly opts in to "remember this device" after OTP.
 func (m *UserModel) SetDeviceToken(id int64, rawToken string, expiresAt time.Time) error {
 	_, err := m.DB.Exec(`
 		UPDATE users SET device_token_hash = $1, device_token_expires_at = $2 WHERE id = $3
@@ -334,9 +305,8 @@ func (m *UserModel) SetDeviceToken(id int64, rawToken string, expiresAt time.Tim
 	return err
 }
 
-// ClearDeviceToken revokes any previously remembered device for a user.
-// Called when a user verifies via OTP but declines to be remembered this
-// time, so an old opt-in doesn't linger as a silent bypass.
+// ClearDeviceToken revokes any previously remembered device for a user so an old
+// opt-in doesn't linger as a silent OTP bypass.
 func (m *UserModel) ClearDeviceToken(id int64) error {
 	_, err := m.DB.Exec(`
 		UPDATE users SET device_token_hash = NULL, device_token_expires_at = NULL WHERE id = $1

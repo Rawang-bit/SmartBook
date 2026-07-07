@@ -13,24 +13,22 @@ type ResetTokenData struct {
 	ExpiresAt time.Time
 }
 
-// ResetStore is an in-memory store for single-use password-reset tokens.
-// Each token is valid for 15 minutes and is deleted the moment it is consumed,
-// so replaying a used token always fails.
+// ResetStore is an in-memory store for single-use password-reset tokens, each valid
+// for 15 minutes and deleted the moment it is consumed, so replay always fails.
 type ResetStore struct {
 	mu     sync.Mutex
 	tokens map[string]ResetTokenData
 }
 
-// NewResetStore creates an empty ResetStore and starts a background goroutine
-// that purges expired tokens every 5 minutes to keep memory bounded.
+// NewResetStore creates an empty ResetStore and starts a cleanup goroutine.
 func NewResetStore() *ResetStore {
 	rs := &ResetStore{tokens: make(map[string]ResetTokenData)}
 	go rs.cleanupLoop()
 	return rs
 }
 
-// Create generates a cryptographically random 64-char hex token linked to adminID.
-// The token expires in 15 minutes.
+// Create generates a cryptographically random 64-char hex token linked to adminID,
+// expiring in 15 minutes.
 func (rs *ResetStore) Create(adminID int64) string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
@@ -54,7 +52,7 @@ func (rs *ResetStore) Consume(token string) (int64, bool) {
 	defer rs.mu.Unlock()
 
 	data, found := rs.tokens[token]
-	// Always delete to prevent replay even if the token has expired
+	// Always delete to prevent replay even if the token has expired.
 	delete(rs.tokens, token)
 
 	if !found || time.Now().After(data.ExpiresAt) {
@@ -63,7 +61,7 @@ func (rs *ResetStore) Consume(token string) (int64, bool) {
 	return data.AdminID, true
 }
 
-// cleanupLoop removes expired tokens every 5 minutes.
+// cleanupLoop removes expired tokens every 5 minutes to keep memory bounded.
 func (rs *ResetStore) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()

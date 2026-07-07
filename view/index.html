@@ -244,9 +244,8 @@
 
   <script src="turnstile-helper.js"></script>
   <script>
-    // { mode: 'register' | 'device', name?, email } — name is only set (and
-    // required) for mode 'register'; mode 'device' re-verifies an existing
-    // active user on a browser without a matching trusted-device cookie.
+    // Tracks active flow: mode='register' for new self-reg, mode='device' for
+    // re-verifying an existing active user on an unrecognized browser.
     let pendingRegistration = null;
 
     async function api(path, options = {}) {
@@ -287,16 +286,12 @@
     }
 
     function grantAccess(name, email) {
-      // Used only for display/prefill on the calendar page — actual return
-      // access is gated server-side by check-email + the trusted-device
-      // cookie (HttpOnly, can't be read or forged from here), not by this.
+      // Display-only — actual access is gated by the server-side trusted-device cookie.
       localStorage.setItem('sbUser', JSON.stringify({ name, email }));
       window.location.href = 'calendar.html';
     }
 
-    // "Back" from the OTP step returns to wherever that flow started:
-    // the register step when verifying a brand-new email, or the email
-    // step when re-verifying an existing user's unrecognized device.
+    // Back goes to registerStep for new accounts, emailStep for device re-verification.
     function otpBackStep() {
       showStep(pendingRegistration && pendingRegistration.mode === 'device' ? 'emailStep' : 'registerStep');
     }
@@ -414,10 +409,8 @@
           }),
         });
 
-        // Keep the button disabled and show success briefly before moving on,
-        // so the user gets clear confirmation that the code was accepted.
-        // Registration always lands as "pending" — an admin must approve it
-        // before the calendar is unlocked.
+        // Show success briefly before redirecting; new registrations land as "pending"
+        // until an admin approves them.
         showMsg('otpMsg', 'Email verified successfully!', 'success');
         btn.textContent = 'Verified ✓';
 

@@ -28,11 +28,7 @@ func NormalizeRoomStatus(status string) string {
 	return status
 }
 
-// To24HourTime converts a time string to 24-hour HH:MM format.
-// Handles three input formats:
-//   - "14:30"     — already 24-hour, kept as-is
-//   - "14:30:00"  — 24-hour with seconds, seconds dropped
-//   - "02:30 PM"  — 12-hour AM/PM, converted to 24-hour
+// To24HourTime converts "14:30", "14:30:00", or "02:30 PM" to "HH:MM" 24-hour format.
 func To24HourTime(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -84,11 +80,8 @@ func MinutesFromTime(value string) (int, error) {
 	return t.Hour()*60 + t.Minute(), nil
 }
 
-// ComputeBookingStatus returns the live display status based on the current time:
-//   - "Cancelled"   → never changes
-//   - "Booked"      → meeting has not started yet
-//   - "In Progress" → current time is between start and end
-//   - "Completed"   → meeting has ended
+// ComputeBookingStatus derives the live status from current time: Cancelled stays as-is;
+// otherwise Booked → In Progress → Completed as the meeting window passes.
 func ComputeBookingStatus(dateStr, startStr, endStr, savedStatus string) string {
 	if strings.EqualFold(strings.TrimSpace(savedStatus), "Cancelled") {
 		return "Cancelled"

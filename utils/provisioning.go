@@ -7,8 +7,8 @@ import (
 	"fmt"
 )
 
-// Character classes deliberately exclude visually ambiguous characters
-// (0/O, 1/l/I) since a human may need to retype this temporary password.
+// Character classes exclude visually ambiguous characters (0/O, 1/l/I) so a human
+// can retype a generated temporary password without confusion.
 const (
 	upperChars      = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 	lowerChars      = "abcdefghijkmnopqrstuvwxyz"
@@ -17,13 +17,9 @@ const (
 	passwordCharset = upperChars + lowerChars + digitChars + symbolChars
 )
 
-// GenerateRandomPassword returns a cryptographically random password of the
-// given length (minimum 12, to satisfy the application's password policy).
-// At least one character from each class (upper, lower, digit, symbol) is
-// guaranteed, not left to chance, so a generated password always satisfies
-// models.ValidatePasswordComplexity. Intended for one-time temporary
-// passwords that the recipient must change on first login — see
-// AdminModel.CreateWithGeneratedPassword.
+// GenerateRandomPassword returns a cryptographically random password of the given
+// length (minimum 12). At least one character from each class is guaranteed, so the
+// result always satisfies models.ValidatePasswordComplexity without relying on chance.
 func GenerateRandomPassword(length int) (string, error) {
 	if length < 12 {
 		length = 12
@@ -61,8 +57,7 @@ func randomCharFrom(set string) (byte, error) {
 }
 
 // shuffleBytes randomizes order in place (Fisher-Yates) so the guaranteed
-// one-per-class characters from GenerateRandomPassword aren't always in the
-// same leading positions.
+// one-per-class characters aren't always in the same leading positions.
 func shuffleBytes(b []byte) error {
 	for i := len(b) - 1; i > 0; i-- {
 		buf := make([]byte, 1)
@@ -75,9 +70,8 @@ func shuffleBytes(b []byte) error {
 	return nil
 }
 
-// GenerateSecureToken returns a cryptographically random 64-character hex
-// string. Used for single-use links (registration confirmation) and for the
-// trusted-device cookie issued when a user opts in to "remember this device".
+// GenerateSecureToken returns a cryptographically random 64-character hex string.
+// Used for single-use links (registration confirmation) and trusted-device cookies.
 func GenerateSecureToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -86,11 +80,9 @@ func GenerateSecureToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// HashToken returns the SHA-256 hex digest of a token, for storing a
-// verifier in the database without persisting the raw secret. Tokens here
-// are high-entropy random values, not human-chosen secrets, so a fast
-// deterministic hash is appropriate — unlike passwords, which use bcrypt
-// specifically to resist brute-forcing low-entropy input.
+// HashToken returns the SHA-256 hex digest of a token, for storing a verifier in the
+// database without persisting the raw secret. Tokens here are high-entropy random values
+// so a fast hash is appropriate — unlike passwords, which use bcrypt to resist brute-forcing.
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

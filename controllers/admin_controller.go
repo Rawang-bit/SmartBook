@@ -74,12 +74,9 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	if before.Role != admin.Role {
 		syncNormalUserAccess(c, admin.Username, admin.Name, admin.Role)
 
-		// Sessions are a snapshot of role taken at login (see session/store.go),
-		// so without this their current browser would keep working under the
-		// old role for up to SessionDuration — same reasoning as resetting a
-		// password or revoking access. AdminModel.Update blocks a self-role-
-		// change, so this can only ever sign out someone other than the
-		// caller.
+		// Sessions are a snapshot of role taken at login — invalidate now so the old
+		// role doesn't stay effective for up to SessionDuration. AdminModel.Update
+		// prevents self-role-change, so this only ever signs out someone else.
 		c.Sessions.DeleteByAdminID(id)
 
 		c.audit(r, "admin_role_changed", "admin", admin.Username, admin.ID, "role: "+models.RoleLabel(before.Role)+" → "+models.RoleLabel(admin.Role))
@@ -90,12 +87,9 @@ func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, admin)
 }
 
-// syncNormalUserAccess keeps an admin's linked Normal User row consistent
-// with the multi-role rule: General Admin retains Normal User booking
-// capability (the one allowed combination), Super Admin is exclusive and
-// retains none. username doubles as email for every admin created through
-// this app; a legacy non-email username (e.g. the original seed account) is
-// left alone rather than risking a bad row in the users table.
+// syncNormalUserAccess keeps an admin's Normal User row consistent with the multi-role
+// rule: General Admin retains booking capability; Super Admin (exclusive) gets none.
+// Legacy non-email usernames are skipped to avoid bad rows in the users table.
 func syncNormalUserAccess(c *Controller, username, name, role string) {
 	if !utils.IsValidEmail(username) {
 		return
@@ -140,9 +134,7 @@ func (c *Controller) ResetAdminPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Force re-login with the new password immediately, rather than letting
-	// any session opened under the old password keep working until it
-	// naturally expires.
+	// Invalidate existing sessions so the old password can't keep working until expiry.
 	c.Sessions.DeleteByAdminID(id)
 
 	c.audit(r, "admin_password_reset", "admin", target.Username, id, "")
@@ -177,8 +169,8 @@ func (c *Controller) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Lift the forced-reset block on the live session immediately so the admin
-	// doesn't have to log out and back in after replacing a temporary password.
+	// Clear the forced-reset flag on the live session immediately so the admin
+	// doesn't need to re-login after replacing a temporary password.
 	if cookie, err := r.Cookie(sessionCookieName()); err == nil {
 		c.Sessions.ClearMustResetPassword(cookie.Value)
 	}
@@ -230,9 +222,8 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cut off access immediately — without this, a revoked admin's existing
-	// browser session keeps working until it naturally expires (up to
-	// SessionDuration later), since status is otherwise only checked at login.
+	// Cut off access immediately — status is only checked at login otherwise,
+	// so a revoked admin's session would keep working until it naturally expires.
 	if newStatus == "revoked" {
 		c.Sessions.DeleteByAdminID(id)
 	}
@@ -275,11 +266,8 @@ func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The admin account is gone entirely now, not just revoked — clean up
-	// any Normal User row that existed only as a side effect of them being a
-	// general_admin (see syncNormalUserAccess), so it doesn't linger as an
-	// orphaned, no-longer-meaningful booking-access grant. A no-op if there
-	// was never one (e.g. they were already a super_admin).
+	// Remove any linked Normal User row so it doesn't linger as an orphaned grant
+	// after the admin account is gone (see syncNormalUserAccess). No-op for super_admin.
 	if err := c.Users.RemoveNormalUserAccess(target.Username); err != nil {
 		log.Printf("[ADMIN DELETED] failed to clean up Normal User access for %s: %v", target.Username, err)
 	}

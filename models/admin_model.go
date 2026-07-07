@@ -15,9 +15,8 @@ type AdminModel struct {
 	DB *sql.DB
 }
 
-// normalizeAdminRole coerces any unrecognised role string to "general_admin".
-// "super_admin" is the only other valid value; anything else is a caller error
-// that we fail safely rather than leaving the field empty or invalid in the DB.
+// normalizeAdminRole coerces any unrecognised role to "general_admin" — the safe default
+// when a caller passes an unexpected value rather than leaving the column empty/invalid.
 func normalizeAdminRole(role string) string {
 	if role == "super_admin" {
 		return role
@@ -25,9 +24,8 @@ func normalizeAdminRole(role string) string {
 	return "general_admin"
 }
 
-// nullableString returns nil for an empty string so a UNIQUE constraint on an
-// optional column (e.g. admins.email) doesn't treat every empty value as a
-// duplicate of every other empty value.
+// nullableString returns nil for an empty string so a UNIQUE constraint on an optional
+// column (e.g. admins.email) doesn't treat every empty value as a duplicate.
 func nullableString(s string) any {
 	if s == "" {
 		return nil
@@ -59,7 +57,6 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 }
 
 // GetByUsername returns the admin row, bcrypt hash, and status for a given username.
-// MustResetPassword on the returned Admin indicates an unresolved temporary password.
 // Returns ErrNotFound if the username does not exist.
 func (m *AdminModel) GetByUsername(username string) (Admin, string, string, error) {
 	var admin  Admin
@@ -89,16 +86,14 @@ func (m *AdminModel) GetByID(id int64) (Admin, string, error) {
 	return admin, email.String, err
 }
 
-// GetByUsernameAndEmail looks up an active admin whose username AND email both match.
-// Both comparisons are case-insensitive.
-// Returns the admin's ID, display name, and stored email, or ErrNotFound if no row matches.
-//
-// This is the gating check for the forgot-password flow: an attacker who only knows
-// a username (or only an email) cannot trigger a reset for someone else's account.
+// GetByUsernameAndEmail looks up an active admin whose username AND email both match
+// (case-insensitive). Used by the forgot-password flow — an attacker who only knows
+// one field cannot trigger a reset for someone else's account.
+// Returns the admin's ID, display name, and stored email, or ErrNotFound if no match.
 func (m *AdminModel) GetByUsernameAndEmail(username, email string) (int64, string, string, error) {
 	var (
-		id         int64
-		name       string
+		id          int64
+		name        string
 		storedEmail sql.NullString
 	)
 	err := m.DB.QueryRow(`
@@ -130,11 +125,9 @@ func (m *AdminModel) GetPasswordHash(id int64) (string, error) {
 	return hash, err
 }
 
-// Create adds a new admin account. The email doubles as the login username so
-// password-reset emails always reach the correct inbox. Because a super admin
-// typed the initial password (not the new admin themselves), must_reset_password
-// is set to force a change on first login.
-// Returns ErrDuplicate if the email is already taken.
+// Create adds a new admin account. Email doubles as the login username.
+// must_reset_password is set because the super admin typed the initial password,
+// not the new admin themselves. Returns ErrDuplicate if the email is already taken.
 func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	req.Name     = strings.TrimSpace(req.Name)
 	req.Password = strings.TrimSpace(req.Password)
@@ -176,11 +169,9 @@ func (m *AdminModel) Create(req AdminRequest) (Admin, error) {
 	return admin, nil
 }
 
-// CreateWithGeneratedPassword creates an admin with a secure random temporary
-// password. Used when a self-registration is promoted to an admin role instead
-// of approved as a normal booking user.
-// Returns the plaintext temporary password so the caller can email it — never
-// log or store it.
+// CreateWithGeneratedPassword creates an admin with a secure random temporary password.
+// Used when a self-registration is promoted to an admin role.
+// Returns the plaintext temporary password so the caller can email it — never log or store it.
 // Returns ErrDuplicate if the username or email is already taken.
 func (m *AdminModel) CreateWithGeneratedPassword(username, name, role, email string) (Admin, string, error) {
 	username = strings.TrimSpace(username)
@@ -218,9 +209,8 @@ func (m *AdminModel) CreateWithGeneratedPassword(username, name, role, email str
 }
 
 // Update changes an admin's name, role, and/or email.
-// currentAdminID and currentRole prevent an admin from demoting their own account.
-// Setting email to an empty string removes the stored email (sets it to NULL).
-// Returns ErrNotFound if the target admin does not exist, ErrDuplicate on email conflict.
+// currentAdminID/currentRole prevent self-demotion. Empty email clears the stored value (NULL).
+// Returns ErrNotFound if the target does not exist, ErrDuplicate on email conflict.
 func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, currentRole string) (Admin, error) {
 	req.Name  = strings.TrimSpace(req.Name)
 	req.Role  = strings.TrimSpace(req.Role)
@@ -256,12 +246,9 @@ func (m *AdminModel) Update(id int64, req AdminRequest, currentAdminID int64, cu
 	return admin, nil
 }
 
-// ResetPassword sets a new bcrypt-hashed password for any admin, chosen by
-// someone other than the account's owner — so, like CreateWithGeneratedPassword,
-// it forces a change on next login rather than letting a password someone
-// else now knows remain in use indefinitely. Rejected if it's the same
-// password the account already has, so a reset can't just restate the
-// password being replaced.
+// ResetPassword sets a new bcrypt-hashed password chosen by another admin (not the account
+// owner), so must_reset_password is set to force a change on next login.
+// Rejected if the new password matches the current one.
 // Returns ErrNotFound if the admin does not exist.
 func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	if err := ValidatePasswordComplexity(newPassword); err != nil {
@@ -289,11 +276,9 @@ func (m *AdminModel) ResetPassword(id int64, newPassword string) error {
 	return nil
 }
 
-// ApplyPasswordReset stores a new password chosen by the admin themselves via
-// the forgot-password link — the admin proved ownership of the account by
-// clicking a single-use token sent to their email, so must_reset_password is
-// cleared (not set). This is distinct from ResetPassword, which is called by
-// another admin and therefore forces a change on next login.
+// ApplyPasswordReset stores a new password chosen by the admin via their own reset link.
+// Unlike ResetPassword (called by another admin), this clears must_reset_password because
+// the admin proved ownership of the account by clicking a single-use emailed token.
 func (m *AdminModel) ApplyPasswordReset(id int64, newPassword string) error {
 	if err := ValidatePasswordComplexity(newPassword); err != nil {
 		return err
@@ -316,12 +301,9 @@ func (m *AdminModel) ApplyPasswordReset(id int64, newPassword string) error {
 	return nil
 }
 
-// ChangeOwnPassword verifies the admin's current password then stores the new
-// one, and clears must_reset_password so a temporary password is only ever
-// usable once. Rejected if the new password is the same as the current one —
-// this is the path a forced password-reset flows through, so it's what stops
-// someone from "changing" straight back to the temporary/default password
-// they were just issued.
+// ChangeOwnPassword verifies the current password then stores the new one and clears
+// must_reset_password. Rejected if the new password matches the current one — this is
+// the forced-reset path, so it stops someone from "changing" back to the temporary password.
 // Returns ErrUnauthorized if the current password is wrong.
 func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error {
 	if err := ValidatePasswordComplexity(newPw); err != nil {

@@ -5,8 +5,7 @@ import (
 	"unicode"
 )
 
-// RoleLabel converts an internal role key to a human-readable label for
-// audit log entries and user-facing messages.
+// RoleLabel converts an internal role key to a human-readable label for audit entries.
 func RoleLabel(role string) string {
 	switch role {
 	case "super_admin":
@@ -18,15 +17,11 @@ func RoleLabel(role string) string {
 	}
 }
 
-// MinPasswordLength is the minimum number of characters required for any
-// admin password — set at login, reset, self-service change, or creation.
-// Centralized so a future policy change only needs to happen in one place.
+// MinPasswordLength is the minimum character count for any admin password.
 const MinPasswordLength = 12
 
-// ValidatePasswordComplexity enforces the minimum length plus a mix of
-// character classes, so a long password made of digits only (or letters
-// only) is still rejected. Applied everywhere an admin password is set —
-// creation, reset, and self-service change.
+// ValidatePasswordComplexity enforces minimum length plus a mix of character classes.
+// Applied everywhere an admin password is set — creation, reset, and self-service change.
 func ValidatePasswordComplexity(password string) error {
 	if len(password) < MinPasswordLength {
 		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
@@ -65,15 +60,13 @@ type AdminDetail struct {
 	Username  string `json:"username"`
 	Name      string `json:"name"`
 	Role      string `json:"role"`
-	Email     string `json:"email"`  // empty string when not set
+	Email     string `json:"email"`
 	Status    string `json:"status"` // "active" or "revoked"
 	CreatedAt string `json:"createdAt"`
 }
 
 // AdminRequest is the JSON body for creating or updating an admin account.
-// There is no separate username field — Email doubles as the login username
-// for every admin (see AdminModel.Create) — and Password is only meaningful
-// when creating a new account; Update ignores it.
+// Email doubles as the login username; Password is ignored on updates.
 type AdminRequest struct {
 	Password string `json:"password"`
 	Name     string `json:"name"`
@@ -94,7 +87,7 @@ type LoginResponse struct {
 }
 
 // ForgotPasswordRequest is the JSON body sent by the forgot-password form.
-// Both username and email must match a single admin account for the reset to proceed.
+// Both username and email must match a single active admin account.
 type ForgotPasswordRequest struct {
 	Username     string `json:"username"`
 	Email        string `json:"email"`
@@ -107,86 +100,70 @@ type ResetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// User is a registered person who is allowed to make room bookings.
-// Self-registered users start as "pending" until an admin approves or
-// rejects them in the Users page.
-// Users added directly by an admin also start as "pending", but they are
-// never reviewed by an admin in the UI — AwaitingConfirmation is true until
-// the new person clicks the confirmation link emailed to them, at which
-// point the account (or admin promotion, per IntendedRole) activates itself.
-// An already-active user can later be set to "revoked", pulling their
-// booking access without deleting their record; restoring sets it back to
-// "active".
+// User is a registered person who may make room bookings.
+// Self-registered users start as "pending" until an admin approves or rejects them.
+// Admin-added users also start as "pending" with AwaitingConfirmation=true until
+// the recipient clicks the emailed confirmation link.
+// Active users can be set to "revoked" to pull booking access without deleting the record.
 type User struct {
 	ID                   int64  `json:"id"`
 	Name                 string `json:"name"`
 	Email                string `json:"email"`
-	Phone                string `json:"phone,omitempty"`      // optional contact number, shown to a reviewing admin
+	Phone                string `json:"phone,omitempty"`      // optional contact number shown to reviewing admin
 	Status               string `json:"status"`               // "pending", "active", "rejected", or "revoked"
 	IntendedRole         string `json:"intendedRole"`         // "normal_user", "general_admin", or "super_admin"
-	AwaitingConfirmation bool   `json:"awaitingConfirmation"` // true only for admin-added rows still awaiting the recipient's email click
+	AwaitingConfirmation bool   `json:"awaitingConfirmation"` // true only for admin-added rows not yet email-confirmed
 	RejectionReason      string `json:"rejectionReason,omitempty"`
-	CreatedAt            string `json:"createdAt,omitempty"` // registration date/time, YYYY-MM-DD HH:MM
-	AdminRole            string `json:"adminRole,omitempty"` // "general_admin" if this person is also an admin (the Normal User + General Admin combination), else empty — computed by UserModel.List, not stored
+	CreatedAt            string `json:"createdAt,omitempty"` // YYYY-MM-DD HH:MM
+	AdminRole            string `json:"adminRole,omitempty"` // "general_admin" if also an admin (Normal User + General Admin combo), else empty
 }
 
-// UserRequest is the JSON body sent when creating or updating a user.
-// Role is only meaningful when an admin creates a new user — it records what
-// should happen once the recipient confirms their email.
+// UserRequest is the JSON body for creating or updating a user.
 type UserRequest struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
 	Phone string `json:"phone"`
-	Role  string `json:"role"`
+	Role  string `json:"role"` // intended role at confirmation time
 }
 
-// RejectUserRequest is the JSON body sent when an admin rejects a pending
-// registration — Reason is stored on the user record for later reference.
+// RejectUserRequest is the JSON body when rejecting a pending registration.
 type RejectUserRequest struct {
 	Reason string `json:"reason"`
 }
 
-// ConfirmRegistrationRequest is the JSON body sent when a newly admin-added
-// user clicks the confirmation link emailed to them.
+// ConfirmRegistrationRequest is the JSON body when a newly admin-added user clicks
+// the confirmation link emailed to them.
 type ConfirmRegistrationRequest struct {
 	Token string `json:"token"`
 }
 
-// ApproveUserRequest is the JSON body sent when an admin approves a pending
-// self-registration. Role defaults to "normal_user" when omitted, which
-// keeps the existing behaviour (the applicant can only book/cancel rooms).
-// Any other role ("general_admin" or "super_admin") promotes the request
-// into a new admin account instead — only a super_admin may grant that.
+// ApproveUserRequest is the JSON body when an admin approves a pending self-registration.
+// Role defaults to "normal_user"; any admin role promotes to a new admin account.
 type ApproveUserRequest struct {
 	Role string `json:"role"`
 }
 
-// CheckEmailRequest is the JSON body sent by the public access gate to find
-// out whether an email already belongs to a registered user.
-// CaptchaToken is only used by the device-OTP send path (POST /api/access/send-otp),
-// not by the email-check path (POST /api/access/check-email).
+// CheckEmailRequest is the JSON body for the public access gate's email lookup.
+// CaptchaToken is used only by the OTP-send path, not by the email-check path.
 type CheckEmailRequest struct {
 	Email        string `json:"email"`
 	CaptchaToken string `json:"captchaToken"`
 }
 
-// SendOTPRequest is the JSON body sent to request a registration verification code.
+// SendOTPRequest is the JSON body to request a registration verification code.
 type SendOTPRequest struct {
 	Name         string `json:"name"`
 	Email        string `json:"email"`
 	CaptchaToken string `json:"captchaToken"`
 }
 
-// VerifyOTPRequest is the JSON body sent to verify a one-time code — either
-// to complete self-registration (Name is required) or to re-verify an
-// already-active user's identity on an unrecognized device (Name is
-// ignored). RememberDevice, if true, issues a trusted-device cookie on
-// success so this browser can skip OTP next time, for up to 30 days —
-// the user opts in explicitly; it is never assumed.
+// VerifyOTPRequest is the JSON body to verify a one-time code — for self-registration
+// (Name required) or re-verifying an active user on an unrecognized device (Name ignored).
+// RememberDevice=true issues a trusted-device cookie valid for 30 days; never assumed.
 type VerifyOTPRequest struct {
 	Name           string `json:"name"`
 	Email          string `json:"email"`
-	Phone          string `json:"phone"` // optional contact number, only meaningful for self-registration
+	Phone          string `json:"phone"` // only meaningful for self-registration
 	OTP            string `json:"otp"`
 	RememberDevice bool   `json:"rememberDevice"`
 }
@@ -200,7 +177,7 @@ type Room struct {
 	Status   string `json:"status"` // "Active" or "Inactive"
 }
 
-// RoomRequest is the JSON body sent when creating or updating a room.
+// RoomRequest is the JSON body for creating or updating a room.
 type RoomRequest struct {
 	Name     string `json:"name"`
 	Capacity int    `json:"capacity"`
@@ -223,19 +200,19 @@ type Booking struct {
 	StartTime        string `json:"startTime"`          // HH:MM AM/PM (for display)
 	EndTime          string `json:"endTime"`            // HH:MM AM/PM (for display)
 	Purpose          string `json:"purpose"`
-	Agenda           string `json:"agenda"`           // optional free-text meeting agenda
-	Participants     string `json:"participants"`     // optional comma-separated participant emails
+	Agenda           string `json:"agenda"`
+	Participants     string `json:"participants"`     // comma-separated participant emails
 	Status           string `json:"status"`           // "Booked", "In Progress", "Completed", or "Cancelled"
-	MinutesOfMeeting string `json:"minutesOfMeeting"` // set by the booking owner after the meeting ends — see BookingModel.SetMinutesOfMeeting
-	MinutesEditable  bool   `json:"minutesEditable"`  // true if SetMinutesOfMeeting would currently accept a save — see isWithinMinutesEditWindow
+	MinutesOfMeeting string `json:"minutesOfMeeting"` // set by booking owner after meeting ends
+	MinutesEditable  bool   `json:"minutesEditable"`  // true if SetMinutesOfMeeting would currently accept a save
 }
 
-// BookingRequest is the JSON body sent when creating or updating a booking.
+// BookingRequest is the JSON body for creating or updating a booking.
 type BookingRequest struct {
 	User         string `json:"user"`
 	Email        string `json:"email"`
 	RoomID       int64  `json:"roomId"`
-	Room         string `json:"room"` // room name — used if roomId is not provided
+	Room         string `json:"room"`      // room name — used if roomId is not provided
 	Date         string `json:"date"`
 	Start        string `json:"start"`     // 24-hour time
 	End          string `json:"end"`       // 24-hour time
@@ -247,13 +224,12 @@ type BookingRequest struct {
 	Status       string `json:"status"`
 }
 
-// CancelBookingRequest is the JSON body sent when a public user cancels their booking.
+// CancelBookingRequest is the JSON body when a public user cancels their booking.
 type CancelBookingRequest struct {
 	Email string `json:"email"`
 }
 
-// MinutesOfMeetingRequest is the JSON body sent when a booking's owner adds
-// or edits the Minutes of Meeting for a completed meeting.
+// MinutesOfMeetingRequest is the JSON body when a booking's owner adds or edits Minutes of Meeting.
 type MinutesOfMeetingRequest struct {
 	Email   string `json:"email"`
 	Minutes string `json:"minutes"`
@@ -265,18 +241,17 @@ type ErrorResponse struct {
 }
 
 // AuditEntry is what a controller records for one audit-trail event.
-// ActorLabel/TargetLabel are denormalized snapshots (username/email/name at
-// the time of the action) so the log entry stays meaningful even if the
-// underlying actor or target account is later renamed or deleted.
+// ActorLabel/TargetLabel are denormalized snapshots taken at action time so entries stay
+// meaningful even if the underlying actor or target is later renamed or deleted.
 type AuditEntry struct {
-	ActorType   string // "admin" or "system" (e.g. an anonymous failed login attempt)
+	ActorType   string // "admin" or "system"
 	ActorID     int64  // 0 when there is no authenticated actor
 	ActorLabel  string
 	Action      string // e.g. "login_success", "user_approved", "room_deleted"
-	TargetType  string // "user", "admin", "room", "booking", or "" for actions with no single target
+	TargetType  string // "user", "admin", "room", "booking", or ""
 	TargetID    int64
 	TargetLabel string
-	Details     string // free-text description, e.g. "role: normal_user -> general_admin"
+	Details     string // free-text, e.g. "role: normal_user -> general_admin"
 	IPAddress   string
 	UserAgent   string
 }
@@ -295,21 +270,17 @@ type AuditLog struct {
 	CreatedAt   string `json:"createdAt"`
 }
 
-// AuditFilter narrows ListAuditLogs. Every field is optional; an empty
-// filter matches the whole audit trail.
-// Page is 1-based. Page <= 0 means "no pagination" — return every matching
-// row in one go, used only for exporting the full filtered result rather
-// than for the paginated on-screen list.
+// AuditFilter narrows ListAuditLogs. Every field is optional.
+// Page is 1-based; Page<=0 means "no pagination" (full export, not on-screen list).
 type AuditFilter struct {
-	ActorLabel string // matches actor or target label, case-insensitive substring
+	ActorLabel string // case-insensitive substring match on actor or target label
 	Action     string // exact match
 	From       string // YYYY-MM-DD, inclusive
 	To         string // YYYY-MM-DD, inclusive
 	Page       int
 }
 
-// AuditPage is one page of audit-trail results, plus enough metadata for
-// the caller to render pagination controls.
+// AuditPage is one page of audit-trail results plus pagination metadata.
 type AuditPage struct {
 	Logs       []AuditLog `json:"logs"`
 	Total      int        `json:"total"`

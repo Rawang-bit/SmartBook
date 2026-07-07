@@ -14,27 +14,22 @@ import (
 	"bookroom-management-system/utils"
 )
 
-// HealthCheck confirms the server is running. Used by monitoring tools.
+// HealthCheck confirms the server is running.
 func (c *Controller) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// PublicConfig exposes frontend-safe configuration values that depend on the
-// environment — currently just the Turnstile site key, which (unlike the
-// secret key used in utils.VerifyTurnstile) is public by design and meant to
-// be embedded in the page. Blank if TURNSTILE_SITE_KEY isn't set, in which
-// case the frontend skips rendering the widget entirely.
+// PublicConfig exposes TURNSTILE_SITE_KEY to the frontend; blank when unset, which
+// tells the frontend to skip rendering the widget entirely.
 func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"turnstileSiteKey": os.Getenv("TURNSTILE_SITE_KEY"),
 	})
 }
 
-// recordFailedLoginAttempt increments the failure counter for username and
-// writes either a lockout notice or a "remaining attempts" warning. Shared by
-// the unknown-username and wrong-password branches of Login so both paths
-// respond identically — an attacker can't distinguish "no such user" from
-// "wrong password" by timing or message.
+// recordFailedLoginAttempt increments the failure counter and responds with a lockout
+// or remaining-attempts message. Both unknown-username and wrong-password paths call
+// this so the error is identical — preventing user enumeration by timing or message.
 func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string) {
 	nowLocked := c.LoginAttempts.RecordFailure(username)
 	remaining := c.LoginAttempts.Remaining(username)
@@ -67,15 +62,9 @@ func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Req
 		fmt.Sprintf("invalid username or password — %d attempt(s) remaining before lockout", remaining))
 }
 
-// Login validates credentials via the AdminModel, creates a server-side session,
-// and sets an HttpOnly cookie. The browser sends this cookie on every future request.
-//
-// Cookie security attributes applied:
-//   - HttpOnly:   JavaScript cannot read the cookie (mitigates XSS token theft)
-//   - Secure:     HTTPS-only delivery in production (set via APP_ENV=production)
-//   - SameSite:   Strict — cookie is never sent on cross-site requests (CSRF defence)
-//   - __Host-:    prefix applied in production — binds the cookie to the exact host,
-//     no Domain attribute allowed, path must be "/" (prevents subdomain injection)
+// Login validates credentials, creates a server-side session, and sets an HttpOnly
+// cookie. Cookie flags: HttpOnly, Secure (production), SameSite=Strict, __Host- prefix
+// in production (binds to exact host, prevents subdomain injection).
 func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if !decodeJSON(w, r, &req) {
@@ -95,9 +84,8 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Lockout check ─────────────────────────────────────────────────────────
-	// Must happen before any database work so locked accounts are rejected
-	// immediately, regardless of whether the password would have been correct.
+	// Check lockout before any DB work — locked accounts are rejected immediately
+	// regardless of whether the password would have been correct.
 	if locked, until := c.LoginAttempts.IsLocked(username); locked {
 		mins := int(time.Until(until).Minutes()) + 1
 		c.Audit.Record(models.AuditEntry{
@@ -116,8 +104,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 
 	admin, hash, status, err := c.Admins.GetByUsername(username)
 	if errors.Is(err, models.ErrNotFound) || err != nil {
-		// Count the failure even for unknown usernames to prevent brute-forcing
-		// the username space; the error message is identical either way.
+		// Count the failure even for unknown usernames — error message is identical either way.
 		c.recordFailedLoginAttempt(w, r, username)
 		return
 	}
@@ -127,9 +114,8 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject revoked accounts only after verifying the password so that the response
-	// time for a revoked account with a correct password is indistinguishable from a
-	// failed login (timing-attack safe).
+	// Check revoked after password verification so timing is indistinguishable from a
+	// failed login — prevents an attacker from detecting revoked accounts by response time.
 	if status == "revoked" {
 		c.Audit.Record(models.AuditEntry{
 			ActorType:  "admin",
@@ -217,13 +203,9 @@ func (c *Controller) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ForgotPassword initiates a password-reset flow.
-// It requires both username and email to match the same active admin account
-// before issuing a token, preventing account enumeration via either field alone.
-//
-// The response is always 200 OK regardless of whether the combination matched —
-// this prevents an attacker from discovering valid username/email pairs by observing
-// different responses.
+// ForgotPassword initiates a password reset. Both username and email must match the
+// same active account before issuing a token. Always responds 200 OK regardless of
+// match — prevents username/email enumeration via differing responses.
 func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req models.ForgotPasswordRequest
 	if !decodeJSON(w, r, &req) {
@@ -250,8 +232,7 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	adminID, adminName, adminEmail, err := c.Admins.GetByUsernameAndEmail(username, email)
 	if err != nil {
-		// No match — log for security monitoring but return the neutral message
-		// to prevent username/email enumeration by the caller.
+		// No match — log for security monitoring but return the neutral message.
 		c.Audit.Record(models.AuditEntry{
 			ActorType:  "system",
 			ActorLabel: username,
@@ -285,10 +266,8 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	resetURL := appURL + "/login.html?token=" + token
 
-	// ── Development shortcut ────────────────────────────────────────────────
-	// When no email API key is configured and we are not in production, return
-	// the reset URL directly in the response so the admin can use it without
-	// needing a live email service. This field is never present in production.
+	// Dev shortcut: when no email API key is configured, return the URL directly
+	// so it's usable without a live email service. Never present in production.
 	if !isProduction() && os.Getenv("RESEND_API_KEY") == "" {
 		log.Printf("[PASSWORD RESET DEV] reset link for %q: %s", adminName, resetURL)
 		writeJSON(w, http.StatusOK, map[string]string{
@@ -298,11 +277,8 @@ func (c *Controller) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Production / API key configured ────────────────────────────────────
-	// Send the email synchronously so that delivery failures are visible in
-	// the server log immediately. The response is still the neutral message —
-	// we never tell the caller whether the address matched or delivery failed,
-	// which prevents username/email enumeration.
+	// Send email synchronously so delivery failures are immediately visible in the log.
+	// Response is always the neutral message — never reveals whether delivery failed.
 	if err := utils.SendPasswordResetEmail(adminEmail, adminName, resetURL); err != nil {
 		log.Printf("[PASSWORD RESET ERROR] could not deliver to %s: %v", adminEmail, err)
 	} else {

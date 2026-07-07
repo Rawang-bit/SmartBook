@@ -10,7 +10,6 @@ import (
 )
 
 // BookingModel manages all database operations and business rules for room bookings.
-// All booking constraints (conflicts, registration checks, time validation) live here.
 type BookingModel struct {
 	DB *sql.DB
 }
@@ -65,8 +64,8 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 	return bookings, rows.Err()
 }
 
-// Save validates all booking business rules then inserts (id == 0) or updates (id > 0).
-// This method is the authoritative source for all booking constraints and workflow.
+// Save validates all booking business rules then inserts (id==0) or updates (id>0).
+// This is the single authoritative source for all booking constraints and workflow.
 func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
 	// ── Step 1: Clean up input ────────────────────────────────────────────────
@@ -126,9 +125,8 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	}
 
 	// ── Step 7: Confirm the email is registered and active ────────────────────
-	// Self-registered users start as "pending" and cannot book until an admin
-	// approves them (setting status to "active") — this check enforces that
-	// even if a request bypasses the frontend gate and calls the API directly.
+	// "pending" users cannot book — this enforces that even if a request bypasses
+	// the frontend gate and calls the API directly.
 	var registeredName, userStatus string
 	err = m.DB.QueryRow(`
 		SELECT name, status FROM users WHERE LOWER(TRIM(email)) = $1
@@ -160,7 +158,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	}
 
 	// ── Step 9: Check for time conflicts ──────────────────────────────────────
-	// Overlap condition: new.start < existing.end AND new.end > existing.start
+	// Overlap: new.start < existing.end AND new.end > existing.start
 	var hasConflict bool
 	err = m.DB.QueryRow(`
 		SELECT EXISTS(
@@ -232,8 +230,6 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	return b, nil
 }
 
-// Cancel marks a booking as Cancelled by ID.
-// Returns ErrNotFound if the booking does not exist.
 // GetByID fetches the minimal booking fields needed for audit log labels.
 func (m *BookingModel) GetByID(id int64) (Booking, error) {
 	var b Booking
@@ -246,6 +242,8 @@ func (m *BookingModel) GetByID(id int64) (Booking, error) {
 	return b, err
 }
 
+// Cancel marks a booking as Cancelled by ID.
+// Returns ErrNotFound if the booking does not exist.
 func (m *BookingModel) Cancel(id int64) error {
 	result, err := m.DB.Exec(`
 		UPDATE bookings SET status = 'Cancelled', updated_at = NOW() WHERE id = $1
@@ -261,7 +259,7 @@ func (m *BookingModel) Cancel(id int64) error {
 }
 
 // PublicCancel cancels a booking only if the provided email matches the booking's owner.
-// Returns ErrOwnerMismatch if the email does not match (prevents unauthorised cancellations).
+// Returns ErrOwnerMismatch if the email does not match.
 func (m *BookingModel) PublicCancel(id int64, email string) error {
 	result, err := m.DB.Exec(`
 		UPDATE bookings
@@ -278,19 +276,13 @@ func (m *BookingModel) PublicCancel(id int64, email string) error {
 	return nil
 }
 
-// MinutesEditWindow is how long after a meeting ends its owner may add or
-// edit the Minutes of Meeting before the record locks for editing.
+// MinutesEditWindow is how long after a meeting ends its owner may add or edit Minutes of Meeting.
 const MinutesEditWindow = 24 * time.Hour
 
-// SetMinutesOfMeeting records what was actually discussed in a completed
-// meeting. Only the original booking owner (proven by email, the same check
-// PublicCancel uses) may do this, and only within MinutesEditWindow after the
-// meeting's end time — too early and the meeting hasn't happened yet; once
-// the window closes the record locks, so it stays an honest account of what
-// was discussed rather than something edited long after the fact.
-// Returns ErrNotFound if the booking doesn't exist, ErrOwnerMismatch if the
-// email doesn't match its owner, and a plain error if the booking is
-// cancelled or the meeting is outside its edit window.
+// SetMinutesOfMeeting records what was discussed in a completed meeting. Only the
+// booking owner (proven by email) may do this, and only within MinutesEditWindow after
+// the meeting's end time — the window prevents editing long after the fact.
+// Returns ErrNotFound, ErrOwnerMismatch, or a plain error for business-rule violations.
 func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Booking, error) {
 	var b Booking
 	var startTimeStr, endTimeStr string
@@ -309,9 +301,8 @@ func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Boo
 		return Booking{}, ErrOwnerMismatch
 	}
 
-	// Use the exact same status computation the public calendar's "eligible
-	// for minutes" list relies on (see FillBookingDisplayFields), so a save
-	// can never be rejected for a booking the list just showed as eligible.
+	// Use the same status computation as FillBookingDisplayFields so a save can
+	// never be rejected for a booking the "eligible for minutes" list just showed.
 	computedStatus := utils.ComputeBookingStatus(b.Date, startTimeStr, endTimeStr, b.Status)
 	switch computedStatus {
 	case "Cancelled":
@@ -352,13 +343,11 @@ func (m *BookingModel) Delete(id int64) error {
 	return nil
 }
 
-// BookingRetentionDays is how long a booking record is kept (counting from
-// its booking_date) before it is permanently purged from the database.
+// BookingRetentionDays is how long a booking record is kept before it is purged.
 const BookingRetentionDays = 365
 
-// PurgeOldBookings permanently deletes every booking — regardless of status —
-// whose booking_date is older than BookingRetentionDays. Returns the number
-// of rows removed.
+// PurgeOldBookings permanently deletes every booking whose booking_date is older than
+// BookingRetentionDays, regardless of status. Returns the number of rows removed.
 func (m *BookingModel) PurgeOldBookings() (int64, error) {
 	result, err := m.DB.Exec(`
 		DELETE FROM bookings WHERE booking_date < CURRENT_DATE - $1::int
