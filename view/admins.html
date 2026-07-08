@@ -159,6 +159,10 @@
           <div class="text-sm font-bold uppercase tracking-wider text-red-500">Revoked</div>
           <div id="statRevoked" class="mt-1 text-4xl font-black text-red-700">—</div>
         </div>
+        <div class="rounded-2xl border border-orange-100 bg-orange-50 p-5 shadow-sm">
+          <div class="text-sm font-bold uppercase tracking-wider text-orange-600">Locked</div>
+          <div id="statLocked" class="mt-1 text-4xl font-black text-orange-700">—</div>
+        </div>
       </div>
 
       <!-- Flash message -->
@@ -391,6 +395,7 @@
       document.getElementById('statSuper').textContent   = admins.filter(a => a.role === 'super_admin').length;
       document.getElementById('statGeneral').textContent = admins.filter(a => a.role === 'general_admin').length;
       document.getElementById('statRevoked').textContent = admins.filter(a => a.status === 'revoked').length;
+      document.getElementById('statLocked').textContent  = admins.filter(a => a.loginLocked).length;
     }
 
     function renderTable(admins) {
@@ -413,9 +418,12 @@
           ? superBadge
           : `<div class="flex flex-col gap-1">${normalBadge}${generalBadge}</div>`;
 
-        const statusBadge = isRevoked
+        const lockedBadge = a.loginLocked
+          ? `<span class="mt-1 inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-extrabold text-orange-700">Locked</span>`
+          : '';
+        const statusBadge = (isRevoked
           ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
-          : `<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>`;
+          : `<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>`) + (lockedBadge ? `<div class="mt-1">${lockedBadge}</div>` : '');
 
         const editOnclick = `openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}', '${escapeHtml(a.email || '')}')`;
         const editBtn = iconButton('edit', editOnclick, 'Edit admin', 'indigo');
@@ -428,9 +436,14 @@
             ? iconButton('refresh', `toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')`, 'Restore access', 'emerald')
             : iconButton('ban', `toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')`, 'Revoke access', 'orange');
 
+          const unlockBtn = a.loginLocked
+            ? iconButton('unlock', `unlockAdmin(${a.id}, '${escapeHtml(a.username)}')`, 'Unlock account', 'emerald')
+            : '';
+
           actions = editBtn +
             iconButton('lock', `openResetModal(${a.id}, '${escapeHtml(a.username)}')`, 'Reset password', 'amber') +
             toggleBtn +
+            unlockBtn +
             iconButton('trash', `openDeleteModal(${a.id}, '${escapeHtml(a.username)}')`, 'Delete admin', 'red');
         }
 
@@ -449,6 +462,19 @@
             </td>
           </tr>`;
       }).join('');
+    }
+
+    // ── Unlock Account ──────────────────────────────────────────────────────
+    function unlockAdmin(id, username) {
+      confirmAction(`Unlock @${username}? They will be able to log in again with a fresh set of attempts.`, async function () {
+        try {
+          await unlockAdminApi(id);
+          showFlash(`Account unlocked for @${username}.`, 'success');
+          await loadAdmins();
+        } catch (err) {
+          showFlash(err.message, 'error');
+        }
+      }, { title: 'Unlock Account?', confirmLabel: 'Unlock', tone: 'positive' });
     }
 
     // ── Toggle Access (Revoke / Restore) ────────────────────────────────────

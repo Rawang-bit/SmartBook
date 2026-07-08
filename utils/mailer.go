@@ -37,7 +37,7 @@ func wrapEmailHTML(content string) string {
 		`<table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;width:100%;">` +
 		`<tr><td style="background-color:#0f172a;border-radius:12px 12px 0 0;padding:28px 40px;text-align:center;">` +
 		`<span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">SmartBook</span><br>` +
-		`<span style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Room Booking System</span>` +
+		`<span style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Online Room Booking System</span>` +
 		`</td></tr>` +
 		`<tr><td style="background-color:#ffffff;padding:40px;">` +
 		content +
@@ -45,7 +45,7 @@ func wrapEmailHTML(content string) string {
 		`<tr><td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 12px 12px;` +
 		`padding:20px 40px;text-align:center;">` +
 		`<p style="margin:0;color:#94a3b8;font-size:12px;">This is an automated message — please do not reply.</p>` +
-		`<p style="margin:6px 0 0;color:#cbd5e1;font-size:11px;">&copy; SmartBook &middot; Room Booking System</p>` +
+		`<p style="margin:6px 0 0;color:#cbd5e1;font-size:11px;">&copy; SmartBook &middot; Online Room Booking System</p>` +
 		`</td></tr>` +
 		`</table></td></tr></table></body></html>`
 }

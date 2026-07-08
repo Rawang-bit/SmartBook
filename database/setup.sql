@@ -38,8 +38,12 @@ CREATE TABLE IF NOT EXISTS admins (
     status              TEXT NOT NULL DEFAULT 'active',
     email               TEXT UNIQUE,
     must_reset_password BOOLEAN NOT NULL DEFAULT FALSE,
+    login_locked        BOOLEAN NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add login_locked to existing databases that were created before this column existed.
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS login_locked BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Case-insensitive index used by the password-reset email lookup.
 CREATE INDEX IF NOT EXISTS idx_admins_email_lower

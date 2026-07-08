@@ -384,6 +384,22 @@
         </div>
       </section>
 
+      <!-- Locked Admin Accounts — only rendered when at least one admin is locked -->
+      <section id="lockedAdminsSection" class="mt-5 hidden rounded-3xl border border-orange-200 bg-orange-50 p-5 shadow-lg">
+        <div class="mb-4 flex items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-xl font-black text-orange-900">Locked Admin Accounts</h2>
+            <p class="text-sm font-semibold text-orange-600">These accounts are locked after 3 failed login attempts — click Unlock to restore access.</p>
+          </div>
+        </div>
+        <div id="lockedAdminsList" class="space-y-2"></div>
+      </section>
+
       </div>
       <!-- ═══ End General Admin ═══ -->
 
@@ -652,6 +668,51 @@
       select.value = selected;
     }
 
+    async function loadLockedAdmins() {
+      try {
+        const locked = await getLockedAdmins();
+        const section = document.getElementById('lockedAdminsSection');
+        const list    = document.getElementById('lockedAdminsList');
+        if (!locked || locked.length === 0) {
+          section.classList.add('hidden');
+          return;
+        }
+        section.classList.remove('hidden');
+        list.innerHTML = locked.map(function(a) {
+          return `
+            <div class="flex items-center justify-between rounded-2xl border border-orange-200 bg-white px-4 py-3">
+              <div>
+                <span class="font-black text-slate-900">${escapeHtml(a.name)}</span>
+                <span class="ml-2 text-sm font-semibold text-slate-500">${escapeHtml(a.username)}</span>
+                <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">${a.role === 'super_admin' ? 'Super Admin' : 'General Admin'}</span>
+              </div>
+              <button
+                onclick="dashboardUnlockAdmin(${a.id}, '${escapeHtml(a.username)}')"
+                class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-extrabold text-white transition hover:bg-emerald-700"
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 018 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+                Unlock
+              </button>
+            </div>`;
+        }).join('');
+      } catch (_) {
+        // Non-critical — locked admin panel is optional on the dashboard
+      }
+    }
+
+    async function dashboardUnlockAdmin(id, username) {
+      confirmAction(`Unlock @${username}? They will be able to log in again.`, async function () {
+        try {
+          await unlockAdminApi(id);
+          await loadLockedAdmins();
+        } catch (err) {
+          alert('Failed to unlock: ' + err.message);
+        }
+      }, { title: 'Unlock Account?', confirmLabel: 'Unlock', tone: 'positive' });
+    }
+
     async function loadDashboard() {
       try {
         const results = await Promise.all([getRooms(), getBookings()]);
@@ -849,7 +910,9 @@
       setInterval(loadSuperAdminDashboard, 10000);
     } else {
       loadDashboard();
+      loadLockedAdmins();
       setInterval(loadDashboard, 10000);
+      setInterval(loadLockedAdmins, 30000);
     }
 
     // Welcome banner is a one-time greeting — fade it out and remove it

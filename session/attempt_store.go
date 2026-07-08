@@ -1,49 +1,37 @@
 package session
 
-import (
-	"sync"
-	"time"
-)
+import "sync"
 
-const (
-	MaxLoginAttempts = 3
-	LockoutDuration  = 15 * time.Minute
-)
+const MaxLoginAttempts = 3
 
 type loginRecord struct {
-	failures    int
-	lockedUntil time.Time
+	failures int
 }
 
-// AttemptStore tracks consecutive failed login attempts; after MaxLoginAttempts failures the username is locked for LockoutDuration.
+// AttemptStore tracks consecutive failed login attempts per username (in-memory only).
+// Lockout state is persisted to the DB by the auth controller; this store is the
+// fast in-session layer that also survives the check before the DB lookup.
 type AttemptStore struct {
 	mu      sync.Mutex
 	records map[string]*loginRecord
 }
 
-// NewAttemptStore creates an empty AttemptStore and starts a background cleanup goroutine.
+// NewAttemptStore creates an empty AttemptStore.
 func NewAttemptStore() *AttemptStore {
-	s := &AttemptStore{records: make(map[string]*loginRecord)}
-	go s.cleanupLoop()
-	return s
+	return &AttemptStore{records: make(map[string]*loginRecord)}
 }
 
-// RecordFailure increments the failure counter; returns true if the account just reached the lock threshold.
+// RecordFailure increments the failure counter; returns true when the account just reached the lock threshold.
 func (s *AttemptStore) RecordFailure(username string) (nowLocked bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	r := s.getOrCreate(username)
 	r.failures++
-
-	if r.failures >= MaxLoginAttempts {
-		r.lockedUntil = time.Now().Add(LockoutDuration)
-		return true
-	}
-	return false
+	return r.failures >= MaxLoginAttempts
 }
 
-// Remaining returns how many more failures are allowed before the account is locked.
+// Remaining returns how many more failures are allowed before the account locks.
 func (s *AttemptStore) Remaining(username string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -59,27 +47,16 @@ func (s *AttemptStore) Remaining(username string) int {
 	return left
 }
 
-// IsLocked reports whether the username is locked and when it expires; expired locks are cleared automatically.
-func (s *AttemptStore) IsLocked(username string) (locked bool, until time.Time) {
+// IsLocked reports whether the username has hit the failure threshold in this server session.
+func (s *AttemptStore) IsLocked(username string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	r, ok := s.records[username]
-	if !ok || r.lockedUntil.IsZero() {
-		return false, time.Time{}
-	}
-
-	if time.Now().Before(r.lockedUntil) {
-		return true, r.lockedUntil
-	}
-
-	// Lock expired — reset so the user gets a fresh set of attempts.
-	r.failures = 0
-	r.lockedUntil = time.Time{}
-	return false, time.Time{}
+	return ok && r.failures >= MaxLoginAttempts
 }
 
-// Reset clears all failure records for username. Call this on a successful login.
+// Reset clears all failure records for username. Call on successful login or admin unlock.
 func (s *AttemptStore) Reset(username string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -93,20 +70,4 @@ func (s *AttemptStore) getOrCreate(username string) *loginRecord {
 		s.records[username] = r
 	}
 	return r
-}
-
-// cleanupLoop removes expired records every 10 minutes to keep memory bounded.
-func (s *AttemptStore) cleanupLoop() {
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
-	for range ticker.C {
-		now := time.Now()
-		s.mu.Lock()
-		for username, r := range s.records {
-			if !r.lockedUntil.IsZero() && now.After(r.lockedUntil) {
-				delete(s.records, username)
-			}
-		}
-		s.mu.Unlock()
-	}
 }

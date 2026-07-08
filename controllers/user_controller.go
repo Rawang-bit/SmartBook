@@ -165,7 +165,7 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Skip promotion if they already have this admin role — avoids creating a duplicate account.
 	if requestedRole == "general_admin" || requestedRole == "super_admin" {
-		if _, _, _, existsErr := c.Admins.GetByUsername(u.Email); existsErr != nil {
+		if _, _, _, _, existsErr := c.Admins.GetByUsername(u.Email); existsErr != nil {
 			sess, ok := c.getSession(r)
 			if !ok || !canAssignRole(sess.Role, requestedRole) {
 				writeError(w, http.StatusForbidden, "you are not allowed to assign this role")

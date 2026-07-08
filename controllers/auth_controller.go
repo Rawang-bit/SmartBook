@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"bookroom-management-system/models"
 	"bookroom-management-system/session"
@@ -27,7 +26,8 @@ func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordFailedLoginAttempt increments the counter; same error for bad username or bad password prevents enumeration.
-func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string) {
+// adminID is 0 when the username does not match any account (nothing to persist to DB in that case).
+func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string, adminID int64) {
 	nowLocked := c.LoginAttempts.RecordFailure(username)
 	remaining := c.LoginAttempts.Remaining(username)
 
@@ -42,16 +42,21 @@ func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Req
 	})
 
 	if nowLocked {
+		if adminID > 0 {
+			if err := c.Admins.SetLoginLocked(adminID, true); err != nil {
+				log.Printf("[LOGIN LOCK] failed to persist lockout for %s (id=%d): %v", username, adminID, err)
+			}
+		}
 		c.Audit.Record(models.AuditEntry{
 			ActorType:  "system",
 			ActorLabel: username,
 			Action:     "account_locked",
-			Details:    fmt.Sprintf("locked after %d failed attempts — auto-unlocks in 15 minutes", session.MaxLoginAttempts),
+			Details:    fmt.Sprintf("locked after %d failed attempts — requires admin to unlock", session.MaxLoginAttempts),
 			IPAddress:  clientIP(r),
 			UserAgent:  r.UserAgent(),
 		})
 		writeError(w, http.StatusTooManyRequests,
-			fmt.Sprintf("account locked after %d failed attempts — try again in 15 minutes",
+			fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
 				session.MaxLoginAttempts))
 		return
 	}
@@ -79,33 +84,48 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check lockout before any DB work — locked accounts are rejected immediately
-	// regardless of whether the password would have been correct.
-	if locked, until := c.LoginAttempts.IsLocked(username); locked {
-		mins := int(time.Until(until).Minutes()) + 1
+	// Fast in-session lockout check — rejects immediately if this server session
+	// already tracked 3 failures for this username (before any DB work).
+	if c.LoginAttempts.IsLocked(username) {
 		c.Audit.Record(models.AuditEntry{
 			ActorType:  "system",
 			ActorLabel: username,
 			Action:     "login_blocked_locked",
-			Details:    fmt.Sprintf("account is locked — %d minute(s) remaining", mins),
+			Details:    "account is locked — requires admin to unlock",
 			IPAddress:  clientIP(r),
 			UserAgent:  r.UserAgent(),
 		})
 		writeError(w, http.StatusTooManyRequests,
-			fmt.Sprintf("account locked after %d failed attempts — try again in %d minute(s)",
-				session.MaxLoginAttempts, mins))
+			fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
+				session.MaxLoginAttempts))
 		return
 	}
 
-	admin, hash, status, err := c.Admins.GetByUsername(username)
+	admin, hash, status, loginLocked, err := c.Admins.GetByUsername(username)
 	if errors.Is(err, models.ErrNotFound) || err != nil {
 		// Count the failure even for unknown usernames — error message is identical either way.
-		c.recordFailedLoginAttempt(w, r, username)
+		c.recordFailedLoginAttempt(w, r, username, 0)
+		return
+	}
+
+	// DB lock check — catches accounts locked before a server restart (in-memory state was cleared).
+	if loginLocked {
+		c.Audit.Record(models.AuditEntry{
+			ActorType:  "system",
+			ActorLabel: username,
+			Action:     "login_blocked_locked",
+			Details:    "account is locked — requires admin to unlock",
+			IPAddress:  clientIP(r),
+			UserAgent:  r.UserAgent(),
+		})
+		writeError(w, http.StatusTooManyRequests,
+			fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
+				session.MaxLoginAttempts))
 		return
 	}
 
 	if err := c.Admins.VerifyPassword(hash, password); err != nil {
-		c.recordFailedLoginAttempt(w, r, username)
+		c.recordFailedLoginAttempt(w, r, username, admin.ID)
 		return
 	}
 

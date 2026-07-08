@@ -141,7 +141,9 @@ async function updateAdminApi(id, data) { return api('/admins/' + id, { method: 
 async function resetAdminPasswordApi(id, newPassword) { return api('/admins/' + id, { method: 'PATCH', body: JSON.stringify({ newPassword }) }); }
 async function revokeAdminApi(id) { return api('/admins/' + id + '/revoke', { method: 'POST' }); }
 async function restoreAdminApi(id) { return api('/admins/' + id + '/restore', { method: 'POST' }); }
+async function unlockAdminApi(id) { return api('/admins/' + id + '/unlock', { method: 'POST' }); }
 async function deleteAdminApi(id) { return api('/admins/' + id, { method: 'DELETE' }); }
+async function getLockedAdmins() { return api('/admins/locked'); }
 
 // ── Audit ───────────────────────────────────────────────────────────────────
 

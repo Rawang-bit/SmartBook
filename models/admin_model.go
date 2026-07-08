@@ -34,7 +34,7 @@ func nullableString(s string) any {
 // List returns all admin accounts ordered by creation date.
 func (m *AdminModel) List() ([]AdminDetail, error) {
 	rows, err := m.DB.Query(`
-		SELECT id, username, name, role, COALESCE(email, ''), status, TO_CHAR(created_at, 'YYYY-MM-DD')
+		SELECT id, username, name, role, COALESCE(email, ''), status, login_locked, TO_CHAR(created_at, 'YYYY-MM-DD')
 		FROM admins
 		ORDER BY created_at ASC
 	`)
@@ -46,7 +46,7 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 	admins := []AdminDetail{}
 	for rows.Next() {
 		var a AdminDetail
-		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Email, &a.Status, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Email, &a.Status, &a.LoginLocked, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		admins = append(admins, a)
@@ -54,19 +54,57 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 	return admins, rows.Err()
 }
 
-// GetByUsername returns the admin row, bcrypt hash, and status; ErrNotFound if missing.
-func (m *AdminModel) GetByUsername(username string) (Admin, string, string, error) {
-	var admin  Admin
-	var hash   string
-	var status string
-	err := m.DB.QueryRow(`
-		SELECT id, username, name, role, status, password, must_reset_password
-		FROM admins WHERE username = $1
-	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hash, &admin.MustResetPassword)
-	if err == sql.ErrNoRows {
-		return Admin{}, "", "", ErrNotFound
+// ListLocked returns all admin accounts that are currently locked out. Accessible to both admin roles.
+func (m *AdminModel) ListLocked() ([]AdminDetail, error) {
+	rows, err := m.DB.Query(`
+		SELECT id, username, name, role, COALESCE(email, ''), status, login_locked, TO_CHAR(created_at, 'YYYY-MM-DD')
+		FROM admins
+		WHERE login_locked = TRUE
+		ORDER BY username ASC
+	`)
+	if err != nil {
+		return nil, err
 	}
-	return admin, hash, status, err
+	defer rows.Close()
+
+	admins := []AdminDetail{}
+	for rows.Next() {
+		var a AdminDetail
+		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Email, &a.Status, &a.LoginLocked, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		admins = append(admins, a)
+	}
+	return admins, rows.Err()
+}
+
+// GetByUsername returns the admin row, bcrypt hash, status, and login_locked flag; ErrNotFound if missing.
+func (m *AdminModel) GetByUsername(username string) (Admin, string, string, bool, error) {
+	var admin       Admin
+	var hash        string
+	var status      string
+	var loginLocked bool
+	err := m.DB.QueryRow(`
+		SELECT id, username, name, role, status, password, must_reset_password, login_locked
+		FROM admins WHERE username = $1
+	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hash, &admin.MustResetPassword, &loginLocked)
+	if err == sql.ErrNoRows {
+		return Admin{}, "", "", false, ErrNotFound
+	}
+	return admin, hash, status, loginLocked, err
+}
+
+// SetLoginLocked sets the login_locked flag for an admin. Call with true to lock, false to unlock.
+func (m *AdminModel) SetLoginLocked(id int64, locked bool) error {
+	result, err := m.DB.Exec(`UPDATE admins SET login_locked = $1 WHERE id = $2`, locked, id)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // GetByID fetches an admin by primary key; returns ErrNotFound if missing.

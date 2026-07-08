@@ -77,15 +77,17 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("PUT /api/bookings/",    c.RequireGeneralAdmin(c.UpdateBooking))
 	mux.HandleFunc("DELETE /api/bookings/", c.RequireGeneralAdmin(c.DeleteBooking))
 
-	// ── Admin management (super_admin only) ───────────────────────────────────
-	mux.HandleFunc("GET /api/admins",     c.RequireSuperAdmin(c.ListAdmins))
-	mux.HandleFunc("POST /api/admins",    c.RequireSuperAdmin(c.CreateAdmin))
-	mux.HandleFunc("PUT /api/admins/",    c.RequireSuperAdmin(c.UpdateAdmin))
-	mux.HandleFunc("PATCH /api/admins/",  c.RequireSuperAdmin(c.ResetAdminPassword))
-	mux.HandleFunc("DELETE /api/admins/", c.RequireSuperAdmin(c.DeleteAdmin))
+	// ── Admin management ──────────────────────────────────────────────────────
+	mux.HandleFunc("GET /api/admins",        c.RequireSuperAdmin(c.ListAdmins))
+	mux.HandleFunc("GET /api/admins/locked", c.RequireAdmin(c.ListLockedAdmins))
+	mux.HandleFunc("POST /api/admins",       c.RequireSuperAdmin(c.CreateAdmin))
+	mux.HandleFunc("PUT /api/admins/",       c.RequireSuperAdmin(c.UpdateAdmin))
+	mux.HandleFunc("PATCH /api/admins/",     c.RequireSuperAdmin(c.ResetAdminPassword))
+	mux.HandleFunc("DELETE /api/admins/",    c.RequireSuperAdmin(c.DeleteAdmin))
 
-	// Revoke or restore an admin's access — POST /api/admins/{id}/revoke|restore
-	mux.HandleFunc("POST /api/admins/", c.RequireSuperAdmin(c.ToggleAdminStatus))
+	// POST /api/admins/{id}/revoke|restore — super_admin only (enforced inside handler)
+	// POST /api/admins/{id}/unlock         — any authenticated admin
+	mux.HandleFunc("POST /api/admins/", c.RequireAdmin(c.ToggleAdminStatus))
 
 	// Any logged-in admin can change their own password
 	mux.HandleFunc("POST /api/admin/change-password", c.RequireAdmin(c.ChangeOwnPassword))

@@ -172,19 +172,31 @@ func (c *Controller) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password changed"})
 }
 
-// ToggleAdminStatus revokes or restores an admin (super_admin only); path must end in /revoke or /restore.
+// ToggleAdminStatus handles /revoke and /restore (super_admin only) and /unlock (any admin role).
 func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/admins/")
 
+	isUnlock := strings.HasSuffix(path, "/unlock")
 	var newStatus string
 	switch {
 	case strings.HasSuffix(path, "/revoke"):
 		newStatus = "revoked"
 	case strings.HasSuffix(path, "/restore"):
 		newStatus = "active"
+	case isUnlock:
+		// handled below
 	default:
-		writeError(w, http.StatusBadRequest, "use /revoke or /restore")
+		writeError(w, http.StatusBadRequest, "use /revoke, /restore, or /unlock")
 		return
+	}
+
+	// revoke and restore are super_admin-only; unlock is open to any authenticated admin.
+	if !isUnlock {
+		sess, _ := c.getSession(r)
+		if sess.Role != "super_admin" {
+			writeError(w, http.StatusForbidden, forbiddenModuleMsg)
+			return
+		}
 	}
 
 	id, ok := idFromPath(w, r, "/api/admins/")
@@ -192,15 +204,30 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, _, getErr := c.Admins.GetByID(id)
+	if getErr != nil {
+		log.Printf("[ADMIN] GetByID(%d) before status change failed — audit label will be empty: %v", id, getErr)
+	}
+
+	if isUnlock {
+		if err := c.Admins.SetLoginLocked(id, false); err != nil {
+			if errors.Is(err, models.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "admin not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to unlock admin")
+			return
+		}
+		c.LoginAttempts.Reset(target.Username)
+		c.audit(r, "admin_unlocked", "admin", target.Username, id, "login lock cleared by admin")
+		writeJSON(w, http.StatusOK, map[string]string{"status": "unlocked"})
+		return
+	}
+
 	sess, _ := c.getSession(r)
 	if sess.AdminID == id && newStatus == "revoked" {
 		writeError(w, http.StatusBadRequest, "you cannot revoke your own access")
 		return
-	}
-
-	target, _, getErr := c.Admins.GetByID(id)
-	if getErr != nil {
-		log.Printf("[ADMIN] GetByID(%d) before status change failed — audit label will be empty: %v", id, getErr)
 	}
 
 	err := c.Admins.SetStatus(id, newStatus)
@@ -226,6 +253,16 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	c.audit(r, action, "admin", target.Username, id, "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": newStatus})
+}
+
+// ListLockedAdmins returns all currently locked admin accounts. Accessible to both admin roles.
+func (c *Controller) ListLockedAdmins(w http.ResponseWriter, r *http.Request) {
+	admins, err := c.Admins.ListLocked()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch locked admins")
+		return
+	}
+	writeJSON(w, http.StatusOK, admins)
 }
 
 // DeleteAdmin removes an admin account (super_admin only); an admin cannot delete their own account.
