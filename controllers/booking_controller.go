@@ -41,25 +41,53 @@ func (c *Controller) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, booking)
 }
 
-// sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
-func (c *Controller) sendBookingConfirmations(b models.Booking) {
-	recipients := []string{b.Email}
+// bookingRecipients returns the owner email first, then all unique participant emails.
+func bookingRecipients(b models.Booking) []string {
+	seen := map[string]bool{strings.ToLower(b.Email): true}
+	out := []string{b.Email}
 	if b.Participants != "" {
 		for _, p := range strings.Split(b.Participants, ",") {
 			p = strings.TrimSpace(p)
-			if p != "" && !strings.EqualFold(p, b.Email) {
-				recipients = append(recipients, p)
+			if p != "" && !seen[strings.ToLower(p)] {
+				seen[strings.ToLower(p)] = true
+				out = append(out, p)
 			}
 		}
 	}
+	return out
+}
 
-	for _, email := range recipients {
-		name := ""
-		if strings.EqualFold(email, b.Email) {
-			name = b.User
-		}
-		if err := utils.SendBookingConfirmationEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda); err != nil {
+// ownerName returns the booking owner's name for emails sent to the owner, blank for participants.
+func ownerName(email string, b models.Booking) string {
+	if strings.EqualFold(email, b.Email) {
+		return b.User
+	}
+	return ""
+}
+
+// sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
+func (c *Controller) sendBookingConfirmations(b models.Booking) {
+	for _, email := range bookingRecipients(b) {
+		if err := utils.SendBookingConfirmationEmail(email, ownerName(email, b), b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda); err != nil {
 			log.Printf("[BOOKING CONFIRMATION] failed to notify %s: %v", email, err)
+		}
+	}
+}
+
+// sendCancellationNotifications emails the owner and all participants that the booking was cancelled.
+func (c *Controller) sendCancellationNotifications(b models.Booking) {
+	for _, email := range bookingRecipients(b) {
+		if err := utils.SendBookingCancellationEmail(email, ownerName(email, b), b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose); err != nil {
+			log.Printf("[BOOKING CANCELLATION] failed to notify %s: %v", email, err)
+		}
+	}
+}
+
+// sendMinutesNotifications emails the owner and all participants the finalised meeting minutes.
+func (c *Controller) sendMinutesNotifications(b models.Booking) {
+	for _, email := range bookingRecipients(b) {
+		if err := utils.SendMinutesOfMeetingEmail(email, ownerName(email, b), b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.MinutesOfMeeting); err != nil {
+			log.Printf("[MINUTES OF MEETING] failed to notify %s: %v", email, err)
 		}
 	}
 }
@@ -98,8 +126,8 @@ func (c *Controller) CancelBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch before cancelling so the audit log has the booking's purpose and owner.
-	b, _ := c.Bookings.GetByID(id)
+	// Fetch full details before cancelling — needed for audit log and cancellation emails.
+	b, _ := c.Bookings.GetFullByID(id)
 
 	err := c.Bookings.Cancel(id)
 	if errors.Is(err, models.ErrNotFound) {
@@ -112,6 +140,7 @@ func (c *Controller) CancelBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c.audit(r, "booking_cancelled", "booking", b.Purpose, id, "booked by: "+b.Email)
+	go c.sendCancellationNotifications(b)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
@@ -183,8 +212,8 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Fetch before cancelling to capture the booking purpose for the audit log.
-	b, _ := c.Bookings.GetByID(id)
+	// Fetch full details before cancelling — needed for audit log and cancellation emails.
+	b, _ := c.Bookings.GetFullByID(id)
 
 	err := c.Bookings.PublicCancel(id, email)
 	if errors.Is(err, models.ErrOwnerMismatch) {
@@ -197,6 +226,7 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 	}
 
 	c.auditPublic(r, email, "booking_cancelled_by_owner", "booking", b.Purpose, id, "")
+	go c.sendCancellationNotifications(b)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
@@ -234,6 +264,11 @@ func (c *Controller) UpdateMinutesOfMeeting(w http.ResponseWriter, r *http.Reque
 	}
 
 	c.auditPublic(r, email, "booking_minutes_updated", "booking", b.Purpose, b.ID, "")
+
+	// Fetch full booking (with room name) for the minutes notification email.
+	if full, fetchErr := c.Bookings.GetFullByID(b.ID); fetchErr == nil {
+		go c.sendMinutesNotifications(full)
+	}
 
 	writeJSON(w, http.StatusOK, b)
 }

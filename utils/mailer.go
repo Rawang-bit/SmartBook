@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
 
 // resendPayload is the JSON body sent to the Resend API.
@@ -91,23 +90,21 @@ func otpDisplay(code string) string {
 }
 
 func detailsTable(rows [][2]string) string {
-	var b strings.Builder
-	b.WriteString(`<table cellpadding="0" cellspacing="0" role="presentation" ` +
-		`style="width:100%;margin:20px 0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">`)
+	out := `<table cellpadding="0" cellspacing="0" role="presentation" ` +
+		`style="width:100%;margin:20px 0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">`
 	for i, row := range rows {
 		bg := "#ffffff"
 		if i%2 == 1 {
 			bg = "#f8fafc"
 		}
-		b.WriteString(`<tr style="background-color:` + bg + `;">`)
-		b.WriteString(`<td style="padding:10px 16px;color:#64748b;font-size:12px;font-weight:600;` +
+		out += `<tr style="background-color:` + bg + `;">` +
+			`<td style="padding:10px 16px;color:#64748b;font-size:12px;font-weight:600;` +
 			`text-transform:uppercase;letter-spacing:0.5px;width:35%;border-right:1px solid #e2e8f0;">` +
-			esc(row[0]) + `</td>`)
-		b.WriteString(`<td style="padding:10px 16px;color:#0f172a;font-size:14px;">` + esc(row[1]) + `</td>`)
-		b.WriteString(`</tr>`)
+			esc(row[0]) + `</td>` +
+			`<td style="padding:10px 16px;color:#0f172a;font-size:14px;">` + esc(row[1]) + `</td>` +
+			`</tr>`
 	}
-	b.WriteString(`</table>`)
-	return b.String()
+	return out + `</table>`
 }
 
 func credentialsBox(username, password string) string {
@@ -328,6 +325,92 @@ func SendTemporaryAdminPasswordEmail(toEmail, toName, username, tempPassword str
 			urlFallback(url),
 	)
 	return sendEmail(toEmail, "SmartBook — Your Admin Account Is Ready", textBody, htmlBody, "ADMIN TEMP PASSWORD")
+}
+
+// SendBookingCancellationEmail notifies a recipient that a booking has been cancelled.
+func SendBookingCancellationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose string) error {
+	greeting := "Hello,"
+	if toName != "" {
+		greeting = fmt.Sprintf("Hi %s,", toName)
+	}
+
+	textBody := fmt.Sprintf(
+		"%s\r\n\r\n"+
+			"The following booking has been cancelled:\r\n\r\n"+
+			"  Room:    %s\r\n"+
+			"  Purpose: %s\r\n"+
+			"  Date:    %s\r\n"+
+			"  Time:    %s - %s\r\n\r\n"+
+			"If you have any questions, please contact the booking administrator.\r\n\r\n"+
+			"— SmartBook",
+		greeting, roomName, purpose, date, startTime, endTime,
+	)
+
+	greetingHTML := "Hello,"
+	if toName != "" {
+		greetingHTML = "Hi <strong>" + esc(toName) + "</strong>,"
+	}
+
+	htmlBody := wrapEmailHTML(
+		p(greetingHTML) +
+			`<div style="margin:0 0 20px;display:inline-flex;align-items:center;gap:8px;background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 16px;">` +
+			`<span style="font-size:18px;">&#x274C;</span>` +
+			`<span style="color:#dc2626;font-size:14px;font-weight:700;">Booking Cancelled</span>` +
+			`</div>` +
+			p("The following booking has been cancelled:") +
+			detailsTable([][2]string{
+				{"Room", roomName},
+				{"Purpose", purpose},
+				{"Date", date},
+				{"Time", startTime + " – " + endTime},
+			}) +
+			pMuted("If you have any questions, please contact the booking administrator."),
+	)
+
+	return sendEmail(toEmail, fmt.Sprintf("SmartBook — Booking Cancelled: %s", roomName), textBody, htmlBody, "BOOKING CANCELLATION")
+}
+
+// SendMinutesOfMeetingEmail sends the finalised meeting minutes to the owner and all participants.
+func SendMinutesOfMeetingEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, minutes string) error {
+	greeting := "Hello,"
+	if toName != "" {
+		greeting = fmt.Sprintf("Hi %s,", toName)
+	}
+
+	textBody := fmt.Sprintf(
+		"%s\r\n\r\n"+
+			"The minutes of meeting for the session below are now available:\r\n\r\n"+
+			"  Room:    %s\r\n"+
+			"  Purpose: %s\r\n"+
+			"  Date:    %s\r\n"+
+			"  Time:    %s - %s\r\n\r\n"+
+			"Minutes:\r\n%s\r\n\r\n"+
+			"— SmartBook",
+		greeting, roomName, purpose, date, startTime, endTime, minutes,
+	)
+
+	greetingHTML := "Hello,"
+	if toName != "" {
+		greetingHTML = "Hi <strong>" + esc(toName) + "</strong>,"
+	}
+
+	htmlBody := wrapEmailHTML(
+		p(greetingHTML) +
+			p("The minutes of meeting for the session below have been recorded:") +
+			detailsTable([][2]string{
+				{"Room", roomName},
+				{"Purpose", purpose},
+				{"Date", date},
+				{"Time", startTime + " – " + endTime},
+			}) +
+			`<div style="margin:20px 0 0;">` +
+			`<p style="margin:0 0 8px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Minutes of Meeting</p>` +
+			`<div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;">` +
+			`<p style="margin:0;color:#0f172a;font-size:14px;line-height:1.75;white-space:pre-wrap;">` + esc(minutes) + `</p>` +
+			`</div></div>`,
+	)
+
+	return sendEmail(toEmail, fmt.Sprintf("SmartBook — Minutes of Meeting: %s", purpose), textBody, htmlBody, "MINUTES OF MEETING")
 }
 
 // SendOTPEmail delivers a one-time verification code used during self-registration.

@@ -241,6 +241,31 @@ func (m *BookingModel) GetByID(id int64) (Booking, error) {
 	return b, err
 }
 
+// GetFullByID fetches a complete booking joined with room info; used when full details are needed for emails.
+func (m *BookingModel) GetFullByID(id int64) (Booking, error) {
+	var b Booking
+	err := m.DB.QueryRow(`
+		SELECT b.id, b.user_name, b.email, b.room_id, r.name, r.location,
+		       TO_CHAR(b.booking_date, 'YYYY-MM-DD'), b.start_time, b.end_time,
+		       b.purpose, b.agenda, b.participants, b.minutes_of_meeting, b.status
+		FROM bookings b
+		JOIN rooms r ON r.id = b.room_id
+		WHERE b.id = $1
+	`, id).Scan(
+		&b.ID, &b.User, &b.Email, &b.RoomID, &b.RoomName, &b.Location,
+		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants,
+		&b.MinutesOfMeeting, &b.Status,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Booking{}, ErrNotFound
+	}
+	if err != nil {
+		return Booking{}, err
+	}
+	FillBookingDisplayFields(&b)
+	return b, nil
+}
+
 // Cancel marks a booking as Cancelled; returns ErrNotFound if missing.
 func (m *BookingModel) Cancel(id int64) error {
 	result, err := m.DB.Exec(`
