@@ -395,7 +395,7 @@
       document.getElementById('statSuper').textContent   = admins.filter(a => a.role === 'super_admin').length;
       document.getElementById('statGeneral').textContent = admins.filter(a => a.role === 'general_admin').length;
       document.getElementById('statRevoked').textContent = admins.filter(a => a.status === 'revoked').length;
-      document.getElementById('statLocked').textContent  = admins.filter(a => a.loginLocked).length;
+      document.getElementById('statLocked').textContent  = admins.filter(a => a.status === 'locked').length;
     }
 
     function renderTable(admins) {
@@ -418,7 +418,7 @@
           ? superBadge
           : `<div class="flex flex-col gap-1">${normalBadge}${generalBadge}</div>`;
 
-        const statusBadge = a.loginLocked
+        const statusBadge = a.status === 'locked'
           ? `<span class="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-extrabold text-orange-700">Locked</span>`
           : isRevoked
             ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
@@ -435,7 +435,7 @@
             ? iconButton('refresh', `toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')`, 'Restore access', 'emerald')
             : iconButton('ban', `toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')`, 'Revoke access', 'orange');
 
-          const unlockBtn = a.loginLocked
+          const unlockBtn = a.status === 'locked'
             ? iconButton('unlock', `unlockAdmin(${a.id}, '${escapeHtml(a.username)}')`, 'Unlock account', 'emerald')
             : '';
 

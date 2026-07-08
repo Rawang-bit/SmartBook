@@ -210,7 +210,7 @@ func (c *Controller) ToggleAdminStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isUnlock {
-		if err := c.Admins.SetLoginLocked(id, false); err != nil {
+		if err := c.Admins.SetStatus(id, "active"); err != nil {
 			if errors.Is(err, models.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "admin not found")
 				return

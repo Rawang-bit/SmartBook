@@ -55,14 +55,13 @@ type Admin struct {
 
 // AdminDetail is returned in admin-list responses and includes management fields.
 type AdminDetail struct {
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	Name        string `json:"name"`
-	Role        string `json:"role"`
-	Email       string `json:"email"`
-	Status      string `json:"status"`      // "active" or "revoked"
-	LoginLocked bool   `json:"loginLocked"` // true when locked out after 3 failed attempts
-	CreatedAt   string `json:"createdAt"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	Email     string `json:"email"`
+	Status    string `json:"status"` // "active", "revoked", or "locked"
+	CreatedAt string `json:"createdAt"`
 }
 
 // AdminRequest is the JSON body for creating or updating an admin (email doubles as username; Password ignored on updates).

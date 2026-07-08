@@ -27,7 +27,8 @@ func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
 
 // recordFailedLoginAttempt increments the counter; same error for bad username or bad password prevents enumeration.
 // adminID is 0 when the username does not match any account (nothing to persist to DB in that case).
-func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string, adminID int64) {
+// currentStatus is the admin's status at the time of the attempt; only 'active' accounts get locked.
+func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Request, username string, adminID int64, currentStatus string) {
 	nowLocked := c.LoginAttempts.RecordFailure(username)
 	remaining := c.LoginAttempts.Remaining(username)
 
@@ -42,8 +43,8 @@ func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Req
 	})
 
 	if nowLocked {
-		if adminID > 0 {
-			if err := c.Admins.SetLoginLocked(adminID, true); err != nil {
+		if adminID > 0 && currentStatus == "active" {
+			if err := c.Admins.SetStatus(adminID, "locked"); err != nil {
 				log.Printf("[LOGIN LOCK] failed to persist lockout for %s (id=%d): %v", username, adminID, err)
 			}
 		}
@@ -101,15 +102,15 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	admin, hash, status, loginLocked, err := c.Admins.GetByUsername(username)
+	admin, hash, status, err := c.Admins.GetByUsername(username)
 	if errors.Is(err, models.ErrNotFound) || err != nil {
 		// Count the failure even for unknown usernames — error message is identical either way.
-		c.recordFailedLoginAttempt(w, r, username, 0)
+		c.recordFailedLoginAttempt(w, r, username, 0, "")
 		return
 	}
 
 	// DB lock check — catches accounts locked before a server restart (in-memory state was cleared).
-	if loginLocked {
+	if status == "locked" {
 		c.Audit.Record(models.AuditEntry{
 			ActorType:  "system",
 			ActorLabel: username,
@@ -125,7 +126,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.Admins.VerifyPassword(hash, password); err != nil {
-		c.recordFailedLoginAttempt(w, r, username, admin.ID)
+		c.recordFailedLoginAttempt(w, r, username, admin.ID, status)
 		return
 	}
 

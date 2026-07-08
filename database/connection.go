@@ -128,9 +128,11 @@ func migrate(db *sql.DB) error {
 		// Minutes of Meeting: booking owner can record what was discussed within
 		// a 24-hour window after the meeting ends (see BookingModel.MinutesEditWindow).
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_of_meeting TEXT NOT NULL DEFAULT ''`,
-		// Login lockout: set to TRUE after 3 consecutive failed login attempts.
-		// Cleared only by an admin via the unlock endpoint — no auto-expiry.
+		// Login lockout: stored as status = 'locked' (merged from the old login_locked boolean).
+		// Migrate existing boolean flag to status value, then drop the redundant column.
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS login_locked BOOLEAN NOT NULL DEFAULT FALSE`,
+		`UPDATE admins SET status = 'locked' WHERE login_locked = TRUE AND status = 'active'`,
+		`ALTER TABLE admins DROP COLUMN IF EXISTS login_locked`,
 		// Optional contact number shown to an admin reviewing a pending registration;
 		// reason recorded when a registration is rejected.
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`,
