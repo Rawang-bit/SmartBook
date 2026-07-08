@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"bookroom-management-system/utils"
@@ -338,6 +339,81 @@ func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Boo
 		WHERE id = $2
 		RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
 	`, minutes, id).Scan(
+		&b.ID, &b.User, &b.Email, &b.RoomID,
+		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+	)
+	if err != nil {
+		return Booking{}, err
+	}
+	FillBookingDisplayFields(&b)
+	return b, nil
+}
+
+// PublicUpdate lets a booking owner edit editable fields before the meeting starts.
+// Ownership is proved by email match; the booking must still be in 'Booked' status.
+func (m *BookingModel) PublicUpdate(id int64, email, purpose, agenda, participants, end string) (Booking, error) {
+	purpose = strings.TrimSpace(purpose)
+	agenda  = strings.TrimSpace(agenda)
+	if len(purpose) < 3 {
+		return Booking{}, fmt.Errorf("purpose must be at least 3 characters")
+	}
+
+	var b Booking
+	var startRaw string
+	err := m.DB.QueryRow(`
+		SELECT email, status, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, room_id
+		FROM bookings WHERE id = $1
+	`, id).Scan(&b.Email, &b.Status, &b.Date, &startRaw, &b.End, &b.RoomID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Booking{}, ErrNotFound
+	}
+	if err != nil {
+		return Booking{}, err
+	}
+	if utils.NormalizeEmail(b.Email) != utils.NormalizeEmail(email) {
+		return Booking{}, ErrOwnerMismatch
+	}
+	if utils.ComputeBookingStatus(b.Date, startRaw, b.End, b.Status) != "Booked" {
+		return Booking{}, fmt.Errorf("only upcoming bookings can be edited")
+	}
+
+	end24 := utils.To24HourTime(strings.TrimSpace(end))
+	startMins, _ := utils.MinutesFromTime(startRaw)
+	endMins, err := utils.MinutesFromTime(end24)
+	if err != nil || endMins <= startMins {
+		return Booking{}, fmt.Errorf("end time must be after start time")
+	}
+
+	cleanParticipants, err := NormalizeParticipants(participants)
+	if err != nil {
+		return Booking{}, err
+	}
+
+	var hasConflict bool
+	err = m.DB.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM bookings
+			WHERE room_id      = $1
+			  AND booking_date = $2
+			  AND status      <> 'Cancelled'
+			  AND id          <> $5
+			  AND $3 < end_time
+			  AND $4 > start_time
+		)
+	`, b.RoomID, b.Date, startRaw, end24, id).Scan(&hasConflict)
+	if err != nil {
+		return Booking{}, err
+	}
+	if hasConflict {
+		return Booking{}, fmt.Errorf("the new end time conflicts with another booking in this room")
+	}
+
+	err = m.DB.QueryRow(`
+		UPDATE bookings
+		SET purpose = $1, agenda = $2, participants = $3, end_time = $4, updated_at = NOW()
+		WHERE id = $5
+		RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
+	`, purpose, agenda, cleanParticipants, end24, id).Scan(
 		&b.ID, &b.User, &b.Email, &b.RoomID,
 		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
 	)

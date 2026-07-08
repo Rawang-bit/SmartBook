@@ -176,7 +176,7 @@ func (c *Controller) DeleteBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// PublicBookingAction dispatches /cancel and /minutes by trailing path segment; ownership proved by email.
+// PublicBookingAction dispatches /cancel, /minutes, and /update by trailing path segment; ownership proved by email.
 func (c *Controller) PublicBookingAction(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
 	switch {
@@ -184,9 +184,53 @@ func (c *Controller) PublicBookingAction(w http.ResponseWriter, r *http.Request)
 		c.PublicCancelBooking(w, r)
 	case strings.HasSuffix(path, "/minutes"):
 		c.UpdateMinutesOfMeeting(w, r)
+	case strings.HasSuffix(path, "/update"):
+		c.PublicUpdateBooking(w, r)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}
+}
+
+// PublicUpdateBooking lets the booking owner edit their booking before the meeting starts.
+func (c *Controller) PublicUpdateBooking(w http.ResponseWriter, r *http.Request) {
+	id, ok := idFromPath(w, r, "/api/bookings/")
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Email        string `json:"email"`
+		Purpose      string `json:"purpose"`
+		Agenda       string `json:"agenda"`
+		Participants string `json:"participants"`
+		End          string `json:"end"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	email := utils.NormalizeEmail(req.Email)
+	if !utils.IsValidEmail(email) {
+		writeError(w, http.StatusBadRequest, "valid email address is required")
+		return
+	}
+
+	b, err := c.Bookings.PublicUpdate(id, email, req.Purpose, req.Agenda, req.Participants, req.End)
+	if errors.Is(err, models.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "booking not found")
+		return
+	}
+	if errors.Is(err, models.ErrOwnerMismatch) {
+		writeError(w, http.StatusForbidden, "only the original booking owner can edit this booking")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.auditPublic(r, email, "booking_updated_by_owner", "booking", b.Purpose, b.ID, "")
+	writeJSON(w, http.StatusOK, b)
 }
 
 // PublicCancelBooking cancels a booking only if the request body's email matches the booking owner.

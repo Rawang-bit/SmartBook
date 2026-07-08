@@ -20,6 +20,7 @@ let state = {
   activeUser: null,
   currentBookingId: null,
   cancelVerified: false,
+  editingBooking: null,
   baseDate: new Date(),
   currentWeekDates: [],
   minutesEligible: [],
@@ -382,7 +383,7 @@ function closeModal() {
   overlay.classList.add('hidden');
   overlay.classList.remove('flex');
 
-  ['bookStep', 'detailsStep', 'cancelConfirmStep', 'messageStep', 'successStep', 'minutesListStep', 'minutesEditStep']
+  ['bookStep', 'detailsStep', 'cancelConfirmStep', 'messageStep', 'successStep', 'minutesListStep', 'minutesEditStep', 'editStep']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
@@ -402,7 +403,8 @@ function showStep(step) {
     message: 'messageStep',
     success: 'successStep',
     minutesList: 'minutesListStep',
-    minutesEdit: 'minutesEditStep'
+    minutesEdit: 'minutesEditStep',
+    edit: 'editStep'
   };
 
   Object.values(steps).forEach(id => {
@@ -456,6 +458,7 @@ function resetTransientState() {
   // persists across bookings and must not be cleared here.
   state.currentBookingId = null;
   state.cancelVerified = false;
+  state.editingBooking = null;
 }
 
 function updateRoomHeader() {
@@ -837,6 +840,17 @@ function showDetails(id) {
     agendaRow.classList.add('hidden');
   }
 
+  const isOwner = state.activeUser &&
+    booking.email.toLowerCase() === state.activeUser.email.toLowerCase();
+  const meetingStarted = isPastSlot(booking.date, booking.startTime);
+  const inProgress = isMeetingInProgress(booking.date, booking.startTime, booking.endTime);
+
+  // Cancel: owner only, and only before the meeting starts
+  document.getElementById('detailsCancelBtn').classList.toggle('hidden', !isOwner || inProgress);
+
+  // Edit: owner only AND only before the meeting has started
+  document.getElementById('detailsEditBtn').classList.toggle('hidden', !isOwner || meetingStarted || inProgress);
+
   showStep('details');
 }
 
@@ -855,6 +869,85 @@ function requestCancelVerify() {
   }
 
   proceedToCancelConfirm(booking);
+}
+
+function openEditBooking() {
+  const booking = state.bookings.find(b => b.id === state.currentBookingId);
+  if (!booking) return;
+
+  state.editingBooking = booking;
+
+  document.getElementById('editStartTimeStatic').value = booking.startTime;
+  document.getElementById('editMeetingPurpose').value = booking.purpose;
+  document.getElementById('editMeetingAgenda').value = booking.agenda || '';
+  document.getElementById('editMeetingParticipants').value = booking.participants || '';
+
+  const endSelect = document.getElementById('editEndTimeSelect');
+  endSelect.innerHTML = '';
+  const startIndex = getTimeIndex(booking.startTime);
+  for (let i = startIndex + 1; i < hours.length; i++) {
+    if (hasBookingConflict(booking.roomId, booking.date, booking.startTime, hours[i], booking.id)) break;
+    endSelect.add(new Option(hours[i], hours[i]));
+  }
+  endSelect.value = booking.endTime;
+
+  const errEl = document.getElementById('editValidationMessage');
+  errEl.innerText = '';
+  errEl.classList.add('hidden');
+
+  showStep('edit');
+}
+
+async function submitEditBooking() {
+  const booking = state.editingBooking;
+  if (!booking || !state.activeUser) return;
+
+  const purpose      = document.getElementById('editMeetingPurpose').value.trim();
+  const agenda       = document.getElementById('editMeetingAgenda').value.trim();
+  const participants = document.getElementById('editMeetingParticipants').value.trim();
+  const endTime      = document.getElementById('editEndTimeSelect').value;
+
+  const errEl = document.getElementById('editValidationMessage');
+  errEl.innerText = '';
+  errEl.classList.add('hidden');
+
+  if (!purpose || purpose.length < 3) {
+    errEl.textContent = 'Meeting purpose must be at least 3 characters.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('editSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    await api(`/api/bookings/${booking.id}/update`, {
+      method: 'POST',
+      body: JSON.stringify({
+        email: state.activeUser.email,
+        purpose,
+        agenda,
+        participants,
+        end: endTime
+      })
+    });
+
+    await loadBookings();
+
+    document.getElementById('successTitle').innerText = 'Updated!';
+    document.getElementById('successMessage').innerText = 'Your booking has been updated successfully.';
+
+    resetTransientState();
+    showStep('success');
+    renderCalendar();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  }
 }
 
 function proceedToCancelConfirm(booking) {

@@ -285,13 +285,66 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <button onclick="requestCancelVerify()" class="w-full rounded-2xl bg-red-50 py-4 font-black text-red-600 hover:bg-red-100">
+        <button id="detailsEditBtn" onclick="openEditBooking()" class="hidden w-full rounded-2xl bg-indigo-50 py-4 font-black text-indigo-600 hover:bg-indigo-100">
+          Edit Booking
+        </button>
+
+        <button id="detailsCancelBtn" onclick="requestCancelVerify()" class="hidden w-full rounded-2xl bg-red-50 py-4 font-black text-red-600 hover:bg-red-100">
           Cancel Meeting
         </button>
 
         <button onclick="closeModal()" class="w-full rounded-2xl bg-slate-900 py-4 font-bold text-white">
           Close
         </button>
+      </div>
+    </div>
+
+    <!-- Edit Booking -->
+    <div id="editStep" class="hidden w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/60 bg-white/75 p-6 shadow-2xl backdrop-blur-xl transition-all duration-200">
+      <h2 class="mb-5 text-xl font-black text-slate-900">Edit Booking</h2>
+
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Starts</label>
+            <input type="text" id="editStartTimeStatic" readonly
+              class="w-full rounded-xl bg-slate-100 px-4 py-3 text-center text-sm font-semibold text-slate-500" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Ends</label>
+            <select id="editEndTimeSelect" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Meeting Purpose</label>
+          <input type="text" id="editMeetingPurpose" placeholder="Strategy Sync"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Agenda <span class="normal-case font-semibold text-slate-400">(optional)</span></label>
+          <textarea id="editMeetingAgenda" rows="2" placeholder="What will be discussed?"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"></textarea>
+        </div>
+
+        <div>
+          <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">Participants <span class="normal-case font-semibold text-slate-400">(optional)</span></label>
+          <input type="text" id="editMeetingParticipants" placeholder="email1@company.com, email2@company.com"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+          <p class="mt-1 text-[10px] font-bold text-slate-400">Separate multiple emails with commas.</p>
+        </div>
+
+        <p id="editValidationMessage" class="hidden text-xs font-bold text-red-500"></p>
+
+        <div class="flex gap-3 pt-1">
+          <button onclick="showStep('details')" class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
+            Back
+          </button>
+          <button id="editSubmitBtn" onclick="submitEditBooking()" class="flex-1 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700">
+            Save Changes
+          </button>
+        </div>
       </div>
     </div>
 
