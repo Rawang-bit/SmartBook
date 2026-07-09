@@ -308,11 +308,15 @@ func (c *Controller) promoteUserToAdmin(w http.ResponseWriter, userID int64, nam
 	return admin, true
 }
 
-// rejectUser marks a user as rejected; any admin may reject, reason body is optional.
+// rejectUser marks a user as rejected; reason is required.
 func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64) {
 	var req models.RejectUserRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req) // empty body is fine — reason is optional
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	if strings.TrimSpace(req.Reason) == "" {
+		writeError(w, http.StatusBadRequest, "rejection reason is required")
+		return
 	}
 
 	user, err := c.Users.Reject(id, req.Reason)
@@ -325,7 +329,7 @@ func (c *Controller) rejectUser(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 
-	if sendErr := utils.SendRejectionEmail(user.Email, user.Name); sendErr != nil {
+	if sendErr := utils.SendRejectionEmail(user.Email, user.Name, req.Reason); sendErr != nil {
 		log.Printf("[USER REJECTED] failed to notify %s: %v", user.Email, sendErr)
 	}
 

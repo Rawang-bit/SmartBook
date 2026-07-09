@@ -240,17 +240,29 @@ func SendApprovalEmail(toEmail, toName string) error {
 }
 
 // SendRejectionEmail notifies a self-registered user that their request was rejected.
-func SendRejectionEmail(toEmail, toName string) error {
+func SendRejectionEmail(toEmail, toName, reason string) error {
+	reasonBlock := ""
+	if reason != "" {
+		reasonBlock = "Reason:\r\n  " + reason + "\r\n\r\n"
+	}
 	textBody := fmt.Sprintf(
 		"Hi %s,\r\n\r\n"+
 			"Your SmartBook access request was not approved.\r\n\r\n"+
+			"%s"+
 			"If you believe this is a mistake, please contact your administrator.\r\n\r\n"+
 			"— SmartBook",
-		toName,
+		toName, reasonBlock,
 	)
+	reasonHTML := ""
+	if reason != "" {
+		reasonHTML = `<table style="width:100%;border-collapse:collapse;margin:16px 0;">` +
+			`<tr><td style="padding:10px 14px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:4px;font-size:14px;color:#991b1b;">` +
+			`<strong>Reason:</strong> ` + esc(reason) + `</td></tr></table>`
+	}
 	htmlBody := wrapEmailHTML(
 		p("Hi <strong>"+esc(toName)+"</strong>,") +
 			p("Your SmartBook access request was not approved.") +
+			reasonHTML +
 			pLast("If you believe this is a mistake, please contact your administrator."),
 	)
 	return sendEmail(toEmail, "SmartBook — Access Request Declined", textBody, htmlBody, "USER REJECTED")

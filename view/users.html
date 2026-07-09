@@ -335,7 +335,7 @@
 
       <div id="confirmActionReasonWrap" class="hidden mb-4 text-left">
         <label class="mb-1 block text-xs font-extrabold uppercase tracking-wider text-slate-500">
-          Reason <span class="normal-case font-semibold text-slate-400">(optional)</span>
+          Reason
         </label>
         <textarea id="confirmActionReason" rows="2" placeholder="Why is this request being rejected?"
           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"></textarea>
@@ -669,6 +669,10 @@
           showMessage('userMessage', message);
         } else {
           const reason = document.getElementById('confirmActionReason').value.trim();
+          if (!reason) {
+            showMessage('userMessage', 'A rejection reason is required.', 'error');
+            return;
+          }
           await rejectUserApi(id, reason);
           showMessage('userMessage', 'User rejected.');
         }

@@ -124,7 +124,7 @@
           </div>
           <div>
             <label class="block text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
-              Contact Number <span class="text-slate-300 normal-case font-medium">(optional)</span>
+              Contact Number
             </label>
             <div class="relative">
               <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -358,6 +358,7 @@
       btn.textContent = 'Sending…';
 
       try {
+        if (!phone) throw new Error('Contact number is required.');
         const captchaToken = getTurnstileToken('registerTurnstile');
         await api('/api/register/send-otp', { method: 'POST', body: JSON.stringify({ name, email, captchaToken }) });
         pendingRegistration = { mode: 'register', name, email, phone };
