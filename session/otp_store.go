@@ -10,9 +10,13 @@ import (
 // OTPExpiry is how long a verification code remains valid after it is issued.
 const OTPExpiry = 10 * time.Minute
 
+// OTPMaxAttempts is how many wrong guesses are allowed before the code is invalidated.
+const OTPMaxAttempts = 3
+
 type otpRecord struct {
 	code      string
 	expiresAt time.Time
+	attempts  int
 }
 
 // OTPStore is an in-memory store of one-time verification codes keyed by email.
@@ -39,18 +43,32 @@ func (s *OTPStore) Create(email string) string {
 	return code
 }
 
-// Verify checks code against the stored value and deletes the record regardless of outcome — codes are single-use.
+// Verify checks the code. A correct code is consumed immediately (cannot be reused).
+// A wrong code is allowed up to OTPMaxAttempts times; the code is invalidated once
+// that limit is reached or after OTPExpiry, whichever comes first.
 func (s *OTPStore) Verify(email, code string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	r, ok := s.codes[email]
-	delete(s.codes, email)
-
 	if !ok || time.Now().After(r.expiresAt) {
+		delete(s.codes, email)
 		return false
 	}
-	return r.code == code
+
+	if r.code == code {
+		delete(s.codes, email) // correct — consumed, cannot reuse
+		return true
+	}
+
+	// Wrong code — count the attempt and keep the record until attempts are exhausted.
+	r.attempts++
+	if r.attempts >= OTPMaxAttempts {
+		delete(s.codes, email)
+	} else {
+		s.codes[email] = r
+	}
+	return false
 }
 
 // generateCode returns a cryptographically random 6-digit numeric string.
