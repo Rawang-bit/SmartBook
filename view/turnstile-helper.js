@@ -39,6 +39,7 @@ async function initTurnstile(containerId) {
     turnstileWidgets[containerId] = turnstile.render('#' + containerId, {
       sitekey: siteKey,
       theme: 'light', // always visible on the white card background
+      size: 'flexible', // stretches to fill the parent container width
     });
   })();
 }
