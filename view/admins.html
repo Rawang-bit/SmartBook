@@ -424,7 +424,7 @@
             ? `<span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">Revoked</span>`
             : `<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">Active</span>`;
 
-        const editOnclick = `openEditModal(${a.id}, '${escapeHtml(a.username)}', '${escapeHtml(a.name)}', '${a.role}', '${escapeHtml(a.email || '')}')`;
+        const editOnclick = `openEditModal(${a.id}, '${jsAttr(a.username)}', '${jsAttr(a.name)}', '${a.role}', '${jsAttr(a.email || '')}')`;
         const editBtn = iconButton('edit', editOnclick, 'Edit admin', 'indigo');
 
         let actions;
@@ -432,18 +432,18 @@
           actions = editBtn + iconButton('lock', 'openSharedCpModal()', 'Change my password', 'slate');
         } else {
           const toggleBtn = isRevoked
-            ? iconButton('refresh', `toggleAccess(${a.id}, 'restore', '${escapeHtml(a.username)}')`, 'Restore access', 'emerald')
-            : iconButton('ban', `toggleAccess(${a.id}, 'revoke', '${escapeHtml(a.username)}')`, 'Revoke access', 'orange');
+            ? iconButton('refresh', `toggleAccess(${a.id}, 'restore', '${jsAttr(a.username)}')`, 'Restore access', 'emerald')
+            : iconButton('ban', `toggleAccess(${a.id}, 'revoke', '${jsAttr(a.username)}')`, 'Revoke access', 'orange');
 
           const unlockBtn = a.status === 'locked'
-            ? iconButton('unlock', `unlockAdmin(${a.id}, '${escapeHtml(a.username)}')`, 'Unlock account', 'emerald')
+            ? iconButton('unlock', `unlockAdmin(${a.id}, '${jsAttr(a.username)}')`, 'Unlock account', 'emerald')
             : '';
 
           actions = editBtn +
-            iconButton('lock', `openResetModal(${a.id}, '${escapeHtml(a.username)}')`, 'Reset password', 'amber') +
+            iconButton('lock', `openResetModal(${a.id}, '${jsAttr(a.username)}')`, 'Reset password', 'amber') +
             toggleBtn +
             unlockBtn +
-            iconButton('trash', `openDeleteModal(${a.id}, '${escapeHtml(a.username)}')`, 'Delete admin', 'red');
+            iconButton('trash', `openDeleteModal(${a.id}, '${jsAttr(a.username)}')`, 'Delete admin', 'red');
         }
 
         return `
@@ -560,7 +560,7 @@
       const roleNote   = document.getElementById('editRoleNote');
       roleSelect.value = role;
 
-      // Check if editing self — use a server call to /api/auth/me to be accurate
+      // Check if editing self, so the current admin can't change their own role
       const isSelf = checkIsSelfById(id);
       if (isSelf) {
         roleSelect.disabled = true;

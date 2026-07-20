@@ -33,35 +33,22 @@ func nullableString(s string) any {
 
 // List returns all admin accounts ordered by creation date.
 func (m *AdminModel) List() ([]AdminDetail, error) {
-	rows, err := m.DB.Query(`
-		SELECT id, username, name, role, COALESCE(email, ''), status, TO_CHAR(created_at, 'YYYY-MM-DD')
-		FROM admins
-		ORDER BY created_at ASC
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	admins := []AdminDetail{}
-	for rows.Next() {
-		var a AdminDetail
-		if err := rows.Scan(&a.ID, &a.Username, &a.Name, &a.Role, &a.Email, &a.Status, &a.CreatedAt); err != nil {
-			return nil, err
-		}
-		admins = append(admins, a)
-	}
-	return admins, rows.Err()
+	return m.listWhere("", "created_at ASC")
 }
 
 // ListLocked returns all admin accounts that are currently locked out. Accessible to both admin roles.
 func (m *AdminModel) ListLocked() ([]AdminDetail, error) {
-	rows, err := m.DB.Query(`
+	return m.listWhere("WHERE status = 'locked'", "username ASC")
+}
+
+// listWhere runs the shared admin-list query/scan with an optional WHERE clause and ORDER BY.
+func (m *AdminModel) listWhere(whereClause, orderBy string) ([]AdminDetail, error) {
+	rows, err := m.DB.Query(fmt.Sprintf(`
 		SELECT id, username, name, role, COALESCE(email, ''), status, TO_CHAR(created_at, 'YYYY-MM-DD')
 		FROM admins
-		WHERE status = 'locked'
-		ORDER BY username ASC
-	`)
+		%s
+		ORDER BY %s
+	`, whereClause, orderBy))
 	if err != nil {
 		return nil, err
 	}

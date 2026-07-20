@@ -46,18 +46,6 @@ func (m *RoomModel) GetByID(id int64) (Room, error) {
 	return room, err
 }
 
-// GetByName fetches a room by unique name; returns ErrNotFound if missing.
-func (m *RoomModel) GetByName(name string) (Room, error) {
-	var room Room
-	err := m.DB.QueryRow(`
-		SELECT id, name, capacity, location, status FROM rooms WHERE name = $1
-	`, name).Scan(&room.ID, &room.Name, &room.Capacity, &room.Location, &room.Status)
-	if err == sql.ErrNoRows {
-		return Room{}, ErrNotFound
-	}
-	return room, err
-}
-
 // Save inserts (id==0) or updates (id>0) a room; returns ErrDuplicate if name taken, ErrNotFound if ID unknown.
 func (m *RoomModel) Save(id int64, req RoomRequest) (Room, error) {
 	req.Name     = strings.TrimSpace(req.Name)

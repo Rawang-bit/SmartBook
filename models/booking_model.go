@@ -65,6 +65,29 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 	return bookings, rows.Err()
 }
 
+// withRoomDateLock runs fn inside a transaction holding a Postgres advisory lock scoped to
+// (roomID, date). Two requests for the same room/day serialize on this lock, so the
+// conflict check and the following write can't race with another request booking the
+// same slot concurrently — without it, both could pass the check before either commits.
+// The lock is released automatically when the transaction commits or rolls back.
+func (m *BookingModel) withRoomDateLock(roomID int64, date string, fn func(tx *sql.Tx) error) error {
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	lockKey := fmt.Sprintf("booking-slot:%d:%s", roomID, date)
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, lockKey); err != nil {
+		return err
+	}
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Save validates all booking business rules then inserts (id==0) or updates (id>0).
 func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
@@ -157,71 +180,74 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 		return Booking{}, fmt.Errorf("inactive rooms cannot be booked")
 	}
 
-	// ── Step 9: Check for time conflicts ──────────────────────────────────────
-	// Overlap: new.start < existing.end AND new.end > existing.start
-	var hasConflict bool
-	err = m.DB.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM bookings
-			WHERE room_id      = $1
-			  AND booking_date = $2
-			  AND status      <> 'Cancelled'
-			  AND id          <> $5
-			  AND $3 < end_time
-			  AND $4 > start_time
-		)
-	`, req.RoomID, req.Date, req.Start, req.End, id).Scan(&hasConflict)
-	if err != nil {
-		return Booking{}, err
-	}
-	if hasConflict {
-		return Booking{}, fmt.Errorf("this room is already booked for the selected time slot")
-	}
-
 	// ── Step 10: Default status ───────────────────────────────────────────────
 	if req.Status == "" {
 		req.Status = "Booked"
 	}
 
-	// ── Step 11: Persist to the database ─────────────────────────────────────
+	// ── Step 9 & 11: Check for time conflicts and persist, holding a per-room/date lock
+	// so two concurrent requests for the same slot can't both pass the conflict check
+	// before either one commits (see withRoomDateLock).
+	// Overlap: new.start < existing.end AND new.end > existing.start
 	var b Booking
+	lockErr := m.withRoomDateLock(req.RoomID, req.Date, func(tx *sql.Tx) error {
+		var hasConflict bool
+		if err := tx.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM bookings
+				WHERE room_id      = $1
+				  AND booking_date = $2
+				  AND status      <> 'Cancelled'
+				  AND id          <> $5
+				  AND $3 < end_time
+				  AND $4 > start_time
+			)
+		`, req.RoomID, req.Date, req.Start, req.End, id).Scan(&hasConflict); err != nil {
+			return err
+		}
+		if hasConflict {
+			return fmt.Errorf("this room is already booked for the selected time slot")
+		}
 
-	if id == 0 {
-		err = m.DB.QueryRow(`
-			INSERT INTO bookings(user_name, email, room_id, booking_date, start_time, end_time, purpose, agenda, participants, status)
-			VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
-		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status).Scan(
-			&b.ID, &b.User, &b.Email, &b.RoomID,
-			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
-		)
-	} else {
-		err = m.DB.QueryRow(`
-			UPDATE bookings
-			SET user_name    = $1,
-			    email        = $2,
-			    room_id      = $3,
-			    booking_date = $4,
-			    start_time   = $5,
-			    end_time     = $6,
-			    purpose      = $7,
-			    agenda       = $8,
-			    participants = $9,
-			    status       = $10,
-			    updated_at   = NOW()
-			WHERE id = $11
-			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
-		`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status, id).Scan(
-			&b.ID, &b.User, &b.Email, &b.RoomID,
-			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
-		)
-	}
+		var err error
+		if id == 0 {
+			err = tx.QueryRow(`
+				INSERT INTO bookings(user_name, email, room_id, booking_date, start_time, end_time, purpose, agenda, participants, status)
+				VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
+			`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status).Scan(
+				&b.ID, &b.User, &b.Email, &b.RoomID,
+				&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+			)
+		} else {
+			err = tx.QueryRow(`
+				UPDATE bookings
+				SET user_name    = $1,
+				    email        = $2,
+				    room_id      = $3,
+				    booking_date = $4,
+				    start_time   = $5,
+				    end_time     = $6,
+				    purpose      = $7,
+				    agenda       = $8,
+				    participants = $9,
+				    status       = $10,
+				    updated_at   = NOW()
+				WHERE id = $11
+				RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
+			`, req.User, req.Email, req.RoomID, req.Date, req.Start, req.End, req.Purpose, req.Agenda, req.Participants, req.Status, id).Scan(
+				&b.ID, &b.User, &b.Email, &b.RoomID,
+				&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+			)
+		}
+		return err
+	})
 
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(lockErr, sql.ErrNoRows) {
 		return b, ErrNotFound
 	}
-	if err != nil {
-		return b, err
+	if lockErr != nil {
+		return b, lockErr
 	}
 
 	b.RoomName = roomName
@@ -389,36 +415,39 @@ func (m *BookingModel) PublicUpdate(id int64, email, purpose, agenda, participan
 		return Booking{}, err
 	}
 
-	var hasConflict bool
-	err = m.DB.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM bookings
-			WHERE room_id      = $1
-			  AND booking_date = $2
-			  AND status      <> 'Cancelled'
-			  AND id          <> $5
-			  AND $3 < end_time
-			  AND $4 > start_time
-		)
-	`, b.RoomID, b.Date, startRaw, end24, id).Scan(&hasConflict)
-	if err != nil {
-		return Booking{}, err
-	}
-	if hasConflict {
-		return Booking{}, fmt.Errorf("the new end time conflicts with another booking in this room")
-	}
+	// Conflict check and update run inside a per-room/date lock so a concurrent request
+	// for the same slot can't slip in between the check and the write (see withRoomDateLock).
+	lockErr := m.withRoomDateLock(b.RoomID, b.Date, func(tx *sql.Tx) error {
+		var hasConflict bool
+		if err := tx.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM bookings
+				WHERE room_id      = $1
+				  AND booking_date = $2
+				  AND status      <> 'Cancelled'
+				  AND id          <> $5
+				  AND $3 < end_time
+				  AND $4 > start_time
+			)
+		`, b.RoomID, b.Date, startRaw, end24, id).Scan(&hasConflict); err != nil {
+			return err
+		}
+		if hasConflict {
+			return fmt.Errorf("the new end time conflicts with another booking in this room")
+		}
 
-	err = m.DB.QueryRow(`
-		UPDATE bookings
-		SET purpose = $1, agenda = $2, participants = $3, end_time = $4, updated_at = NOW()
-		WHERE id = $5
-		RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
-	`, purpose, agenda, cleanParticipants, end24, id).Scan(
-		&b.ID, &b.User, &b.Email, &b.RoomID,
-		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
-	)
-	if err != nil {
-		return Booking{}, err
+		return tx.QueryRow(`
+			UPDATE bookings
+			SET purpose = $1, agenda = $2, participants = $3, end_time = $4, updated_at = NOW()
+			WHERE id = $5
+			RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
+		`, purpose, agenda, cleanParticipants, end24, id).Scan(
+			&b.ID, &b.User, &b.Email, &b.RoomID,
+			&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+		)
+	})
+	if lockErr != nil {
+		return Booking{}, lockErr
 	}
 	FillBookingDisplayFields(&b)
 	return b, nil

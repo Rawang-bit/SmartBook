@@ -25,6 +25,22 @@ func (c *Controller) PublicConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// rejectLockedLogin records the audit entry and writes the 429 response for a locked-account
+// login attempt, whether the lock was detected via in-memory session state or the DB status.
+func (c *Controller) rejectLockedLogin(w http.ResponseWriter, r *http.Request, username string) {
+	c.Audit.Record(models.AuditEntry{
+		ActorType:  "system",
+		ActorLabel: username,
+		Action:     "login_blocked_locked",
+		Details:    "account is locked — requires admin to unlock",
+		IPAddress:  clientIP(r),
+		UserAgent:  r.UserAgent(),
+	})
+	writeError(w, http.StatusTooManyRequests,
+		fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
+			session.MaxLoginAttempts))
+}
+
 // recordFailedLoginAttempt increments the counter; same error for bad username or bad password prevents enumeration.
 // adminID is 0 when the username does not match any account (nothing to persist to DB in that case).
 // currentStatus is the admin's status at the time of the attempt; only 'active' accounts get locked.
@@ -56,9 +72,7 @@ func (c *Controller) recordFailedLoginAttempt(w http.ResponseWriter, r *http.Req
 			IPAddress:  clientIP(r),
 			UserAgent:  r.UserAgent(),
 		})
-		writeError(w, http.StatusTooManyRequests,
-			fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
-				session.MaxLoginAttempts))
+		c.rejectLockedLogin(w, r, username)
 		return
 	}
 	writeError(w, http.StatusUnauthorized,
@@ -72,7 +86,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := strings.TrimSpace(req.Username)
+	username := utils.NormalizeEmail(req.Username)
 	password := strings.TrimSpace(req.Password)
 
 	if username == "" || password == "" {
@@ -88,17 +102,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	// Fast in-session lockout check — rejects immediately if this server session
 	// already tracked 3 failures for this username (before any DB work).
 	if c.LoginAttempts.IsLocked(username) {
-		c.Audit.Record(models.AuditEntry{
-			ActorType:  "system",
-			ActorLabel: username,
-			Action:     "login_blocked_locked",
-			Details:    "account is locked — requires admin to unlock",
-			IPAddress:  clientIP(r),
-			UserAgent:  r.UserAgent(),
-		})
-		writeError(w, http.StatusTooManyRequests,
-			fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
-				session.MaxLoginAttempts))
+		c.rejectLockedLogin(w, r, username)
 		return
 	}
 
@@ -111,17 +115,7 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 
 	// DB lock check — catches accounts locked before a server restart (in-memory state was cleared).
 	if status == "locked" {
-		c.Audit.Record(models.AuditEntry{
-			ActorType:  "system",
-			ActorLabel: username,
-			Action:     "login_blocked_locked",
-			Details:    "account is locked — requires admin to unlock",
-			IPAddress:  clientIP(r),
-			UserAgent:  r.UserAgent(),
-		})
-		writeError(w, http.StatusTooManyRequests,
-			fmt.Sprintf("account locked after %d failed attempts — contact an administrator to unlock your account",
-				session.MaxLoginAttempts))
+		c.rejectLockedLogin(w, r, username)
 		return
 	}
 

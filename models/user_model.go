@@ -224,18 +224,6 @@ func (m *UserModel) Delete(id int64) error {
 	return nil
 }
 
-// EnsureActiveForEmail upserts an active user row for email — required for the Normal User + General Admin multi-role combo.
-func (m *UserModel) EnsureActiveForEmail(name, email string) error {
-	name = strings.TrimSpace(name)
-	email = utils.NormalizeEmail(email)
-	_, err := m.DB.Exec(`
-		INSERT INTO users(name, email, status)
-		VALUES($1, $2, 'active')
-		ON CONFLICT (email) DO UPDATE SET status = 'active'
-	`, name, email)
-	return err
-}
-
 // RemoveNormalUserAccess deletes the users row for email (Super Admin is exclusive — no booking row allowed).
 func (m *UserModel) RemoveNormalUserAccess(email string) error {
 	email = utils.NormalizeEmail(email)

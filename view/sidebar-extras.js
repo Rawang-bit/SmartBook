@@ -41,10 +41,6 @@
       });
     }
 
-    // Header admin name badge (present on every admin page)
-    const headerNameEl = document.getElementById('adminName');
-    if (headerNameEl) headerNameEl.textContent = name;
-
     // Sidebar admin panel: avatar initial, full name, and human-readable role
     const sidebarNameEl = document.getElementById('sidebarAdminName');
     if (sidebarNameEl) sidebarNameEl.textContent = name;

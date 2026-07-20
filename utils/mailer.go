@@ -89,6 +89,25 @@ func otpDisplay(code string) string {
 		`</div></div>`
 }
 
+// greetingFor returns the plain-text and HTML greeting line for an email; toName may be empty.
+func greetingFor(toName string) (text, htmlText string) {
+	if toName == "" {
+		return "Hello,", "Hello,"
+	}
+	return fmt.Sprintf("Hi %s,", toName), "Hi <strong>" + esc(toName) + "</strong>,"
+}
+
+// bookingDetailRows builds the standard Room/Purpose/Date/Time row set shared by
+// booking confirmation, cancellation, and minutes-of-meeting emails.
+func bookingDetailRows(roomName, purpose, date, startTime, endTime string) [][2]string {
+	return [][2]string{
+		{"Room", roomName},
+		{"Purpose", purpose},
+		{"Date", date},
+		{"Time", startTime + " – " + endTime},
+	}
+}
+
 func detailsTable(rows [][2]string) string {
 	out := `<table cellpadding="0" cellspacing="0" role="presentation" ` +
 		`style="width:100%;margin:20px 0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">`
@@ -270,10 +289,7 @@ func SendRejectionEmail(toEmail, toName, reason string) error {
 
 // SendBookingConfirmationEmail notifies a recipient of a room booking; toName may be empty for participants.
 func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, agenda string) error {
-	greeting := "Hello,"
-	if toName != "" {
-		greeting = fmt.Sprintf("Hi %s,", toName)
-	}
+	greeting, greetingHTML := greetingFor(toName)
 
 	agendaBlock := ""
 	if agenda != "" {
@@ -288,17 +304,7 @@ func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, en
 		greeting, roomName, purpose, date, startTime, endTime, agendaBlock,
 	)
 
-	greetingHTML := "Hello,"
-	if toName != "" {
-		greetingHTML = "Hi <strong>" + esc(toName) + "</strong>,"
-	}
-
-	rows := [][2]string{
-		{"Room", roomName},
-		{"Purpose", purpose},
-		{"Date", date},
-		{"Time", startTime + " – " + endTime},
-	}
+	rows := bookingDetailRows(roomName, purpose, date, startTime, endTime)
 	if agenda != "" {
 		rows = append(rows, [2]string{"Agenda", agenda})
 	}
@@ -341,10 +347,7 @@ func SendTemporaryAdminPasswordEmail(toEmail, toName, username, tempPassword str
 
 // SendBookingCancellationEmail notifies a recipient that a booking has been cancelled.
 func SendBookingCancellationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose string) error {
-	greeting := "Hello,"
-	if toName != "" {
-		greeting = fmt.Sprintf("Hi %s,", toName)
-	}
+	greeting, greetingHTML := greetingFor(toName)
 
 	textBody := fmt.Sprintf(
 		"%s\r\n\r\n"+
@@ -358,11 +361,6 @@ func SendBookingCancellationEmail(toEmail, toName, roomName, date, startTime, en
 		greeting, roomName, purpose, date, startTime, endTime,
 	)
 
-	greetingHTML := "Hello,"
-	if toName != "" {
-		greetingHTML = "Hi <strong>" + esc(toName) + "</strong>,"
-	}
-
 	htmlBody := wrapEmailHTML(
 		p(greetingHTML) +
 			`<div style="margin:0 0 20px;display:inline-flex;align-items:center;gap:8px;background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 16px;">` +
@@ -370,12 +368,7 @@ func SendBookingCancellationEmail(toEmail, toName, roomName, date, startTime, en
 			`<span style="color:#dc2626;font-size:14px;font-weight:700;">Booking Cancelled</span>` +
 			`</div>` +
 			p("The following booking has been cancelled:") +
-			detailsTable([][2]string{
-				{"Room", roomName},
-				{"Purpose", purpose},
-				{"Date", date},
-				{"Time", startTime + " – " + endTime},
-			}) +
+			detailsTable(bookingDetailRows(roomName, purpose, date, startTime, endTime)) +
 			pMuted("If you have any questions, please contact the booking administrator."),
 	)
 
@@ -384,10 +377,7 @@ func SendBookingCancellationEmail(toEmail, toName, roomName, date, startTime, en
 
 // SendMinutesOfMeetingEmail sends the finalised meeting minutes to the owner and all participants.
 func SendMinutesOfMeetingEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, minutes string) error {
-	greeting := "Hello,"
-	if toName != "" {
-		greeting = fmt.Sprintf("Hi %s,", toName)
-	}
+	greeting, greetingHTML := greetingFor(toName)
 
 	textBody := fmt.Sprintf(
 		"%s\r\n\r\n"+
@@ -401,20 +391,10 @@ func SendMinutesOfMeetingEmail(toEmail, toName, roomName, date, startTime, endTi
 		greeting, roomName, purpose, date, startTime, endTime, minutes,
 	)
 
-	greetingHTML := "Hello,"
-	if toName != "" {
-		greetingHTML = "Hi <strong>" + esc(toName) + "</strong>,"
-	}
-
 	htmlBody := wrapEmailHTML(
 		p(greetingHTML) +
 			p("The minutes of meeting for the session below have been recorded:") +
-			detailsTable([][2]string{
-				{"Room", roomName},
-				{"Purpose", purpose},
-				{"Date", date},
-				{"Time", startTime + " – " + endTime},
-			}) +
+			detailsTable(bookingDetailRows(roomName, purpose, date, startTime, endTime)) +
 			`<div style="margin:20px 0 0;">` +
 			`<p style="margin:0 0 8px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Minutes of Meeting</p>` +
 			`<div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;">` +

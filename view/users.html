@@ -541,9 +541,9 @@
         // without deleting their record — distinct from Approve/Reject, which
         // only applies to a pending registration request.
         const accessToggle = u.status === 'active'
-          ? iconButton('ban', `toggleUserAccess(${u.id}, 'revoke', '${escapeHtml(u.name)}')`, 'Revoke access', 'orange')
+          ? iconButton('ban', `toggleUserAccess(${u.id}, 'revoke', '${jsAttr(u.name)}')`, 'Revoke access', 'orange')
           : u.status === 'revoked'
-          ? iconButton('refresh', `toggleUserAccess(${u.id}, 'restore', '${escapeHtml(u.name)}')`, 'Restore access', 'emerald')
+          ? iconButton('refresh', `toggleUserAccess(${u.id}, 'restore', '${jsAttr(u.name)}')`, 'Restore access', 'emerald')
           : '';
 
         const statusCell = (isPending && u.awaitingConfirmation)

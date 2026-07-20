@@ -165,7 +165,17 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Skip promotion if they already have this admin role — avoids creating a duplicate account.
 	if requestedRole == "general_admin" || requestedRole == "super_admin" {
-		if _, _, _, existsErr := c.Admins.GetByUsername(u.Email); existsErr != nil {
+		existingAdmin, _, _, existsErr := c.Admins.GetByUsername(u.Email)
+		switch {
+		case existsErr == nil && existingAdmin.Role == requestedRole:
+			// Already an admin with this exact role — nothing to do, fall through to the plain update below.
+		case existsErr == nil:
+			// Already an admin, but with a different role — promotion would create a duplicate
+			// account. Role changes for existing admins must go through the Admins page instead.
+			writeError(w, http.StatusBadRequest,
+				"this user already has an admin account with a different role — change it from the Admins page")
+			return
+		default:
 			sess, ok := c.getSession(r)
 			if !ok || !canAssignRole(sess.Role, requestedRole) {
 				writeError(w, http.StatusForbidden, "you are not allowed to assign this role")

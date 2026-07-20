@@ -65,31 +65,34 @@ func ownerName(email string, b models.Booking) string {
 	return ""
 }
 
-// sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
-func (c *Controller) sendBookingConfirmations(b models.Booking) {
+// notifyRecipients emails every booking recipient via sendFn, logging (never blocking) on failure.
+func notifyRecipients(b models.Booking, logPrefix string, sendFn func(email, name string) error) {
 	for _, email := range bookingRecipients(b) {
-		if err := utils.SendBookingConfirmationEmail(email, ownerName(email, b), b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda); err != nil {
-			log.Printf("[BOOKING CONFIRMATION] failed to notify %s: %v", email, err)
+		if err := sendFn(email, ownerName(email, b)); err != nil {
+			log.Printf("[%s] failed to notify %s: %v", logPrefix, email, err)
 		}
 	}
+}
+
+// sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
+func (c *Controller) sendBookingConfirmations(b models.Booking) {
+	notifyRecipients(b, "BOOKING CONFIRMATION", func(email, name string) error {
+		return utils.SendBookingConfirmationEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda)
+	})
 }
 
 // sendCancellationNotifications emails the owner and all participants that the booking was cancelled.
 func (c *Controller) sendCancellationNotifications(b models.Booking) {
-	for _, email := range bookingRecipients(b) {
-		if err := utils.SendBookingCancellationEmail(email, ownerName(email, b), b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose); err != nil {
-			log.Printf("[BOOKING CANCELLATION] failed to notify %s: %v", email, err)
-		}
-	}
+	notifyRecipients(b, "BOOKING CANCELLATION", func(email, name string) error {
+		return utils.SendBookingCancellationEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose)
+	})
 }
 
 // sendMinutesNotifications emails the owner and all participants the finalised meeting minutes.
 func (c *Controller) sendMinutesNotifications(b models.Booking) {
-	for _, email := range bookingRecipients(b) {
-		if err := utils.SendMinutesOfMeetingEmail(email, ownerName(email, b), b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.MinutesOfMeeting); err != nil {
-			log.Printf("[MINUTES OF MEETING] failed to notify %s: %v", email, err)
-		}
-	}
+	notifyRecipients(b, "MINUTES OF MEETING", func(email, name string) error {
+		return utils.SendMinutesOfMeetingEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.MinutesOfMeeting)
+	})
 }
 
 // UpdateBooking allows an admin to edit any existing booking.

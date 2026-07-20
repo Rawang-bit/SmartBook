@@ -7,7 +7,6 @@
   Shows only upcoming and in-progress bookings.
 */
 
-let localUsers = [];
 let rooms = [];
 
 let state = {
@@ -138,9 +137,6 @@ async function loadRooms() {
     state.location = rooms[0].location;
   }
 }
-
-// localUsers is kept for future use; the public site does not fetch the user list.
-async function loadUsers() {}
 
 function normalizeTimeDisplay(value) {
   if (!value) return '';
@@ -1135,7 +1131,6 @@ window.onload = async function() {
 
   try {
     await loadRooms();
-    await loadUsers();
     await loadBookings();
 
     populateRoomSwitcher();
@@ -1150,8 +1145,6 @@ window.onload = async function() {
   }
 
   setInterval(async function() {
-    updateHeaderClock();
-
     if (!(await verifyGateUserStillActive())) return;
 
     try {
@@ -1160,12 +1153,5 @@ window.onload = async function() {
     } catch (_) {}
   }, 10000);
 
-  setInterval(function() {
-    document.getElementById('clock').innerText =
-      new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-  }, 1000);
+  setInterval(updateHeaderClock, 1000);
 };

@@ -87,6 +87,13 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings(room_id, booking_date)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email))`,
 
+		// ── Incremental columns (added in later versions, safe to re-run) ─────
+		// admins.email must exist before the seed insert below, which sets it.
+		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE`,
+		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
+		     ON admins (LOWER(TRIM(email)))
+		     WHERE email IS NOT NULL`,
+
 		// ── Seed: default super admin account ────────────────────────────────
 		// Password: Rawang@3013 — CHANGE THIS IMMEDIATELY after first login.
 		// username = email so the forgot-password flow works for this account.
@@ -94,11 +101,6 @@ func migrate(db *sql.DB) error {
 		 VALUES ('ratuwangchuk@dhi.bt', '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2', 'System Admin', 'super_admin', 'ratuwangchuk@dhi.bt')
 		 ON CONFLICT(username) DO NOTHING`,
 
-		// ── Incremental columns (added in later versions, safe to re-run) ─────
-		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS email TEXT UNIQUE`,
-		`CREATE INDEX IF NOT EXISTS idx_admins_email_lower
-		     ON admins (LOWER(TRIM(email)))
-		     WHERE email IS NOT NULL`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS agenda TEXT NOT NULL DEFAULT ''`,

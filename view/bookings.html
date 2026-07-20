@@ -257,11 +257,6 @@
       select.value = selected;
     }
 
-    function getBookingSortDateTime(booking) {
-      const startValue = booking.startTime || formatTime12(booking.start);
-      return new Date(booking.date + 'T' + toTime24(startValue));
-    }
-
     async function renderBookings() {
       const results = await Promise.all([getRooms(), getBookings()]);
       allRoomsCache = results[0];

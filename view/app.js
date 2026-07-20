@@ -290,6 +290,21 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+// Safe for embedding inside a JS string literal that itself sits inside an
+// HTML attribute, e.g. onclick="fn('${jsAttr(name)}')". escapeHtml() alone is
+// NOT sufficient here: the browser HTML-decodes the attribute value before
+// parsing it as JS, so an HTML-escaped quote turns back into a real quote and
+// can break out of the string literal.
+function jsAttr(value) {
+  const jsEscaped = String(value ?? '')
+    .replaceAll('\\', '\\\\')
+    .replaceAll("'", "\\'")
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r');
+  return escapeHtml(jsEscaped);
+}
+
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 function formatTime12(value) {
@@ -323,6 +338,11 @@ function toTime24(value) {
   if (modifier === 'PM' && hour !== 12) hour += 12;
   if (modifier === 'AM' && hour === 12) hour = 0;
   return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+}
+
+function getBookingSortDateTime(booking) {
+  const startValue = booking.startTime || formatTime12(booking.start);
+  return new Date(booking.date + 'T' + toTime24(startValue));
 }
 
 function formatDateDisplay(value) {
