@@ -191,6 +191,33 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Demotion: requested role is Normal User (or left blank) but an admin account still
+	// exists for this email — remove the admin account so the role actually changes,
+	// instead of silently leaving it in place while reporting success. The linked users
+	// row is left untouched so booking access is kept, matching the "kept only normal
+	// user" intent. super_admin can't be removed this way — the Admins page owns that,
+	// since the Users page never even lists super_admins (see UserModel.List's join filter).
+	if requestedRole == "" || requestedRole == "normal_user" {
+		if existingAdmin, _, _, existsErr := c.Admins.GetByUsername(u.Email); existsErr == nil {
+			if existingAdmin.Role == "super_admin" {
+				writeError(w, http.StatusBadRequest, "super admin access can only be removed from the Admins page")
+				return
+			}
+			sess, ok := c.getSession(r)
+			if !ok || !canAssignRole(sess.Role, existingAdmin.Role) {
+				writeError(w, http.StatusForbidden, "you are not allowed to remove this admin role")
+				return
+			}
+			if err := c.Admins.Delete(existingAdmin.ID); err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to remove admin access")
+				return
+			}
+			c.audit(r, "user_demoted_to_normal", "user", u.Email, id, "role: "+models.RoleLabel(existingAdmin.Role)+" → Normal User")
+			writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": "normal_user"})
+			return
+		}
+	}
+
 	c.audit(r, "user_updated", "user", u.Email, u.ID, "")
 
 	writeJSON(w, http.StatusOK, u)
