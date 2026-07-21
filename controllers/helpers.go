@@ -135,17 +135,6 @@ func (c *Controller) RequireGeneralAdmin(next http.HandlerFunc) http.HandlerFunc
 	}
 }
 
-// BlockSuperAdmin rejects super_admin requests; passes everyone else (including unauthenticated).
-func (c *Controller) BlockSuperAdmin(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if sess, ok := c.getSession(r); ok && sess.Role == "super_admin" {
-			writeError(w, http.StatusForbidden, forbiddenModuleMsg)
-			return
-		}
-		next(w, r)
-	}
-}
-
 // getSession returns session data for the current request; treats DB errors as "no session".
 func (c *Controller) getSession(r *http.Request) (session.SessionData, bool) {
 	cookie, err := r.Cookie(sessionCookieName())

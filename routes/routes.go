@@ -62,11 +62,13 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("DELETE /api/rooms/", c.RequireGeneralAdmin(c.DeleteRoom))
 
 	// ── Bookings ──────────────────────────────────────────────────────────────
-	// Public: view all bookings — same reasoning as Rooms above, needed by
-	// Dashboard and History too. Creating a booking is a write, though, so
-	// that one still excludes an authenticated super_admin.
+	// Public: view and create bookings — same reasoning as Rooms above, needed by
+	// Dashboard and History too. Super admin exclusivity (they never get normal-user
+	// booking access) is enforced in BookingModel.Save against the booking's own
+	// email, not here — gating on the caller's admin session cookie would wrongly
+	// block anyone else sharing a browser with an active super_admin login.
 	mux.HandleFunc("GET /api/bookings",  c.ListBookings)
-	mux.HandleFunc("POST /api/bookings", c.BlockSuperAdmin(c.CreateBooking))
+	mux.HandleFunc("POST /api/bookings", c.CreateBooking)
 
 	// Public: cancel own booking (POST /api/bookings/{id}/cancel) or add
 	// Minutes of Meeting after it ends (POST /api/bookings/{id}/minutes)

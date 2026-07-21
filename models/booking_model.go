@@ -165,6 +165,22 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	}
 	req.User = registeredName // use the canonical name from the database
 
+	// Super admin access is exclusive — normal promotion to that role deletes the
+	// linked users row (see promoteUserToAdmin), but an admin created directly with
+	// this email could still coincidentally share it with an active users row.
+	// Checked against the booking's own email, not the caller's admin session —
+	// an unrelated super_admin login in the same browser must never block someone
+	// else's booking.
+	var isSuperAdmin bool
+	if err := m.DB.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM admins WHERE LOWER(TRIM(email)) = $1 AND role = 'super_admin')
+	`, req.Email).Scan(&isSuperAdmin); err != nil {
+		return Booking{}, err
+	}
+	if isSuperAdmin {
+		return Booking{}, fmt.Errorf("super admin accounts cannot book rooms")
+	}
+
 	// ── Step 8: Confirm the room exists and is active ─────────────────────────
 	var roomName, roomLocation, roomStatus string
 	err = m.DB.QueryRow(`
