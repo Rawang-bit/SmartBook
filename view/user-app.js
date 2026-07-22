@@ -1064,6 +1064,11 @@ async function saveMinutesOfMeeting() {
   if (!state.currentMinutesBookingId || !state.activeUser) return;
 
   const minutes = document.getElementById('minutesText').value.trim();
+  if (!minutes) {
+    showMessageModal('Save Failed', 'Meeting minutes cannot be empty.', 'circle-alert');
+    return;
+  }
+
   const btn = document.getElementById('saveMinutesBtn');
   btn.disabled = true;
   btn.textContent = 'Saving…';

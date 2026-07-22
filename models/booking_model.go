@@ -346,6 +346,11 @@ const MinutesEditWindow = 24 * time.Hour
 
 // SetMinutesOfMeeting saves meeting notes; only the email-proven owner may edit, within MinutesEditWindow after end time.
 func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Booking, error) {
+	minutes = strings.TrimSpace(minutes)
+	if minutes == "" {
+		return Booking{}, fmt.Errorf("meeting minutes cannot be empty")
+	}
+
 	var b Booking
 	var startTimeStr, endTimeStr string
 	err := m.DB.QueryRow(`
