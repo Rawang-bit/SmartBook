@@ -24,12 +24,12 @@ The database schema is created and migrated automatically on server startup. The
 
 ## Key Functionalities
 
-- **Public booking calendar** — passwordless email + OTP access, view/create/edit/cancel bookings, add post-meeting minutes.
-- **Role-based access control** — Normal Users, General Admins, and Super Admins, each with distinct permissions.
-- **Admin panel** — manage rooms, users, bookings, and (for Super Admins) other admin accounts.
-- **Audit trail** — append-only log of all sensitive actions (logins, bookings, approvals, admin changes).
-- **Automated email notifications** — OTPs, booking confirmations/cancellations, approvals, temporary passwords.
-- **Security** — bcrypt password hashing, DB-backed sessions, login lockout after failed attempts, Cloudflare Turnstile CAPTCHA, secure cookies, and standard security headers.
+- **Public booking calendar** - passwordless email + OTP access, view/create/edit/cancel bookings, add post-meeting minutes.
+- **Role-based access control** - Normal Users, General Admins, and Super Admins, each with distinct permissions.
+- **Admin panel** - manage rooms, users, bookings, and (for Super Admins) other admin accounts.
+- **Audit trail** - append-only log of all sensitive actions (logins, bookings, approvals, admin changes).
+- **Automated email notifications** - OTPs, booking confirmations/cancellations, approvals, temporary passwords.
+- **Security** - bcrypt password hashing, DB-backed sessions, login lockout after failed attempts, Cloudflare Turnstile CAPTCHA, secure cookies, and standard security headers.
 
 ## Live Application
 
