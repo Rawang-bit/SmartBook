@@ -6,7 +6,7 @@ SmartBook is a web-based meeting room reservation platform for organisations. It
 
 ## System Architecture
 
-Built with a Go backend (`net/http`) and a PostgreSQL database (`pgx/v5`), serving a static HTML/JavaScript + Tailwind CSS frontend that communicates exclusively through a JSON `/api/*` REST API — there is no server-side template rendering.
+Built with a Go backend (`net/http`) and a PostgreSQL database (`pgx/v5`), serving a static HTML/JavaScript + Tailwind CSS frontend that communicates exclusively through a JSON `/api/*` REST API.
 
 ```
 Browser
