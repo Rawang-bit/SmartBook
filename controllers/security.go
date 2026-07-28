@@ -54,7 +54,8 @@ func setDeviceCookie(w http.ResponseWriter, value string, maxAge int) {
 	setCookie(w, deviceCookieName(), value, maxAge)
 }
 
-// SecureHeaders wraps every response with hardened security headers; must be outermost middleware.
+// SecureHeaders wraps every response with hardened security headers; wired inside HTTPSRedirect
+// in the chain (see main.go), so it still runs on every non-redirected response.
 func SecureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

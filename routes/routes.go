@@ -22,7 +22,6 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 
 	// ── Public access gate (self-registration with OTP) ─────────────────────────
 	// Email check happens once, up front, on the public access page.
-	// Booking itself no longer asks for email verification; only cancellation does.
 	mux.HandleFunc("POST /api/access/check-email",  c.CheckEmail)
 	mux.HandleFunc("POST /api/register/send-otp",   c.SendRegistrationOTP)
 	mux.HandleFunc("POST /api/register/verify-otp", c.VerifyRegistrationOTP)
@@ -37,15 +36,17 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	// ownership and activate the account. The token itself is the credential.
 	mux.HandleFunc("POST /api/users/confirm", c.ConfirmRegistration)
 
-	// Admin: list, create, edit, and delete — general_admin manages Users
-	// end to end; assigning an admin role within these still requires the
-	// matching privilege (see canAssignRole).
+	// Admin: list, create, edit, and delete — open to any authenticated admin
+	// (general_admin or super_admin); assigning an admin role within these
+	// still requires the matching privilege (see canAssignRole).
 	mux.HandleFunc("GET /api/users",     c.RequireAdmin(c.ListUsers))
 	mux.HandleFunc("POST /api/users",    c.RequireAdmin(c.CreateUser))
 	mux.HandleFunc("PUT /api/users/",    c.RequireAdmin(c.UpdateUser))
 	mux.HandleFunc("DELETE /api/users/", c.RequireAdmin(c.DeleteUser))
 
-	// Approve or reject a pending self-registration — POST /api/users/{id}/approve|reject
+	// POST /api/users/{id}/approve|reject|revoke|restore — approve or reject a
+	// pending self-registration, or revoke/restore an already-active user
+	// (see ToggleUserStatus's suffix dispatch).
 	mux.HandleFunc("POST /api/users/", c.RequireAdmin(c.ToggleUserStatus))
 
 	// ── Rooms ─────────────────────────────────────────────────────────────────
@@ -70,8 +71,10 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	mux.HandleFunc("GET /api/bookings",  c.ListBookings)
 	mux.HandleFunc("POST /api/bookings", c.CreateBooking)
 
-	// Public: cancel own booking (POST /api/bookings/{id}/cancel) or add
-	// Minutes of Meeting after it ends (POST /api/bookings/{id}/minutes)
+	// Public: cancel own booking (POST /api/bookings/{id}/cancel), edit it
+	// before it starts (POST /api/bookings/{id}/update), or add Minutes of
+	// Meeting after it ends (POST /api/bookings/{id}/minutes) — ownership is
+	// proven by the booking's own email, not a session (see PublicBookingAction).
 	mux.HandleFunc("POST /api/bookings/", c.PublicBookingAction)
 
 	// General admin only: edit or delete any booking — operational, so

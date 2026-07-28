@@ -95,7 +95,7 @@ func (c *Controller) sendMinutesNotifications(b models.Booking) {
 	})
 }
 
-// UpdateBooking allows an admin to edit any existing booking.
+// UpdateBooking allows a general_admin to edit any existing booking.
 func (c *Controller) UpdateBooking(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/bookings/")
 	if !ok {

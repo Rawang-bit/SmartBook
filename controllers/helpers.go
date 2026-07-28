@@ -181,15 +181,17 @@ func clientIP(r *http.Request) string {
 func (c *Controller) audit(r *http.Request, action, targetType, targetLabel string, targetID int64, details string) {
 	sess, ok := c.getSession(r)
 
+	actorType := "system"
 	actorLabel := "system"
 	var actorID int64
 	if ok {
+		actorType = "admin"
 		actorLabel = sess.Username
 		actorID = sess.AdminID
 	}
 
 	c.Audit.Record(models.AuditEntry{
-		ActorType:   "admin",
+		ActorType:   actorType,
 		ActorID:     actorID,
 		ActorLabel:  actorLabel,
 		Action:      action,

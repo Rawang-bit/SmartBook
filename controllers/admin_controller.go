@@ -43,7 +43,7 @@ func (c *Controller) CreateAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, admin)
 }
 
-// UpdateAdmin changes an admin's name and/or role. Super admin only.
+// UpdateAdmin changes an admin's name, role, and/or email. Super admin only.
 func (c *Controller) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/admins/")
 	if !ok {

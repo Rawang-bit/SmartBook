@@ -315,7 +315,7 @@ func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error 
 	return err
 }
 
-// SetStatus sets an admin to "active" or "revoked"; returns ErrNotFound if missing.
+// SetStatus sets an admin's status ("active", "revoked", or "locked"); returns ErrNotFound if missing.
 func (m *AdminModel) SetStatus(id int64, status string) error {
 	result, err := m.DB.Exec(`UPDATE admins SET status = $1 WHERE id = $2`, status, id)
 	if err != nil {

@@ -139,7 +139,7 @@ func migrate(db *sql.DB) error {
 		// reason recorded when a registration is rejected.
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS rejection_reason TEXT NOT NULL DEFAULT ''`,
-		// Audit trail: append-only log of all admin-initiated actions.
+		// Audit trail: append-only log of admin- and system-initiated actions.
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 		    id           BIGSERIAL PRIMARY KEY,
 		    actor_type   TEXT NOT NULL,

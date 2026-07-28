@@ -237,7 +237,7 @@ type AuditEntry struct {
 	TargetType  string // "user", "admin", "room", "booking", or ""
 	TargetID    int64
 	TargetLabel string
-	Details     string // free-text, e.g. "role: normal_user -> general_admin"
+	Details     string // free-text, e.g. "role: Normal User → General Admin"
 	IPAddress   string
 	UserAgent   string
 }

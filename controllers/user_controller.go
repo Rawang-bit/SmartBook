@@ -135,7 +135,8 @@ func (c *Controller) ConfirmRegistration(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// UpdateUser changes the name or email of a registered user. Admin only.
+// UpdateUser changes the name or email of a registered user, or promotes/demotes their
+// admin role if requested (gated by canAssignRole). Admin only.
 func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/users/")
 	if !ok {

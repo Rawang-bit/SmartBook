@@ -165,6 +165,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	}
 	req.User = registeredName // use the canonical name from the database
 
+	// ── Step 8: Block super admin emails ──────────────────────────────────────
 	// Super admin access is exclusive — normal promotion to that role deletes the
 	// linked users row (see promoteUserToAdmin), but an admin created directly with
 	// this email could still coincidentally share it with an active users row.
@@ -181,7 +182,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 		return Booking{}, fmt.Errorf("super admin accounts cannot book rooms")
 	}
 
-	// ── Step 8: Confirm the room exists and is active ─────────────────────────
+	// ── Step 9: Confirm the room exists and is active ─────────────────────────
 	var roomName, roomLocation, roomStatus string
 	err = m.DB.QueryRow(`
 		SELECT name, location, status FROM rooms WHERE id = $1
@@ -201,7 +202,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 		req.Status = "Booked"
 	}
 
-	// ── Step 9 & 11: Check for time conflicts and persist, holding a per-room/date lock
+	// ── Step 11: Check for time conflicts and persist, holding a per-room/date lock
 	// so two concurrent requests for the same slot can't both pass the conflict check
 	// before either one commits (see withRoomDateLock).
 	// Overlap: new.start < existing.end AND new.end > existing.start
