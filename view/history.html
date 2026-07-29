@@ -505,8 +505,9 @@
       document.getElementById('detailsParticipants').textContent = booking.participants || 'No participants listed.';
 
       const minutesRow = document.getElementById('detailsMinutesRow');
-      if (booking.minutesOfMeeting) {
-        document.getElementById('detailsMinutes').textContent = booking.minutesOfMeeting;
+      if (booking.minutesFileName) {
+        document.getElementById('detailsMinutes').innerHTML =
+          `<a href="/api/bookings/${booking.id}/minutes/file" target="_blank" rel="noopener" class="text-indigo-600 underline">${escapeHtml(booking.minutesFileName)}</a>`;
         minutesRow.classList.remove('hidden');
       } else {
         minutesRow.classList.add('hidden');

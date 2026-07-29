@@ -191,8 +191,9 @@ type Booking struct {
 	Agenda           string `json:"agenda"`
 	Participants     string `json:"participants"`     // comma-separated participant emails
 	Status           string `json:"status"`           // "Booked", "In Progress", "Completed", or "Cancelled"
-	MinutesOfMeeting string `json:"minutesOfMeeting"` // set by booking owner after meeting ends
-	MinutesEditable  bool   `json:"minutesEditable"`  // true if SetMinutesOfMeeting would currently accept a save
+	MinutesOfMeeting string `json:"minutesOfMeeting"` // legacy free-text minutes; unused by new saves
+	MinutesFileName  string `json:"minutesFileName"`  // uploaded PDF/Word filename, set by booking owner after meeting ends
+	MinutesEditable  bool   `json:"minutesEditable"`  // true if SetMinutesOfMeetingFile would currently accept a save
 }
 
 // BookingRequest is the JSON body for creating or updating a booking.
@@ -215,12 +216,6 @@ type BookingRequest struct {
 // CancelBookingRequest is the JSON body when a public user cancels their booking.
 type CancelBookingRequest struct {
 	Email string `json:"email"`
-}
-
-// MinutesOfMeetingRequest is the JSON body when a booking's owner adds or edits Minutes of Meeting.
-type MinutesOfMeetingRequest struct {
-	Email   string `json:"email"`
-	Minutes string `json:"minutes"`
 }
 
 // ErrorResponse is the standard JSON format for all error messages.

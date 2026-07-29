@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -13,11 +14,18 @@ import (
 
 // resendPayload is the JSON body sent to the Resend API.
 type resendPayload struct {
-	From    string   `json:"from"`
-	To      []string `json:"to"`
-	Subject string   `json:"subject"`
-	Text    string   `json:"text"`
-	Html    string   `json:"html,omitempty"`
+	From        string             `json:"from"`
+	To          []string           `json:"to"`
+	Subject     string             `json:"subject"`
+	Text        string             `json:"text"`
+	Html        string             `json:"html,omitempty"`
+	Attachments []resendAttachment `json:"attachments,omitempty"`
+}
+
+// resendAttachment is a single email attachment in Resend's expected shape (base64-encoded content).
+type resendAttachment struct {
+	Filename string `json:"filename"`
+	Content  string `json:"content"`
 }
 
 // ── HTML layout helpers ───────────────────────────────────────────────────────
@@ -143,11 +151,17 @@ func credentialsBox(username, password string) string {
 
 // sendEmail posts to the Resend API with both plain-text and HTML bodies; logs when no API key is set.
 func sendEmail(toEmail, subject, textBody, htmlBody, logTag string) error {
+	return sendEmailWithAttachment(toEmail, subject, textBody, htmlBody, logTag, "", nil)
+}
+
+// sendEmailWithAttachment posts to the Resend API, optionally including a single base64-encoded
+// attachment; logs when no API key is set. Pass an empty attachFilename to send without one.
+func sendEmailWithAttachment(toEmail, subject, textBody, htmlBody, logTag, attachFilename string, attachData []byte) error {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	from := os.Getenv("EMAIL_FROM")
 
 	if apiKey == "" {
-		log.Printf("[%s] No RESEND_API_KEY set. Would have sent to %s:\n%s", logTag, toEmail, textBody)
+		log.Printf("[%s] No RESEND_API_KEY set. Would have sent to %s (attachment: %s):\n%s", logTag, toEmail, attachFilename, textBody)
 		return nil
 	}
 
@@ -155,13 +169,21 @@ func sendEmail(toEmail, subject, textBody, htmlBody, logTag string) error {
 		from = "SmartBook <onboarding@resend.dev>"
 	}
 
-	payload, err := json.Marshal(resendPayload{
+	body := resendPayload{
 		From:    from,
 		To:      []string{toEmail},
 		Subject: subject,
 		Text:    textBody,
 		Html:    htmlBody,
-	})
+	}
+	if attachFilename != "" {
+		body.Attachments = []resendAttachment{{
+			Filename: attachFilename,
+			Content:  base64.StdEncoding.EncodeToString(attachData),
+		}}
+	}
+
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("resend: marshal payload: %w", err)
 	}
@@ -375,34 +397,28 @@ func SendBookingCancellationEmail(toEmail, toName, roomName, date, startTime, en
 	return sendEmail(toEmail, fmt.Sprintf("SmartBook — Booking Cancelled: %s", roomName), textBody, htmlBody, "BOOKING CANCELLATION")
 }
 
-// SendMinutesOfMeetingEmail sends the finalised meeting minutes to the owner and all participants.
-func SendMinutesOfMeetingEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, minutes string) error {
+// SendMinutesOfMeetingEmail sends the finalised meeting minutes document to the owner and all participants.
+func SendMinutesOfMeetingEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, fileName string, fileData []byte) error {
 	greeting, greetingHTML := greetingFor(toName)
 
 	textBody := fmt.Sprintf(
 		"%s\r\n\r\n"+
-			"The minutes of meeting for the session below are now available:\r\n\r\n"+
+			"The minutes of meeting for the session below are now available, attached as %s:\r\n\r\n"+
 			"  Room:    %s\r\n"+
 			"  Purpose: %s\r\n"+
 			"  Date:    %s\r\n"+
 			"  Time:    %s - %s\r\n\r\n"+
-			"Minutes:\r\n%s\r\n\r\n"+
 			"— SmartBook",
-		greeting, roomName, purpose, date, startTime, endTime, minutes,
+		greeting, fileName, roomName, purpose, date, startTime, endTime,
 	)
 
 	htmlBody := wrapEmailHTML(
 		p(greetingHTML) +
-			p("The minutes of meeting for the session below have been recorded:") +
-			detailsTable(bookingDetailRows(roomName, purpose, date, startTime, endTime)) +
-			`<div style="margin:20px 0 0;">` +
-			`<p style="margin:0 0 8px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Minutes of Meeting</p>` +
-			`<div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;padding:16px 20px;">` +
-			`<p style="margin:0;color:#0f172a;font-size:14px;line-height:1.75;white-space:pre-wrap;">` + esc(minutes) + `</p>` +
-			`</div></div>`,
+			p("The minutes of meeting for the session below have been recorded and are attached to this email as <strong>"+esc(fileName)+"</strong>.") +
+			detailsTable(bookingDetailRows(roomName, purpose, date, startTime, endTime)),
 	)
 
-	return sendEmail(toEmail, fmt.Sprintf("SmartBook — Minutes of Meeting: %s", purpose), textBody, htmlBody, "MINUTES OF MEETING")
+	return sendEmailWithAttachment(toEmail, fmt.Sprintf("SmartBook — Minutes of Meeting: %s", purpose), textBody, htmlBody, "MINUTES OF MEETING", fileName, fileData)
 }
 
 // SendOTPEmail delivers a one-time verification code used during self-registration.

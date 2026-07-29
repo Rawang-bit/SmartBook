@@ -31,7 +31,7 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 			b.purpose,
 			b.agenda,
 			b.participants,
-			b.minutes_of_meeting,
+			b.minutes_file_name,
 			b.status
 		FROM bookings b
 		JOIN rooms r ON r.id = b.room_id
@@ -55,7 +55,7 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 		if err := rows.Scan(
 			&b.ID, &b.User, &b.Email, &b.RoomID,
 			&b.RoomName, &b.Location, &b.Date,
-			&b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+			&b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesFileName, &b.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -291,14 +291,14 @@ func (m *BookingModel) GetFullByID(id int64) (Booking, error) {
 	err := m.DB.QueryRow(`
 		SELECT b.id, b.user_name, b.email, b.room_id, r.name, r.location,
 		       TO_CHAR(b.booking_date, 'YYYY-MM-DD'), b.start_time, b.end_time,
-		       b.purpose, b.agenda, b.participants, b.minutes_of_meeting, b.status
+		       b.purpose, b.agenda, b.participants, b.minutes_file_name, b.status
 		FROM bookings b
 		JOIN rooms r ON r.id = b.room_id
 		WHERE b.id = $1
 	`, id).Scan(
 		&b.ID, &b.User, &b.Email, &b.RoomID, &b.RoomName, &b.Location,
 		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants,
-		&b.MinutesOfMeeting, &b.Status,
+		&b.MinutesFileName, &b.Status,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, ErrNotFound
@@ -345,11 +345,11 @@ func (m *BookingModel) PublicCancel(id int64, email string) error {
 // MinutesEditWindow is how long after a meeting ends its owner may add or edit Minutes of Meeting.
 const MinutesEditWindow = 24 * time.Hour
 
-// SetMinutesOfMeeting saves meeting notes; only the email-proven owner may edit, within MinutesEditWindow after end time.
-func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Booking, error) {
-	minutes = strings.TrimSpace(minutes)
-	if minutes == "" {
-		return Booking{}, fmt.Errorf("meeting minutes cannot be empty")
+// SetMinutesOfMeetingFile saves the uploaded minutes document; only the email-proven owner may
+// edit, within MinutesEditWindow after end time.
+func (m *BookingModel) SetMinutesOfMeetingFile(id int64, email, fileName, mime string, data []byte) (Booking, error) {
+	if len(data) == 0 {
+		return Booking{}, fmt.Errorf("a meeting minutes file is required")
 	}
 
 	var b Booking
@@ -383,18 +383,36 @@ func (m *BookingModel) SetMinutesOfMeeting(id int64, email, minutes string) (Boo
 	}
 
 	err = m.DB.QueryRow(`
-		UPDATE bookings SET minutes_of_meeting = $1, updated_at = NOW()
-		WHERE id = $2
-		RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_of_meeting, status
-	`, minutes, id).Scan(
+		UPDATE bookings SET minutes_file_name = $1, minutes_file_mime = $2, minutes_file_data = $3, updated_at = NOW()
+		WHERE id = $4
+		RETURNING id, user_name, email, room_id, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, purpose, agenda, participants, minutes_file_name, status
+	`, fileName, mime, data, id).Scan(
 		&b.ID, &b.User, &b.Email, &b.RoomID,
-		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesOfMeeting, &b.Status,
+		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants, &b.MinutesFileName, &b.Status,
 	)
 	if err != nil {
 		return Booking{}, err
 	}
 	FillBookingDisplayFields(&b)
 	return b, nil
+}
+
+// GetMinutesFile returns the stored minutes document for a booking; ErrNotFound if none was uploaded.
+func (m *BookingModel) GetMinutesFile(id int64) (fileName, mime string, data []byte, err error) {
+	err = m.DB.QueryRow(`
+		SELECT minutes_file_name, minutes_file_mime, minutes_file_data
+		FROM bookings WHERE id = $1
+	`, id).Scan(&fileName, &mime, &data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", nil, ErrNotFound
+	}
+	if err != nil {
+		return "", "", nil, err
+	}
+	if fileName == "" || len(data) == 0 {
+		return "", "", nil, ErrNotFound
+	}
+	return fileName, mime, data, nil
 }
 
 // PublicUpdate lets a booking owner edit editable fields before the meeting starts.

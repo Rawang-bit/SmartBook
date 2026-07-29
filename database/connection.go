@@ -157,6 +157,12 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id)`,
+		// Minutes of Meeting is now an uploaded PDF/Word file stored directly in the
+		// database (no persistent disk/object storage in this deployment) instead of
+		// free text. minutes_of_meeting is left in place, unused, for historical data.
+		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_file_name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_file_mime TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS minutes_file_data BYTEA`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

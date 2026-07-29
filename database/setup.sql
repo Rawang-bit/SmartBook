@@ -122,6 +122,15 @@ CREATE TABLE IF NOT EXISTS bookings (
 
 CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings (room_id, booking_date);
 
+-- Minutes of meeting is now a PDF/Word file stored directly in the database
+-- (no persistent disk/object storage in this deployment) rather than free
+-- text. The old minutes_of_meeting column is left in place, unused, for
+-- any historical data — new saves go through these columns instead.
+ALTER TABLE bookings
+    ADD COLUMN IF NOT EXISTS minutes_file_name TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS minutes_file_mime TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS minutes_file_data BYTEA;
+
 
 -- ── Sessions table ───────────────────────────────────────────────────────────
 -- Admin sessions are stored in the database (not server memory) so that

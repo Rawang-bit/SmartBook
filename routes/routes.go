@@ -77,6 +77,10 @@ func RegisterRoutes(mux *http.ServeMux, c *controllers.Controller) {
 	// proven by the booking's own email, not a session (see PublicBookingAction).
 	mux.HandleFunc("POST /api/bookings/", c.PublicBookingAction)
 
+	// Public: download a booking's uploaded Minutes of Meeting file (PDF/Word), if one exists.
+	// See DownloadMinutesFile for why this is left unauthenticated.
+	mux.HandleFunc("GET /api/bookings/", c.DownloadMinutesFile)
+
 	// General admin only: edit or delete any booking — operational, so
 	// super_admin is deliberately excluded (see RequireGeneralAdmin).
 	mux.HandleFunc("PUT /api/bookings/",    c.RequireGeneralAdmin(c.UpdateBooking))

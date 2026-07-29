@@ -3,9 +3,41 @@ package utils
 
 import (
 	"net/mail"
+	"path/filepath"
 	"strings"
 	"time"
 )
+
+// MaxMinutesFileSize is the largest Minutes of Meeting upload accepted (5MB).
+const MaxMinutesFileSize = 5 << 20
+
+// allowedMinutesFileTypes maps accepted lowercase extensions to their canonical content-type,
+// used to detect the file when a browser doesn't set (or misreports) Content-Type.
+var allowedMinutesFileTypes = map[string]string{
+	".pdf":  "application/pdf",
+	".doc":  "application/msword",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+// allowedMinutesContentTypes is the set of declared content-types accepted alongside a matching extension.
+// application/octet-stream is included because some browsers send it for .doc/.docx uploads.
+var allowedMinutesContentTypes = map[string]bool{
+	"application/pdf":    true,
+	"application/msword": true,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	"application/octet-stream": true,
+}
+
+// IsAllowedMinutesFile reports whether filename/contentType look like a PDF or Word document.
+// The extension is the primary gate; the declared content-type must also be plausible for it.
+func IsAllowedMinutesFile(filename, contentType string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if _, ok := allowedMinutesFileTypes[ext]; !ok {
+		return false
+	}
+	contentType = strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
+	return allowedMinutesContentTypes[contentType]
+}
 
 // IsValidEmail returns true if the address is a properly formatted email (RFC 5322).
 func IsValidEmail(email string) bool {

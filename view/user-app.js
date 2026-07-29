@@ -50,10 +50,14 @@ function escapeHtml(value) {
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
-  });
+  // FormData (file uploads) must not get a manual Content-Type — the browser
+  // sets it itself, including the multipart boundary.
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(options.headers || {}) }
+    : { 'Content-Type': 'application/json', ...(options.headers || {}) };
+
+  const res = await fetch(path, { headers, ...options });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -1013,7 +1017,7 @@ async function openMinutesOfMeeting() {
     .filter(b => b.minutesEditable)
     // Only meetings still needing minutes — once added, this list is no
     // longer how you'd revisit them.
-    .filter(b => !b.minutesOfMeeting)
+    .filter(b => !b.minutesFileName)
     .map(b => ({
       id: b.id,
       purpose: b.purpose,
@@ -1055,17 +1059,31 @@ function openMinutesEditor(id) {
   state.currentMinutesBookingId = id;
   document.getElementById('minutesEditTitle').innerText = booking.purpose;
   document.getElementById('minutesEditMeta').innerText = `${booking.room} · ${booking.startTime} - ${booking.endTime}`;
-  document.getElementById('minutesText').value = '';
+  document.getElementById('minutesFile').value = '';
 
   showStep('minutesEdit');
 }
 
+const ALLOWED_MINUTES_FILE_EXTENSIONS = ['.pdf', '.doc', '.docx'];
+const MAX_MINUTES_FILE_SIZE = 5 * 1024 * 1024; // 5MB, matches the server's utils.MaxMinutesFileSize
+
 async function saveMinutesOfMeeting() {
   if (!state.currentMinutesBookingId || !state.activeUser) return;
 
-  const minutes = document.getElementById('minutesText').value.trim();
-  if (!minutes) {
-    showMessageModal('Save Failed', 'Meeting minutes cannot be empty.', 'circle-alert');
+  const fileInput = document.getElementById('minutesFile');
+  const file = fileInput.files[0];
+  if (!file) {
+    showMessageModal('Save Failed', 'Please select a PDF or Word file.', 'circle-alert');
+    return;
+  }
+
+  const lowerName = file.name.toLowerCase();
+  if (!ALLOWED_MINUTES_FILE_EXTENSIONS.some(ext => lowerName.endsWith(ext))) {
+    showMessageModal('Save Failed', 'Only PDF or Word documents (.pdf, .doc, .docx) are allowed.', 'circle-alert');
+    return;
+  }
+  if (file.size > MAX_MINUTES_FILE_SIZE) {
+    showMessageModal('Save Failed', 'File is too large. Maximum size is 5MB.', 'circle-alert');
     return;
   }
 
@@ -1074,9 +1092,13 @@ async function saveMinutesOfMeeting() {
   btn.textContent = 'Saving…';
 
   try {
+    const formData = new FormData();
+    formData.append('email', state.activeUser.email);
+    formData.append('file', file);
+
     await api(`/api/bookings/${state.currentMinutesBookingId}/minutes`, {
       method: 'POST',
-      body: JSON.stringify({ email: state.activeUser.email, minutes })
+      body: formData
     });
 
     document.getElementById('successTitle').innerText = 'Saved';

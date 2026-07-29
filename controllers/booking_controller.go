@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -88,10 +90,10 @@ func (c *Controller) sendCancellationNotifications(b models.Booking) {
 	})
 }
 
-// sendMinutesNotifications emails the owner and all participants the finalised meeting minutes.
-func (c *Controller) sendMinutesNotifications(b models.Booking) {
+// sendMinutesNotifications emails the owner and all participants the finalised meeting minutes document.
+func (c *Controller) sendMinutesNotifications(b models.Booking, fileName string, fileData []byte) {
 	notifyRecipients(b, "MINUTES OF MEETING", func(email, name string) error {
-		return utils.SendMinutesOfMeetingEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.MinutesOfMeeting)
+		return utils.SendMinutesOfMeetingEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, fileName, fileData)
 	})
 }
 
@@ -278,25 +280,51 @@ func (c *Controller) PublicCancelBooking(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
-// UpdateMinutesOfMeeting saves meeting notes for a completed booking; email proves ownership, subject to the edit window.
+// UpdateMinutesOfMeeting saves an uploaded minutes document (PDF/Word) for a completed booking;
+// email proves ownership, subject to the edit window.
 func (c *Controller) UpdateMinutesOfMeeting(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/bookings/")
 	if !ok {
 		return
 	}
 
-	var req models.MinutesOfMeetingRequest
-	if !decodeJSON(w, r, &req) {
+	// A little headroom above the file size cap for the rest of the multipart form (email field, boundaries).
+	r.Body = http.MaxBytesReader(w, r.Body, utils.MaxMinutesFileSize+64<<10)
+	if err := r.ParseMultipartForm(utils.MaxMinutesFileSize); err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "file is too large (max 5MB) or the request is malformed")
 		return
 	}
 
-	email := utils.NormalizeEmail(req.Email)
+	email := utils.NormalizeEmail(r.FormValue("email"))
 	if !utils.IsValidEmail(email) {
 		writeError(w, http.StatusBadRequest, "valid email address is required")
 		return
 	}
 
-	b, err := c.Bookings.SetMinutesOfMeeting(id, email, req.Minutes)
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "a meeting minutes file is required")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	if !utils.IsAllowedMinutesFile(header.Filename, contentType) {
+		writeError(w, http.StatusBadRequest, "only PDF or Word documents (.pdf, .doc, .docx) are allowed")
+		return
+	}
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "could not read the uploaded file")
+		return
+	}
+	if len(data) == 0 {
+		writeError(w, http.StatusBadRequest, "the uploaded file is empty")
+		return
+	}
+
+	b, err := c.Bookings.SetMinutesOfMeetingFile(id, email, header.Filename, contentType, data)
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "booking not found")
 		return
@@ -314,8 +342,41 @@ func (c *Controller) UpdateMinutesOfMeeting(w http.ResponseWriter, r *http.Reque
 
 	// Fetch full booking (with room name) for the minutes notification email.
 	if full, fetchErr := c.Bookings.GetFullByID(b.ID); fetchErr == nil {
-		go c.sendMinutesNotifications(full)
+		go c.sendMinutesNotifications(full, header.Filename, data)
 	}
 
 	writeJSON(w, http.StatusOK, b)
+}
+
+// DownloadMinutesFile serves a booking's uploaded minutes document, if one has been added.
+// Unauthenticated by design: GET /api/bookings already exposes the same booking's purpose,
+// agenda, and participants to anyone, so gating just the file would not reduce exposure.
+func (c *Controller) DownloadMinutesFile(w http.ResponseWriter, r *http.Request) {
+	path := strings.Trim(r.URL.Path, "/")
+	if !strings.HasSuffix(path, "/minutes/file") {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	id, ok := idFromPath(w, r, "/api/bookings/")
+	if !ok {
+		return
+	}
+
+	fileName, mime, data, err := c.Bookings.GetMinutesFile(id)
+	if errors.Is(err, models.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "no meeting minutes file for this booking")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if mime == "" {
+		mime = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", fileName))
+	w.Write(data)
 }
