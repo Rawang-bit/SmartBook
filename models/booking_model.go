@@ -35,10 +35,11 @@ func (m *BookingModel) List(roomFilter string) ([]Booking, error) {
 			b.status
 		FROM bookings b
 		JOIN rooms r ON r.id = b.room_id
+		WHERE b.deleted_at IS NULL
 	`
 	args := []any{}
 	if roomFilter != "" {
-		query += ` WHERE r.name = $1 OR b.room_id::text = $1 `
+		query += ` AND (r.name = $1 OR b.room_id::text = $1) `
 		args = append(args, roomFilter)
 	}
 	query += ` ORDER BY b.booking_date ASC, b.start_time ASC, b.id ASC `
@@ -102,7 +103,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 
 	// ── Step 2: Look up room ID if only a room name was given ─────────────────
 	if req.RoomID == 0 && req.Room != "" {
-		err := m.DB.QueryRow(`SELECT id FROM rooms WHERE name = $1`, req.Room).Scan(&req.RoomID)
+		err := m.DB.QueryRow(`SELECT id FROM rooms WHERE name = $1 AND deleted_at IS NULL`, req.Room).Scan(&req.RoomID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return Booking{}, fmt.Errorf("could not look up room")
 		}
@@ -152,7 +153,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	// the frontend gate and calls the API directly.
 	var registeredName, userStatus string
 	err = m.DB.QueryRow(`
-		SELECT name, status FROM users WHERE LOWER(TRIM(email)) = $1
+		SELECT name, status FROM users WHERE LOWER(TRIM(email)) = $1 AND deleted_at IS NULL
 	`, req.Email).Scan(&registeredName, &userStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, fmt.Errorf("this email is not registered — ask admin to add the user first")
@@ -174,7 +175,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	// else's booking.
 	var isSuperAdmin bool
 	if err := m.DB.QueryRow(`
-		SELECT EXISTS(SELECT 1 FROM admins WHERE LOWER(TRIM(email)) = $1 AND role = 'super_admin')
+		SELECT EXISTS(SELECT 1 FROM admins WHERE LOWER(TRIM(email)) = $1 AND role = 'super_admin' AND deleted_at IS NULL)
 	`, req.Email).Scan(&isSuperAdmin); err != nil {
 		return Booking{}, err
 	}
@@ -185,7 +186,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 	// ── Step 9: Confirm the room exists and is active ─────────────────────────
 	var roomName, roomLocation, roomStatus string
 	err = m.DB.QueryRow(`
-		SELECT name, location, status FROM rooms WHERE id = $1
+		SELECT name, location, status FROM rooms WHERE id = $1 AND deleted_at IS NULL
 	`, req.RoomID).Scan(&roomName, &roomLocation, &roomStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, fmt.Errorf("room not found")
@@ -216,6 +217,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 				  AND booking_date = $2
 				  AND status      <> 'Cancelled'
 				  AND id          <> $5
+				  AND deleted_at IS NULL
 				  AND $3 < end_time
 				  AND $4 > start_time
 			)
@@ -277,7 +279,7 @@ func (m *BookingModel) Save(id int64, req BookingRequest) (Booking, error) {
 func (m *BookingModel) GetByID(id int64) (Booking, error) {
 	var b Booking
 	err := m.DB.QueryRow(`
-		SELECT id, user_name, email, purpose, status FROM bookings WHERE id = $1
+		SELECT id, user_name, email, purpose, status FROM bookings WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&b.ID, &b.User, &b.Email, &b.Purpose, &b.Status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, ErrNotFound
@@ -294,7 +296,7 @@ func (m *BookingModel) GetFullByID(id int64) (Booking, error) {
 		       b.purpose, b.agenda, b.participants, b.minutes_file_name, b.status
 		FROM bookings b
 		JOIN rooms r ON r.id = b.room_id
-		WHERE b.id = $1
+		WHERE b.id = $1 AND b.deleted_at IS NULL
 	`, id).Scan(
 		&b.ID, &b.User, &b.Email, &b.RoomID, &b.RoomName, &b.Location,
 		&b.Date, &b.Start, &b.End, &b.Purpose, &b.Agenda, &b.Participants,
@@ -313,7 +315,7 @@ func (m *BookingModel) GetFullByID(id int64) (Booking, error) {
 // Cancel marks a booking as Cancelled; returns ErrNotFound if missing.
 func (m *BookingModel) Cancel(id int64) error {
 	result, err := m.DB.Exec(`
-		UPDATE bookings SET status = 'Cancelled', updated_at = NOW() WHERE id = $1
+		UPDATE bookings SET status = 'Cancelled', updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL
 	`, id)
 	if err != nil {
 		return err
@@ -330,7 +332,7 @@ func (m *BookingModel) PublicCancel(id int64, email string) error {
 	result, err := m.DB.Exec(`
 		UPDATE bookings
 		SET status = 'Cancelled', updated_at = NOW()
-		WHERE id = $1 AND LOWER(TRIM(email)) = $2
+		WHERE id = $1 AND LOWER(TRIM(email)) = $2 AND deleted_at IS NULL
 	`, id, email)
 	if err != nil {
 		return err
@@ -356,7 +358,7 @@ func (m *BookingModel) SetMinutesOfMeetingFile(id int64, email, fileName, mime s
 	var startTimeStr, endTimeStr string
 	err := m.DB.QueryRow(`
 		SELECT email, status, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time
-		FROM bookings WHERE id = $1
+		FROM bookings WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&b.Email, &b.Status, &b.Date, &startTimeStr, &endTimeStr)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, ErrNotFound
@@ -401,7 +403,7 @@ func (m *BookingModel) SetMinutesOfMeetingFile(id int64, email, fileName, mime s
 func (m *BookingModel) GetMinutesFile(id int64) (fileName, mime string, data []byte, err error) {
 	err = m.DB.QueryRow(`
 		SELECT minutes_file_name, minutes_file_mime, minutes_file_data
-		FROM bookings WHERE id = $1
+		FROM bookings WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&fileName, &mime, &data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", nil, ErrNotFound
@@ -428,7 +430,7 @@ func (m *BookingModel) PublicUpdate(id int64, email, purpose, agenda, participan
 	var startRaw string
 	err := m.DB.QueryRow(`
 		SELECT email, status, TO_CHAR(booking_date,'YYYY-MM-DD'), start_time, end_time, room_id
-		FROM bookings WHERE id = $1
+		FROM bookings WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&b.Email, &b.Status, &b.Date, &startRaw, &b.End, &b.RoomID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Booking{}, ErrNotFound
@@ -466,6 +468,7 @@ func (m *BookingModel) PublicUpdate(id int64, email, purpose, agenda, participan
 				  AND booking_date = $2
 				  AND status      <> 'Cancelled'
 				  AND id          <> $5
+				  AND deleted_at IS NULL
 				  AND $3 < end_time
 				  AND $4 > start_time
 			)
@@ -493,9 +496,9 @@ func (m *BookingModel) PublicUpdate(id int64, email, purpose, agenda, participan
 	return b, nil
 }
 
-// Delete permanently removes a booking; returns ErrNotFound if missing.
+// Delete soft-deletes a booking (marks deleted_at); returns ErrNotFound if missing.
 func (m *BookingModel) Delete(id int64) error {
-	result, err := m.DB.Exec(`DELETE FROM bookings WHERE id = $1`, id)
+	result, err := m.DB.Exec(`UPDATE bookings SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return err
 	}
@@ -509,10 +512,12 @@ func (m *BookingModel) Delete(id int64) error {
 // BookingRetentionDays is how long a booking record is kept before it is purged.
 const BookingRetentionDays = 365
 
-// PurgeOldBookings deletes bookings older than BookingRetentionDays; returns the row count.
+// PurgeOldBookings soft-deletes bookings older than BookingRetentionDays; returns the row count.
+// Rows are never physically removed (soft-delete policy applies here too), so the table
+// grows without bound over time rather than being pruned — an accepted tradeoff.
 func (m *BookingModel) PurgeOldBookings() (int64, error) {
 	result, err := m.DB.Exec(`
-		DELETE FROM bookings WHERE booking_date < CURRENT_DATE - $1::int
+		UPDATE bookings SET deleted_at = NOW() WHERE booking_date < CURRENT_DATE - $1::int AND deleted_at IS NULL
 	`, BookingRetentionDays)
 	if err != nil {
 		return 0, err

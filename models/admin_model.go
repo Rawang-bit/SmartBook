@@ -38,11 +38,16 @@ func (m *AdminModel) List() ([]AdminDetail, error) {
 
 // ListLocked returns all admin accounts that are currently locked out. Accessible to both admin roles.
 func (m *AdminModel) ListLocked() ([]AdminDetail, error) {
-	return m.listWhere("WHERE status = 'locked'", "username ASC")
+	return m.listWhere("status = 'locked'", "username ASC")
 }
 
-// listWhere runs the shared admin-list query/scan with an optional WHERE clause and ORDER BY.
-func (m *AdminModel) listWhere(whereClause, orderBy string) ([]AdminDetail, error) {
+// listWhere runs the shared admin-list query/scan with an optional extra WHERE condition and ORDER BY.
+// deleted_at IS NULL is always applied; extraCondition (if non-empty) is ANDed in.
+func (m *AdminModel) listWhere(extraCondition, orderBy string) ([]AdminDetail, error) {
+	whereClause := "WHERE deleted_at IS NULL"
+	if extraCondition != "" {
+		whereClause += " AND (" + extraCondition + ")"
+	}
 	rows, err := m.DB.Query(fmt.Sprintf(`
 		SELECT id, username, name, role, COALESCE(email, ''), status, TO_CHAR(created_at, 'YYYY-MM-DD')
 		FROM admins
@@ -72,7 +77,7 @@ func (m *AdminModel) GetByUsername(username string) (Admin, string, string, erro
 	var status string
 	err := m.DB.QueryRow(`
 		SELECT id, username, name, role, status, password, must_reset_password
-		FROM admins WHERE username = $1
+		FROM admins WHERE username = $1 AND deleted_at IS NULL
 	`, username).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &status, &hash, &admin.MustResetPassword)
 	if err == sql.ErrNoRows {
 		return Admin{}, "", "", ErrNotFound
@@ -85,7 +90,7 @@ func (m *AdminModel) GetByID(id int64) (Admin, string, error) {
 	var admin Admin
 	var email sql.NullString
 	err := m.DB.QueryRow(`
-		SELECT id, username, name, role, email FROM admins WHERE id = $1
+		SELECT id, username, name, role, email FROM admins WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&admin.ID, &admin.Username, &admin.Name, &admin.Role, &email)
 	if err == sql.ErrNoRows {
 		return Admin{}, "", ErrNotFound
@@ -107,6 +112,7 @@ func (m *AdminModel) GetByUsernameAndEmail(username, email string) (int64, strin
 		  AND email IS NOT NULL
 		  AND LOWER(TRIM(email))       = $2
 		  AND status                   = 'active'
+		  AND deleted_at IS NULL
 	`, username, email).Scan(&id, &name, &storedEmail)
 
 	if err == sql.ErrNoRows {
@@ -317,7 +323,7 @@ func (m *AdminModel) ChangeOwnPassword(id int64, currentPw, newPw string) error 
 
 // SetStatus sets an admin's status ("active", "revoked", or "locked"); returns ErrNotFound if missing.
 func (m *AdminModel) SetStatus(id int64, status string) error {
-	result, err := m.DB.Exec(`UPDATE admins SET status = $1 WHERE id = $2`, status, id)
+	result, err := m.DB.Exec(`UPDATE admins SET status = $1 WHERE id = $2 AND deleted_at IS NULL`, status, id)
 	if err != nil {
 		return err
 	}
@@ -328,9 +334,11 @@ func (m *AdminModel) SetStatus(id int64, status string) error {
 	return nil
 }
 
-// Delete permanently removes an admin; returns ErrNotFound if missing.
+// Delete soft-deletes an admin (marks deleted_at); returns ErrNotFound if missing.
+// Callers must also invalidate any live session for this admin (see Sessions.DeleteByAdminID) —
+// that used to happen automatically via ON DELETE CASCADE on a real DELETE, which no longer fires.
 func (m *AdminModel) Delete(id int64) error {
-	result, err := m.DB.Exec(`DELETE FROM admins WHERE id = $1`, id)
+	result, err := m.DB.Exec(`UPDATE admins SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return err
 	}

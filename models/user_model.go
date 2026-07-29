@@ -35,10 +35,11 @@ func (m *UserModel) List() ([]User, error) {
 		SELECT u.id, u.name, u.email, u.phone, u.status, u.intended_role, u.confirm_token IS NOT NULL,
 		       u.rejection_reason, TO_CHAR(u.created_at, 'YYYY-MM-DD HH24:MI'), COALESCE(a.role, '')
 		FROM users u
-		LEFT JOIN admins a ON LOWER(TRIM(a.username)) = LOWER(TRIM(u.email))
-		WHERE NOT EXISTS (
+		LEFT JOIN admins a ON LOWER(TRIM(a.username)) = LOWER(TRIM(u.email)) AND a.deleted_at IS NULL
+		WHERE u.deleted_at IS NULL
+		  AND NOT EXISTS (
 			SELECT 1 FROM admins a2
-			WHERE LOWER(TRIM(a2.username)) = LOWER(TRIM(u.email)) AND a2.role = 'super_admin'
+			WHERE LOWER(TRIM(a2.username)) = LOWER(TRIM(u.email)) AND a2.role = 'super_admin' AND a2.deleted_at IS NULL
 		)
 		ORDER BY u.name ASC
 	`)
@@ -64,7 +65,7 @@ func (m *UserModel) GetByID(id int64) (User, error) {
 	err := m.DB.QueryRow(`
 		SELECT id, name, email, phone, status, intended_role, confirm_token IS NOT NULL,
 		       rejection_reason, TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
-		FROM users WHERE id = $1
+		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation, &u.RejectionReason, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
@@ -77,7 +78,7 @@ func (m *UserModel) GetByEmail(email string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
 		SELECT id, name, email, status, intended_role, confirm_token IS NOT NULL
-		FROM users WHERE LOWER(TRIM(email)) = $1
+		FROM users WHERE LOWER(TRIM(email)) = $1 AND deleted_at IS NULL
 	`, email).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
 		return User{}, ErrNotFound
@@ -166,7 +167,7 @@ func (m *UserModel) Register(req UserRequest) (User, error) {
 func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
-		UPDATE users SET status = $1 WHERE id = $2
+		UPDATE users SET status = $1 WHERE id = $2 AND deleted_at IS NULL
 		RETURNING id, name, email, status, intended_role, confirm_token IS NOT NULL
 	`, status, id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
@@ -179,7 +180,7 @@ func (m *UserModel) SetStatus(id int64, status string) (User, error) {
 func (m *UserModel) Reject(id int64, reason string) (User, error) {
 	var u User
 	err := m.DB.QueryRow(`
-		UPDATE users SET status = 'rejected', rejection_reason = $1 WHERE id = $2
+		UPDATE users SET status = 'rejected', rejection_reason = $1 WHERE id = $2 AND deleted_at IS NULL
 		RETURNING id, name, email, status, intended_role, confirm_token IS NOT NULL
 	`, strings.TrimSpace(reason), id).Scan(&u.ID, &u.Name, &u.Email, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
@@ -196,7 +197,7 @@ func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 
 	var u User
 	err := m.DB.QueryRow(`
-		UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4
+		UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4 AND deleted_at IS NULL
 		RETURNING id, name, email, phone, status, intended_role, confirm_token IS NOT NULL
 	`, req.Name, req.Email, req.Phone, id).Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.Status, &u.IntendedRole, &u.AwaitingConfirmation)
 	if err == sql.ErrNoRows {
@@ -211,9 +212,9 @@ func (m *UserModel) Update(id int64, req UserRequest) (User, error) {
 	return u, nil
 }
 
-// Delete removes a user; returns ErrNotFound if missing.
+// Delete soft-deletes a user (marks deleted_at); returns ErrNotFound if missing.
 func (m *UserModel) Delete(id int64) error {
-	result, err := m.DB.Exec(`DELETE FROM users WHERE id = $1`, id)
+	result, err := m.DB.Exec(`UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return err
 	}
@@ -224,10 +225,10 @@ func (m *UserModel) Delete(id int64) error {
 	return nil
 }
 
-// RemoveNormalUserAccess deletes the users row for email (Super Admin is exclusive — no booking row allowed).
+// RemoveNormalUserAccess soft-deletes the users row for email (Super Admin is exclusive — no booking row allowed).
 func (m *UserModel) RemoveNormalUserAccess(email string) error {
 	email = utils.NormalizeEmail(email)
-	_, err := m.DB.Exec(`DELETE FROM users WHERE LOWER(TRIM(email)) = $1`, email)
+	_, err := m.DB.Exec(`UPDATE users SET deleted_at = NOW() WHERE LOWER(TRIM(email)) = $1 AND deleted_at IS NULL`, email)
 	return err
 }
 

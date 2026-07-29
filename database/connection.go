@@ -94,12 +94,31 @@ func migrate(db *sql.DB) error {
 		     ON admins (LOWER(TRIM(email)))
 		     WHERE email IS NOT NULL`,
 
+		// Soft delete: rooms/admins/users/bookings are marked deleted_at instead of being
+		// physically removed. Identifying fields (room name, admin username/email, user
+		// email) become reusable once a row is deleted — replace the plain UNIQUE
+		// constraints with unique indexes scoped to non-deleted rows only. This must run
+		// before the seed insert below, whose ON CONFLICT(username) target requires the
+		// partial unique index on admins.username to already exist.
+		`ALTER TABLE rooms    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+		`ALTER TABLE admins   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+		`ALTER TABLE users    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+		`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+		`ALTER TABLE rooms  DROP CONSTRAINT IF EXISTS rooms_name_key`,
+		`ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_username_key`,
+		`ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_email_key`,
+		`ALTER TABLE users  DROP CONSTRAINT IF EXISTS users_email_key`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_name_active      ON rooms  (name)     WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_username_active ON admins (username) WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_email_active    ON admins (email)    WHERE deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active     ON users  (email)    WHERE deleted_at IS NULL`,
+
 		// ── Seed: default super admin account ────────────────────────────────
 		// Password: Rawang@3013 — CHANGE THIS IMMEDIATELY after first login.
 		// username = email so the forgot-password flow works for this account.
 		`INSERT INTO admins(username, password, name, role, email)
 		 VALUES ('ratuwangchuk@dhi.bt', '$2a$10$.ZliKLUQLYpvfPVmE1lVhe3AZePpopcWdxn4WaLh765vSiPsDLzO2', 'System Admin', 'super_admin', 'ratuwangchuk@dhi.bt')
-		 ON CONFLICT(username) DO NOTHING`,
+		 ON CONFLICT(username) WHERE deleted_at IS NULL DO NOTHING`,
 
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
 		`ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE`,

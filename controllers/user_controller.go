@@ -213,6 +213,9 @@ func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, "failed to remove admin access")
 				return
 			}
+			// Cut off access immediately — deleting no longer physically removes the row
+			// (soft delete), so the sessions table's ON DELETE CASCADE no longer fires.
+			c.Sessions.DeleteByAdminID(existingAdmin.ID)
 			c.audit(r, "user_demoted_to_normal", "user", u.Email, id, "role: "+models.RoleLabel(existingAdmin.Role)+" → Normal User")
 			writeJSON(w, http.StatusOK, map[string]string{"status": "active", "role": "normal_user"})
 			return

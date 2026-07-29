@@ -9,9 +9,6 @@ var (
 	// ErrDuplicate is returned when a unique constraint is violated.
 	ErrDuplicate = errors.New("already exists")
 
-	// ErrForeignKey is returned when a delete is blocked by a dependent record.
-	ErrForeignKey = errors.New("has associated records")
-
 	// ErrOwnerMismatch is returned when a public booking action (cancel, update, minutes) is attempted by a non-owner.
 	ErrOwnerMismatch = errors.New("owner mismatch")
 

@@ -293,6 +293,10 @@ func (c *Controller) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cut off access immediately — deleting no longer physically removes the row
+	// (soft delete), so the sessions table's ON DELETE CASCADE no longer fires.
+	c.Sessions.DeleteByAdminID(id)
+
 	// Remove any linked Normal User row so it doesn't linger as an orphaned grant
 	// after the admin account is gone (see syncNormalUserAccess). No-op for super_admin.
 	if err := c.Users.RemoveNormalUserAccess(target.Username); err != nil {

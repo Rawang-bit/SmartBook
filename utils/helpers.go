@@ -149,7 +149,3 @@ func IsUniqueViolation(err error) bool {
 	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "unique")
 }
 
-// IsForeignKeyViolation returns true when a database error is a foreign-key constraint failure.
-func IsForeignKeyViolation(err error) bool {
-	return strings.Contains(err.Error(), "foreign key")
-}

@@ -316,7 +316,7 @@
             <td class="border-b border-slate-100 px-4 py-3 align-middle text-right">
               <div class="flex flex-wrap items-center justify-end gap-1">
                 ${canCancel ? iconButton('x', `cancelBooking(${booking.id})`, 'Cancel booking', 'red') : ''}
-                ${iconButton('trash', `hardDelete(${booking.id})`, 'Remove booking', 'slate')}
+                ${iconButton('trash', `removeBooking(${booking.id})`, 'Remove booking', 'slate')}
               </div>
             </td>
           </tr>
@@ -375,7 +375,7 @@
       }, { title: 'Cancel This Booking?', confirmLabel: 'Cancel Booking' });
     }
 
-    function hardDelete(id) {
+    function removeBooking(id) {
       confirmAction('This booking will be removed. This cannot be undone.', async function () {
         try {
           await deleteBookingApi(id);

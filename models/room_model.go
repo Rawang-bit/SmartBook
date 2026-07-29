@@ -16,7 +16,7 @@ type RoomModel struct {
 // List returns all rooms ordered by ID.
 func (m *RoomModel) List() ([]Room, error) {
 	rows, err := m.DB.Query(`
-		SELECT id, name, capacity, location, status FROM rooms ORDER BY id ASC
+		SELECT id, name, capacity, location, status FROM rooms WHERE deleted_at IS NULL ORDER BY id ASC
 	`)
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (m *RoomModel) List() ([]Room, error) {
 func (m *RoomModel) GetByID(id int64) (Room, error) {
 	var room Room
 	err := m.DB.QueryRow(`
-		SELECT id, name, capacity, location, status FROM rooms WHERE id = $1
+		SELECT id, name, capacity, location, status FROM rooms WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&room.ID, &room.Name, &room.Capacity, &room.Location, &room.Status)
 	if err == sql.ErrNoRows {
 		return Room{}, ErrNotFound
@@ -90,13 +90,12 @@ func (m *RoomModel) Save(id int64, req RoomRequest) (Room, error) {
 	return room, nil
 }
 
-// Delete permanently removes a room; returns ErrForeignKey if it has bookings, ErrNotFound if ID unknown.
+// Delete soft-deletes a room (marks deleted_at); returns ErrNotFound if ID unknown.
+// The room row is never physically removed, so this never conflicts with bookings
+// still referencing it via room_id — those keep displaying the room's name/location.
 func (m *RoomModel) Delete(id int64) error {
-	result, err := m.DB.Exec(`DELETE FROM rooms WHERE id = $1`, id)
+	result, err := m.DB.Exec(`UPDATE rooms SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
-		if utils.IsForeignKeyViolation(err) {
-			return ErrForeignKey
-		}
 		return err
 	}
 	n, _ := result.RowsAffected()

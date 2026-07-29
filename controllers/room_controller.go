@@ -71,7 +71,7 @@ func (c *Controller) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, room)
 }
 
-// DeleteRoom permanently removes a room (general_admin only); returns ErrForeignKey if it has bookings.
+// DeleteRoom soft-deletes a room (general_admin only); existing bookings keep showing its name.
 func (c *Controller) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	id, ok := idFromPath(w, r, "/api/rooms/")
 	if !ok {
@@ -84,10 +84,6 @@ func (c *Controller) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := c.Rooms.Delete(id)
-	if errors.Is(err, models.ErrForeignKey) {
-		writeError(w, http.StatusBadRequest, "cannot delete a room that has bookings")
-		return
-	}
 	if errors.Is(err, models.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "room not found")
 		return

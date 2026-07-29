@@ -131,6 +131,25 @@ ALTER TABLE bookings
     ADD COLUMN IF NOT EXISTS minutes_file_mime TEXT NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS minutes_file_data BYTEA;
 
+-- Soft delete: rooms/admins/users/bookings are marked deleted_at instead of being
+-- physically removed. Identifying fields (room name, admin username/email, user
+-- email) become reusable once a row is deleted — replace the plain UNIQUE
+-- constraints with unique indexes scoped to non-deleted rows only.
+ALTER TABLE rooms    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE admins   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+ALTER TABLE rooms  DROP CONSTRAINT IF EXISTS rooms_name_key;
+ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_username_key;
+ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_email_key;
+ALTER TABLE users  DROP CONSTRAINT IF EXISTS users_email_key;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_name_active      ON rooms  (name)     WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_username_active ON admins (username) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_email_active    ON admins (email)    WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active     ON users  (email)    WHERE deleted_at IS NULL;
+
 
 -- ── Sessions table ───────────────────────────────────────────────────────────
 -- Admin sessions are stored in the database (not server memory) so that
@@ -193,7 +212,7 @@ INSERT INTO admins (username, password, name, role, email) VALUES
     'super_admin',
     'ratuwangchuk@dhi.bt'
 )
-ON CONFLICT (username) DO NOTHING;
+ON CONFLICT (username) WHERE deleted_at IS NULL DO NOTHING;
 
 
 -- ── Sample rooms ──────────────────────────────────────────────────────────────
@@ -202,4 +221,4 @@ INSERT INTO rooms (name, capacity, location, status) VALUES
     ('Meeting Room 01',     12, 'Level 3', 'Active'),
     ('Meeting Room 02',      8, 'Level 2', 'Active'),
     ('Conference Suite',    20, 'Level 1', 'Active')
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (name) WHERE deleted_at IS NULL DO NOTHING;
