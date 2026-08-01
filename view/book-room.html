@@ -163,15 +163,23 @@
 
           <form id="bookingForm" class="grid gap-4">
 
-            <label class="block text-sm font-bold text-slate-700">
+            <label class="block text-sm font-bold text-slate-700" for="registeredUserSearch">
               Registered User
-              <select
-                id="registeredUser"
-                required
-                class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">Select registered user</option>
-              </select>
+              <div class="relative mt-1">
+                <input
+                  type="text"
+                  id="registeredUserSearch"
+                  autocomplete="off"
+                  required
+                  placeholder="Search by name or email..."
+                  class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                />
+                <input type="hidden" id="registeredUser" />
+                <div
+                  id="registeredUserOptions"
+                  class="absolute z-20 mt-1 hidden max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+                ></div>
+              </div>
             </label>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -313,6 +321,7 @@
       document.getElementById('bookingForm').reset();
       document.getElementById('bookingDate').value = todayISO();
       document.getElementById('bookingDate').min = todayISO();
+      document.getElementById('registeredUserOptions').classList.add('hidden');
       fillTimeDropdowns();
     }
 
@@ -397,20 +406,49 @@
           .join('');
     }
 
+    let activeUsers = [];
+
     function fillUsers() {
       // Only active (approved) users can book — mirrors the server-side check
       // in BookingModel.Save (pending/rejected/revoked are all blocked there).
-      const activeUsers = users.filter(function(user) {
+      activeUsers = users.filter(function(user) {
         return user.status === 'active';
       });
+    }
 
-      document.getElementById('registeredUser').innerHTML =
-        '<option value="">Select registered user</option>' +
-        activeUsers.map(function(user) {
-          return '<option value="' + user.id + '">' +
-            escapeHtml(user.name) + ' - ' + escapeHtml(user.email) +
-          '</option>';
-        }).join('');
+    function renderUserOptions(query) {
+      const list = document.getElementById('registeredUserOptions');
+      const q = query.trim().toLowerCase();
+
+      const matches = q
+        ? activeUsers.filter(function(user) {
+            return user.name.toLowerCase().includes(q) || user.email.toLowerCase().includes(q);
+          })
+        : activeUsers;
+
+      list.innerHTML = matches.length
+        ? matches.map(function(user) {
+            return '<button type="button" data-user-id="' + user.id + '" class="user-option block w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-indigo-50">' +
+              escapeHtml(user.name) + ' <span class="font-normal text-slate-400">- ' + escapeHtml(user.email) + '</span>' +
+            '</button>';
+          }).join('')
+        : '<div class="px-4 py-3 text-sm font-semibold text-slate-400">No matching users</div>';
+
+      list.classList.remove('hidden');
+    }
+
+    function selectRegisteredUser(user) {
+      document.getElementById('registeredUser').value = user.id;
+      document.getElementById('registeredUserSearch').value = user.name + ' - ' + user.email;
+      document.getElementById('userName').value = user.name;
+      document.getElementById('userEmail').value = user.email;
+      document.getElementById('registeredUserOptions').classList.add('hidden');
+    }
+
+    function clearRegisteredUser() {
+      document.getElementById('registeredUser').value = '';
+      document.getElementById('userName').value = '';
+      document.getElementById('userEmail').value = '';
     }
 
     function fillRooms() {
@@ -475,13 +513,30 @@
       resetBookingForm();
     }
 
-    document.getElementById('registeredUser').addEventListener('change', function() {
-      const selected = users.find(function(user) {
-        return Number(user.id) === Number(this.value);
-      }, this);
+    document.getElementById('registeredUserSearch').addEventListener('focus', function() {
+      renderUserOptions(this.value);
+    });
 
-      document.getElementById('userName').value = selected ? selected.name : '';
-      document.getElementById('userEmail').value = selected ? selected.email : '';
+    document.getElementById('registeredUserSearch').addEventListener('input', function() {
+      clearRegisteredUser();
+      renderUserOptions(this.value);
+    });
+
+    document.getElementById('registeredUserOptions').addEventListener('click', function(e) {
+      const btn = e.target.closest('.user-option');
+      if (!btn) return;
+
+      const user = activeUsers.find(function(u) {
+        return Number(u.id) === Number(btn.dataset.userId);
+      });
+
+      if (user) selectRegisteredUser(user);
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#registeredUserSearch') && !e.target.closest('#registeredUserOptions')) {
+        document.getElementById('registeredUserOptions').classList.add('hidden');
+      }
     });
 
     document.getElementById('startTime').addEventListener('change', refreshEndTimes);
@@ -499,10 +554,16 @@
       e.preventDefault();
       clearModalMsg('bookingModalMsg');
 
+      const registeredUserId = document.getElementById('registeredUser').value;
       const roomId = Number(document.getElementById('roomId').value);
       const date = document.getElementById('bookingDate').value;
       const start = document.getElementById('startTime').value;
       const end = document.getElementById('endTime').value;
+
+      if (!registeredUserId) {
+        showModalMsg('bookingModalMsg', 'Please select a registered user from the search results.');
+        return;
+      }
 
       if (!roomId || !date || !start || !end) {
         showModalMsg('bookingModalMsg', 'Please complete room, date, start time, and end time.');
