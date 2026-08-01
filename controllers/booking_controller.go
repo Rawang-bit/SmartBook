@@ -59,18 +59,25 @@ func bookingRecipients(b models.Booking) []string {
 	return out
 }
 
-// ownerName returns the booking owner's name for emails sent to the owner, blank for participants.
-func ownerName(email string, b models.Booking) string {
+// recipientName returns the display name for a booking email recipient: the owner's stored
+// name for the owner, or the participant's registered name (looked up by email) when they're
+// a known user; blank if the participant isn't a registered user.
+func (c *Controller) recipientName(email string, b models.Booking) string {
 	if strings.EqualFold(email, b.Email) {
 		return b.User
+	}
+	if u, err := c.Users.GetByEmail(email); err == nil {
+		return u.Name
 	}
 	return ""
 }
 
 // notifyRecipients emails every booking recipient via sendFn, logging (never blocking) on failure.
-func notifyRecipients(b models.Booking, logPrefix string, sendFn func(email, name string) error) {
+// isOwner tells sendFn whether the recipient is the booking owner or a participant.
+func (c *Controller) notifyRecipients(b models.Booking, logPrefix string, sendFn func(email, name string, isOwner bool) error) {
 	for _, email := range bookingRecipients(b) {
-		if err := sendFn(email, ownerName(email, b)); err != nil {
+		isOwner := strings.EqualFold(email, b.Email)
+		if err := sendFn(email, c.recipientName(email, b), isOwner); err != nil {
 			log.Printf("[%s] failed to notify %s: %v", logPrefix, email, err)
 		}
 	}
@@ -78,21 +85,21 @@ func notifyRecipients(b models.Booking, logPrefix string, sendFn func(email, nam
 
 // sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
 func (c *Controller) sendBookingConfirmations(b models.Booking) {
-	notifyRecipients(b, "BOOKING CONFIRMATION", func(email, name string) error {
-		return utils.SendBookingConfirmationEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda)
+	c.notifyRecipients(b, "BOOKING CONFIRMATION", func(email, name string, isOwner bool) error {
+		return utils.SendBookingConfirmationEmail(email, name, isOwner, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda)
 	})
 }
 
 // sendCancellationNotifications emails the owner and all participants that the booking was cancelled.
 func (c *Controller) sendCancellationNotifications(b models.Booking) {
-	notifyRecipients(b, "BOOKING CANCELLATION", func(email, name string) error {
+	c.notifyRecipients(b, "BOOKING CANCELLATION", func(email, name string, isOwner bool) error {
 		return utils.SendBookingCancellationEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose)
 	})
 }
 
 // sendMinutesNotifications emails the owner and all participants the finalised meeting minutes document.
 func (c *Controller) sendMinutesNotifications(b models.Booking, fileName string, fileData []byte) {
-	notifyRecipients(b, "MINUTES OF MEETING", func(email, name string) error {
+	c.notifyRecipients(b, "MINUTES OF MEETING", func(email, name string, isOwner bool) error {
 		return utils.SendMinutesOfMeetingEmail(email, name, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, fileName, fileData)
 	})
 }

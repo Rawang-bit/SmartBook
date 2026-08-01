@@ -105,6 +105,14 @@ func greetingFor(toName string) (text, htmlText string) {
 	return fmt.Sprintf("Hi %s,", toName), "Hi <strong>" + esc(toName) + "</strong>,"
 }
 
+// ownerGreetingFor is greetingFor's "Hi" form, used for the booking owner even when toName is empty.
+func ownerGreetingFor(toName string) (text, htmlText string) {
+	if toName == "" {
+		return "Hi,", "Hi,"
+	}
+	return fmt.Sprintf("Hi %s,", toName), "Hi <strong>" + esc(toName) + "</strong>,"
+}
+
 // bookingDetailRows builds the standard Room/Purpose/Date/Time row set shared by
 // booking confirmation, cancellation, and minutes-of-meeting emails.
 func bookingDetailRows(roomName, purpose, date, startTime, endTime string) [][2]string {
@@ -310,20 +318,30 @@ func SendRejectionEmail(toEmail, toName, reason string) error {
 }
 
 // SendBookingConfirmationEmail notifies a recipient of a room booking; toName may be empty for participants.
-func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, endTime, purpose, agenda string) error {
+func SendBookingConfirmationEmail(toEmail, toName string, isOwner bool, roomName, date, startTime, endTime, purpose, agenda string) error {
 	greeting, greetingHTML := greetingFor(toName)
+	intro := "You have been invited to the meeting. Here are the meeting details:"
+	if isOwner {
+		greeting, greetingHTML = ownerGreetingFor(toName)
+		intro = "Your room has been booked successfully. Here are the details:"
+	}
 
 	agendaBlock := ""
 	if agenda != "" {
-		agendaBlock = fmt.Sprintf("\r\nAgenda:\r\n  %s\r\n", agenda)
+		agendaBlock = fmt.Sprintf("\r\n  Agenda:  %s\r\n", agenda)
 	}
 
 	textBody := fmt.Sprintf(
 		"%s\r\n\r\n"+
-			"This room, %s has been booked for \"%s\" on %s at %s - %s.\r\n"+
+			"%s\r\n\r\n"+
+			"  Room:    %s\r\n"+
+			"  Purpose: %s\r\n"+
+			"  Date:    %s\r\n"+
+			"  Time:    %s - %s\r\n"+
 			"%s\r\n"+
+			"If you have any questions, please contact the booking administrator.\r\n\r\n"+
 			"— SmartBook",
-		greeting, roomName, purpose, date, startTime, endTime, agendaBlock,
+		greeting, intro, roomName, purpose, date, startTime, endTime, agendaBlock,
 	)
 
 	rows := bookingDetailRows(roomName, purpose, date, startTime, endTime)
@@ -333,7 +351,7 @@ func SendBookingConfirmationEmail(toEmail, toName, roomName, date, startTime, en
 
 	htmlBody := wrapEmailHTML(
 		p(greetingHTML) +
-			p("A room has been booked. Here are the details:") +
+			p(intro) +
 			detailsTable(rows) +
 			pMuted("If you have any questions, please contact the booking administrator."),
 	)
