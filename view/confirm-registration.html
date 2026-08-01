@@ -70,6 +70,7 @@
     </div><!-- /card -->
   </div>
 
+  <script src="toast.js"></script>
   <script>
     async function api(path, options = {}) {
       const res = await fetch(path, {
@@ -82,14 +83,7 @@
     }
 
     function showMsg(text, type) {
-      const el = document.getElementById('confirmMsg');
-      el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${
-        type === 'success'
-          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-          : 'bg-red-50 text-red-700 border border-red-200'
-      }`;
-      el.textContent = text;
-      el.classList.remove('hidden');
+      showToast(text, type);
     }
 
     const token = new URLSearchParams(window.location.search).get('token');

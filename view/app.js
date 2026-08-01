@@ -208,13 +208,10 @@ function formatStatus(status) {
   return `<span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-extrabold whitespace-nowrap ${classes[status] || 'bg-slate-200 text-slate-700'}">${escapeHtml(status)}</span>`;
 }
 
+// Kept as showMessage(id, text, type) for compatibility with existing call sites — the id is
+// no longer used since messages now render as a popup toast instead of an inline page banner.
 function showMessage(id, text, type='success') {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.className = `rounded-xl px-4 py-3 mb-4 font-bold ${type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`;
-  el.textContent = text;
-  el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 3000);
+  showToast(text, type);
 }
 
 // showModal/hideModal: toggling the "hidden flex" pattern used by admin panel modals.
@@ -230,21 +227,15 @@ function hideModal(id) {
   el.classList.remove('flex');
 }
 
-// showModalMsg: persistent in-form feedback (no auto-dismiss, unlike showMessage).
+// Kept as showModalMsg(id, text, type) for compatibility with existing call sites — messages
+// now render as a popup toast instead of an inline banner inside the modal.
 function showModalMsg(id, text, type = 'error') {
-  const el = document.getElementById(id);
-  el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${type === 'success'
-    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-    : 'bg-red-50 text-red-700 border border-red-200'}`;
-  el.textContent = text;
-  el.classList.remove('hidden');
+  showToast(text, type);
 }
 
-function clearModalMsg(id) {
-  const el = document.getElementById(id);
-  el.textContent = '';
-  el.classList.add('hidden');
-}
+// No-op now that messages are self-dismissing toasts instead of persistent inline banners;
+// kept so existing clearModalMsg(id) calls (e.g. on modal open) don't need to be removed.
+function clearModalMsg(id) {}
 
 // ── Icon buttons ─────────────────────────────────────────────────────────────
 

@@ -197,6 +197,7 @@
     </div><!-- /card -->
   </div>
 
+  <script src="toast.js"></script>
   <script src="app.js"></script>
   <script src="turnstile-helper.js"></script>
   <script>
@@ -214,21 +215,12 @@
     }
 
     function showStepMsg(id, text, type) {
-      const el = document.getElementById(id);
-      el.className = `mb-4 rounded-xl px-4 py-3 font-bold text-sm ${
-        type === 'success'
-          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-          : 'bg-red-50 text-red-700 border border-red-200'
-      }`;
-      el.textContent = text;
-      el.classList.remove('hidden');
+      showToast(text, type);
     }
 
-    function clearMsg(id) {
-      const el = document.getElementById(id);
-      el.classList.add('hidden');
-      el.textContent = '';
-    }
+    // No-op now that messages are self-dismissing toasts instead of persistent inline banners;
+    // kept so existing clearMsg(id) calls (e.g. on step switch) don't need to be removed.
+    function clearMsg(id) {}
 
     // ── On load: check for ?token= in URL ───────────────────────────────────
     (function init() {
