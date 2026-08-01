@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // resendPayload is the JSON body sent to the Resend API.
@@ -317,8 +318,11 @@ func SendRejectionEmail(toEmail, toName, reason string) error {
 	return sendEmail(toEmail, "SmartBook — Access Request Declined", textBody, htmlBody, "USER REJECTED")
 }
 
-// SendBookingConfirmationEmail notifies a recipient of a room booking; toName may be empty for participants.
-func SendBookingConfirmationEmail(toEmail, toName string, isOwner bool, roomName, date, startTime, endTime, purpose, agenda string) error {
+// SendBookingConfirmationEmail notifies a recipient of a room booking. toName may be empty for
+// unregistered participants; ownerName is always the booking owner's name, shown to participants
+// so they know who booked the meeting; participantNames lists every invited participant, shown
+// to both the owner and participants.
+func SendBookingConfirmationEmail(toEmail, toName string, isOwner bool, ownerName string, participantNames []string, roomName, date, startTime, endTime, purpose, agenda string) error {
 	greeting, greetingHTML := greetingFor(toName)
 	intro := "You have been invited to the meeting. Here are the meeting details:"
 	if isOwner {
@@ -326,28 +330,23 @@ func SendBookingConfirmationEmail(toEmail, toName string, isOwner bool, roomName
 		intro = "Your room has been booked successfully. Here are the details:"
 	}
 
-	agendaBlock := ""
-	if agenda != "" {
-		agendaBlock = fmt.Sprintf("\r\n  Agenda:  %s\r\n", agenda)
-	}
-
-	textBody := fmt.Sprintf(
-		"%s\r\n\r\n"+
-			"%s\r\n\r\n"+
-			"  Room:    %s\r\n"+
-			"  Purpose: %s\r\n"+
-			"  Date:    %s\r\n"+
-			"  Time:    %s - %s\r\n"+
-			"%s\r\n"+
-			"If you have any questions, please contact the booking administrator.\r\n\r\n"+
-			"— SmartBook",
-		greeting, intro, roomName, purpose, date, startTime, endTime, agendaBlock,
-	)
-
 	rows := bookingDetailRows(roomName, purpose, date, startTime, endTime)
+	if !isOwner {
+		rows = append(rows, [2]string{"Meeting Owner", ownerName})
+	}
+	if len(participantNames) > 0 {
+		rows = append(rows, [2]string{"Participants", strings.Join(participantNames, ", ")})
+	}
 	if agenda != "" {
 		rows = append(rows, [2]string{"Agenda", agenda})
 	}
+
+	var textLines strings.Builder
+	textLines.WriteString(greeting + "\r\n\r\n" + intro + "\r\n\r\n")
+	for _, row := range rows {
+		textLines.WriteString(fmt.Sprintf("  %s: %s\r\n", row[0], row[1]))
+	}
+	textLines.WriteString("\r\nIf you have any questions, please contact the booking administrator.\r\n\r\n— SmartBook")
 
 	htmlBody := wrapEmailHTML(
 		p(greetingHTML) +
@@ -356,7 +355,7 @@ func SendBookingConfirmationEmail(toEmail, toName string, isOwner bool, roomName
 			pMuted("If you have any questions, please contact the booking administrator."),
 	)
 
-	return sendEmail(toEmail, fmt.Sprintf("SmartBook — Room Booked: %s", roomName), textBody, htmlBody, "BOOKING CONFIRMATION")
+	return sendEmail(toEmail, fmt.Sprintf("SmartBook — Room Booked: %s", roomName), textLines.String(), htmlBody, "BOOKING CONFIRMATION")
 }
 
 // SendTemporaryAdminPasswordEmail sends login credentials to a newly promoted admin (server enforces password change on first login).

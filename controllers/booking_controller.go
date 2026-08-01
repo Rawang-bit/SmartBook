@@ -72,6 +72,24 @@ func (c *Controller) recipientName(email string, b models.Booking) string {
 	return ""
 }
 
+// participantNames resolves each participant's display name (falling back to their email when
+// they aren't a registered user), for inclusion in booking confirmation emails.
+func (c *Controller) participantNames(b models.Booking) []string {
+	emails := bookingRecipients(b) // owner first, then participants
+	if len(emails) <= 1 {
+		return nil
+	}
+	names := make([]string, 0, len(emails)-1)
+	for _, email := range emails[1:] {
+		if u, err := c.Users.GetByEmail(email); err == nil && u.Name != "" {
+			names = append(names, u.Name)
+		} else {
+			names = append(names, email)
+		}
+	}
+	return names
+}
+
 // notifyRecipients emails every booking recipient via sendFn, logging (never blocking) on failure.
 // isOwner tells sendFn whether the recipient is the booking owner or a participant.
 func (c *Controller) notifyRecipients(b models.Booking, logPrefix string, sendFn func(email, name string, isOwner bool) error) {
@@ -85,8 +103,9 @@ func (c *Controller) notifyRecipients(b models.Booking, logPrefix string, sendFn
 
 // sendBookingConfirmations emails the owner and all participants; failures are logged, never block the response.
 func (c *Controller) sendBookingConfirmations(b models.Booking) {
+	participants := c.participantNames(b)
 	c.notifyRecipients(b, "BOOKING CONFIRMATION", func(email, name string, isOwner bool) error {
-		return utils.SendBookingConfirmationEmail(email, name, isOwner, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda)
+		return utils.SendBookingConfirmationEmail(email, name, isOwner, b.User, participants, b.RoomName, b.Date, b.StartTime, b.EndTime, b.Purpose, b.Agenda)
 	})
 }
 
